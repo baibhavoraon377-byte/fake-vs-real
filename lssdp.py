@@ -1,139 +1,155 @@
-# --------------------------------------------------------------
-# Fake vs Real – Lexical / Syntactic / Semantic / Sentiment / Pragmatic
-# Streamlit App (auto-detects column names)
-# --------------------------------------------------------------
+# ============================================
+# 📌 Streamlit NLP Phase-wise with All Models
+# ============================================
 
 import streamlit as st
 import pandas as pd
-import numpy as np
-import re
-import string
+import spacy
+from spacy.lang.en.stop_words import STOP_WORDS
+from textblob import TextBlob
+
 from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-import nltk
 
-# Download NLTK data (only needs to run once per environment)
-nltk.download("punkt")
-nltk.download("stopwords")
+import matplotlib.pyplot as plt
 
-st.title("Fake vs Real Detection – LSSDP Pipeline (Naive Bayes)")
+# ============================
+# Load SpaCy & Globals
+# ============================
+nlp = spacy.load("en_core_web_sm")
+stop_words = STOP_WORDS
 
-# --------------------------------------------------------------
-# 1. Upload CSV
-# --------------------------------------------------------------
-uploaded_file = st.file_uploader(
-    "Upload CSV (columns can be 'Statement'/'BinaryTarget' OR 'text'/'label')",
-    type="csv",
-)
-if uploaded_file is None:
-    st.stop()
-
-df = pd.read_csv(uploaded_file)
-st.write("### Dataset Preview", df.head())
-
-# --------------------------------------------------------------
-# 2. Detect correct column names
-# --------------------------------------------------------------
-possible_text_cols = ["Statement", "text"]
-possible_label_cols = ["BinaryTarget", "label"]
-
-text_col = next((c for c in possible_text_cols if c in df.columns), None)
-label_col = next((c for c in possible_label_cols if c in df.columns), None)
-
-if text_col is None or label_col is None:
-    st.error("CSV must have either ('Statement','BinaryTarget') or ('text','label') columns.")
-    st.write("Found columns:", list(df.columns))
-    st.stop()
-
-# --------------------------------------------------------------
-# 3. Text cleaning
-# --------------------------------------------------------------
-stop_words = set(stopwords.words("english"))
-
-def clean_text(text):
-    text = text.lower()
-    text = re.sub(r"http\S+", "", text)
-    text = re.sub(r"[0-9]+", "", text)
-    text = text.translate(str.maketrans("", "", string.punctuation))
-    tokens = word_tokenize(text)
-    tokens = [t for t in tokens if t not in stop_words]
+# ============================
+# Phase Feature Extractors
+# ============================
+def lexical_preprocess(text):
+    """Tokenization + Stopwords removal + Lemmatization"""
+    doc = nlp(text.lower())
+    tokens = [token.lemma_ for token in doc if token.text not in stop_words and token.is_alpha]
     return " ".join(tokens)
 
-df["clean"] = df[text_col].astype(str).apply(clean_text)
+def syntactic_features(text):
+    """Part-of-Speech tags"""
+    doc = nlp(text)
+    pos_tags = " ".join([token.pos_ for token in doc])
+    return pos_tags
 
-# --------------------------------------------------------------
-# 4. Helper: Train & evaluate Naive Bayes
-# --------------------------------------------------------------
-def train_nb(X, y, name):
-    Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.25, random_state=42)
-    nb = MultinomialNB()
-    nb.fit(Xtr, ytr)
-    pred = nb.predict(Xte)
-    acc = accuracy_score(yte, pred)
-    st.write(f"**{name} Accuracy:** {acc*100:.2f}%")
-    return acc
+def semantic_features(text):
+    """Sentiment polarity & subjectivity"""
+    blob = TextBlob(text)
+    return [blob.sentiment.polarity, blob.sentiment.subjectivity]
 
-# --------------------------------------------------------------
-# 5. Lexical Features – Bag of Words
-# --------------------------------------------------------------
-st.subheader("Lexical Analysis")
-vec_lexical = CountVectorizer()
-X_lexical = vec_lexical.fit_transform(df["clean"])
-train_nb(X_lexical, df[label_col], "Lexical")
+def discourse_features(text):
+    """Sentence count + first word of each sentence"""
+    doc = nlp(text)
+    sentences = [sent.text.strip() for sent in doc.sents]
+    return f"{len(sentences)} {' '.join([s.split()[0] for s in sentences if len(s.split()) > 0])}"
 
-# --------------------------------------------------------------
-# 6. Syntactic Features – Bigrams
-# --------------------------------------------------------------
-st.subheader("Syntactic Analysis")
-vec_syntactic = CountVectorizer(ngram_range=(2, 2))
-X_syntactic = vec_syntactic.fit_transform(df["clean"])
-train_nb(X_syntactic, df[label_col], "Syntactic")
+pragmatic_words = ["must", "should", "might", "could", "will", "?", "!"]
+def pragmatic_features(text):
+    """Counts of modality & special words"""
+    text = text.lower()
+    return [text.count(w) for w in pragmatic_words]
 
-# --------------------------------------------------------------
-# 7. Semantic Features – TF-IDF
-# --------------------------------------------------------------
-st.subheader("Semantic Analysis")
-vec_semantic = TfidfVectorizer()
-X_semantic = vec_semantic.fit_transform(df["clean"])
-train_nb(X_semantic, df[label_col], "Semantic")
+# ============================
+# Train & Evaluate All Models
+# ============================
+def evaluate_models(X_features, y):
+    results = {}
+    models = {
+        "Naive Bayes": MultinomialNB(),
+        "Decision Tree": DecisionTreeClassifier(),
+        "Logistic Regression": LogisticRegression(max_iter=200),
+        "SVM": SVC()
+    }
 
-# --------------------------------------------------------------
-# 8. Sentiment Features – toy polarity count
-# --------------------------------------------------------------
-st.subheader("Sentiment Analysis")
-positive_words = {"good", "great", "excellent", "positive", "fortunate", "correct", "superior"}
-negative_words = {"bad", "terrible", "poor", "negative", "wrong", "inferior"}
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_features, y, test_size=0.2, random_state=42
+    )
 
-def sentiment_vector(text):
-    tokens = text.split()
-    pos = sum(t in positive_words for t in tokens)
-    neg = sum(t in negative_words for t in tokens)
-    return f"{pos} {neg}"
+    for name, model in models.items():
+        try:
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
+            acc = accuracy_score(y_test, y_pred) * 100
+            results[name] = f"{round(acc, 2)}%"
+        except Exception as e:
+            results[name] = f"Error: {str(e)}"
 
-sent_feats = df["clean"].apply(sentiment_vector)
-vec_sentiment = CountVectorizer(token_pattern=r"(?u)\b\w+\b")
-X_sentiment = vec_sentiment.fit_transform(sent_feats)
-train_nb(X_sentiment, df[label_col], "Sentiment")
+    return results
 
-# --------------------------------------------------------------
-# 9. Pragmatic Features – simple numeric counts
-# --------------------------------------------------------------
-st.subheader("Pragmatic Analysis")
+# ============================
+# Streamlit UI
+# ============================
+st.title("Phase-wise NLP Analysis with Model Comparison")
 
-def pragmatic_vector(text):
-    words = text.split()
-    word_count = len(words)
-    avg_word_len = np.mean([len(w) for w in words]) if words else 0
-    punctuation_ratio = sum(ch in string.punctuation for ch in text) / (len(text) + 1)
-    return f"{word_count} {avg_word_len:.2f} {punctuation_ratio:.2f}"
+uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    st.write("### Data Preview", df.head())
 
-prag_feats = df[text_col].astype(str).apply(pragmatic_vector)
-X_pragmatic = np.array([list(map(float, s.split())) for s in prag_feats])
+    text_col = st.selectbox("Select Text Column:", df.columns)
+    target_col = st.selectbox("Select Target Column:", df.columns)
 
-# MultinomialNB requires non-negative integers → scale
-X_pragmatic_int = np.round(X_pragmatic * 100).astype(int)
-train_nb(X_pragmatic_int, df[label_col], "Pragmatic")
+    phase = st.selectbox("Select NLP Phase:", [
+        "Lexical & Morphological",
+        "Syntactic",
+        "Semantic",
+        "Discourse",
+        "Pragmatic"
+    ])
+
+    if st.button("Run Comparison"):
+        X = df[text_col].astype(str)
+        y = df[target_col]
+
+        if phase == "Lexical & Morphological":
+            X_processed = X.apply(lexical_preprocess)
+            X_features = CountVectorizer().fit_transform(X_processed)
+
+        elif phase == "Syntactic":
+            X_processed = X.apply(syntactic_features)
+            X_features = CountVectorizer().fit_transform(X_processed)
+
+        elif phase == "Semantic":
+            X_features = pd.DataFrame(X.apply(semantic_features).tolist(),
+                                      columns=["polarity", "subjectivity"])
+
+        elif phase == "Discourse":
+            X_processed = X.apply(discourse_features)
+            X_features = CountVectorizer().fit_transform(X_processed)
+
+        elif phase == "Pragmatic":
+            X_features = pd.DataFrame(X.apply(pragmatic_features).tolist(),
+                                      columns=pragmatic_words)
+
+        # Run all models
+        results = evaluate_models(X_features, y)
+
+        # Convert results to DataFrame
+        results_df = pd.DataFrame(list(results.items()), columns=["Model", "Accuracy"])
+        results_df["Accuracy_float"] = results_df["Accuracy"].str.rstrip('%').astype(float)
+        results_df = results_df.sort_values(by="Accuracy_float", ascending=False).reset_index(drop=True)
+
+        # Display results
+        st.subheader("Model Comparison Results")
+        st.dataframe(results_df[["Model", "Accuracy"]])
+
+        # Bar chart
+        acc_values = results_df["Accuracy_float"]
+        plt.figure(figsize=(6, 4))
+        plt.bar(results_df["Model"], acc_values, alpha=0.7)
+        plt.ylabel("Accuracy (%)")
+        plt.title(f"Model Performance on {phase}")
+        plt.xticks(rotation=30)
+
+        # Add percentage labels
+        for i, v in enumerate(acc_values):
+            plt.text(i, v + 1, f"{v:.0f}%", ha='center')
+
+        st.pyplot(plt)
