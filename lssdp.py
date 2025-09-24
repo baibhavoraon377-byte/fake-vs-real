@@ -1,138 +1,195 @@
-# --------------------------------------------------------------
-# Fake vs Real – Lexical / Syntactic / Semantic / Sentiment / Pragmatic
-# Streamlit App (NO google.colab)
-# --------------------------------------------------------------
+# ============================================
+# 📌 NLP Phases for Fake vs Real Detection
+# Using Naive Bayes at each step
+# With Robust Preprocessing (LOCAL CSV VERSION)
+# ============================================
 
-import streamlit as st
+# Install dependencies (run once if needed)
+# pip install scikit-learn pandas nltk spacy textblob
+
 import pandas as pd
 import numpy as np
-import re
-import string
+import nltk, string, spacy
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize, sent_tokenize
+from textblob import TextBlob
+
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.metrics import accuracy_score
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-import nltk
+from sklearn.metrics import accuracy_score, classification_report
 
-# Make sure these are downloaded once
+# ============================
+# Download NLTK resources
+# ============================
 nltk.download('punkt')
+nltk.download('wordnet')
 nltk.download('stopwords')
 
-st.title("Fake vs Real Detection – LSSDP Pipeline (Naive Bayes)")
+# ============================
+# Load spaCy model
+# ============================
+nlp = spacy.load("en_core_web_sm")
 
-# --------------------------------------------------------------
-# 1. Upload CSV
-# --------------------------------------------------------------
-uploaded_file = st.file_uploader("Upload CSV (must contain 'text' & 'label' columns)", type="csv")
-if uploaded_file is None:
-    st.stop()
+# ============================
+# Step 1: Load Dataset
+# ============================
+# 👉 Put your CSV file name here
+df = pd.read_csv("your_dataset.csv")   # Must have 'Statement' & 'BinaryTarget'
 
-df = pd.read_csv(uploaded_file)
-st.write("Dataset Preview", df.head())
+print("Dataset Shape:", df.shape)
+print("Columns:", df.columns)
+print(df.head())
 
-# Ensure required columns exist
-if not {"text", "label"}.issubset(df.columns):
-    st.error("CSV must have 'text' and 'label' columns.")
-    st.stop()
+X = df['Statement']
+y = df['BinaryTarget']
 
-# --------------------------------------------------------------
-# 2. Helper: clean text
-# --------------------------------------------------------------
-stop_words = set(stopwords.words("english"))
+# ============================
+# Step 2: Robust Preprocessing
+# ============================
+lemmatizer = WordNetLemmatizer()
+stop_words = set(stopwords.words('english'))
 
-def clean_text(text):
-    text = text.lower()
-    text = re.sub(r"http\S+", "", text)
-    text = re.sub(r"[0-9]+", "", text)
-    text = text.translate(str.maketrans("", "", string.punctuation))
+def robust_preprocess(text):
+    if pd.isnull(text):
+        return ""
+    text = str(text).lower()
     tokens = word_tokenize(text)
-    tokens = [t for t in tokens if t not in stop_words]
+    tokens = [t for t in tokens if t.isalpha()]  # keep only alphabetic
+    tokens = [lemmatizer.lemmatize(t) for t in tokens if t not in stop_words]
     return " ".join(tokens)
 
-df["clean"] = df["text"].astype(str).apply(clean_text)
+# Apply preprocessing globally
+X_processed = X.astype(str).apply(robust_preprocess)
 
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(
-    df["clean"], df["label"], test_size=0.25, random_state=42
-)
+# Drop rows that became empty after preprocessing
+mask_global = X_processed.str.strip().astype(bool)
+X_processed, y_filtered = X_processed[mask_global], y[mask_global]
 
-# --------------------------------------------------------------
-# 3. Train function
-# --------------------------------------------------------------
-def train_nb(X, y, name):
-    Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.25, random_state=42)
-    nb = MultinomialNB()
-    nb.fit(Xtr, ytr)
-    pred = nb.predict(Xte)
-    acc = accuracy_score(yte, pred)
-    st.write(f"**{name} Accuracy:** {acc*100:.2f}%")
+
+# ============================
+# Helper: Train Naive Bayes
+# ============================
+def train_nb(X_features, y, name):
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_features, y, test_size=0.2, random_state=42
+    )
+    model = MultinomialNB()
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    print(f"\n🔹 {name} Accuracy: {acc:.4f}")
+    print(classification_report(y_test, y_pred))
     return acc
 
-# --------------------------------------------------------------
-# 4. Lexical Features – bag of words
-# --------------------------------------------------------------
-st.subheader("Lexical Analysis")
-vec_lexical = CountVectorizer()
-X_lexical = vec_lexical.fit_transform(df["clean"])
-train_nb(X_lexical, df["label"], "Lexical")
 
-# --------------------------------------------------------------
-# 5. Syntactic Features – n-grams (bigrams)
-# --------------------------------------------------------------
-st.subheader("Syntactic Analysis")
-vec_syntactic = CountVectorizer(ngram_range=(2, 2))
-X_syntactic = vec_syntactic.fit_transform(df["clean"])
-train_nb(X_syntactic, df["label"], "Syntactic")
+# ============================
+# Phase 1: Lexical & Morphological Analysis
+# ============================
+X_lexical = X_processed.copy()
+mask_lex = X_lexical.str.strip().astype(bool)
+X_lexical, y_lex = X_lexical[mask_lex], y_filtered[mask_lex]
 
-# --------------------------------------------------------------
-# 6. Semantic Features – TF-IDF
-# --------------------------------------------------------------
-st.subheader("Semantic Analysis")
-vec_semantic = TfidfVectorizer()
-X_semantic = vec_semantic.fit_transform(df["clean"])
-train_nb(X_semantic, df["label"], "Semantic")
+if X_lexical.empty:
+    print("\n🔹 Lexical & Morphological Analysis: No documents left after filtering.")
+    acc1 = None
+else:
+    vec_lexical = CountVectorizer().fit_transform(X_lexical)
+    acc1 = train_nb(vec_lexical, y_lex, "Lexical & Morphological Analysis")
 
-# --------------------------------------------------------------
-# 7. Sentiment Features – very simple polarity count
-# --------------------------------------------------------------
-st.subheader("Sentiment Analysis")
-# Count positive and negative words (toy example)
-positive_words = {"good","great","excellent","positive","fortunate","correct","superior"}
-negative_words = {"bad","terrible","poor","negative","wrong","inferior"}
 
-def sentiment_vector(text):
-    tokens = text.split()
-    pos = sum(t in positive_words for t in tokens)
-    neg = sum(t in negative_words for t in tokens)
-    return f"{pos} {neg}"
+# ============================
+# Phase 2: Syntactic Analysis
+# ============================
+def syntactic_features(text):
+    doc = nlp(text)
+    pos_tags = " ".join([token.pos_ for token in doc])
+    return pos_tags
 
-sent_feats = df["clean"].apply(sentiment_vector)
-vec_sentiment = CountVectorizer(token_pattern=r"(?u)\b\w+\b")
-X_sentiment = vec_sentiment.fit_transform(sent_feats)
-train_nb(X_sentiment, df["label"], "Sentiment")
+X_syntax = X_processed.apply(syntactic_features)
+mask_syn = X_syntax.str.strip().astype(bool)
+X_syntax, y_syn = X_syntax[mask_syn], y_filtered[mask_syn]
 
-# --------------------------------------------------------------
-# 8. Pragmatic Features – numeric counts (no text vectorizer)
-# Example: sentence length, punctuation ratio, etc.
-# --------------------------------------------------------------
-st.subheader("Pragmatic Analysis")
+if X_syntax.empty:
+    print("\n🔹 Syntactic Analysis: No documents left after filtering.")
+    acc2 = None
+else:
+    vec_syntax = CountVectorizer().fit_transform(X_syntax)
+    acc2 = train_nb(vec_syntax, y_syn, "Syntactic Analysis")
 
-def pragmatic_vector(text):
-    words = text.split()
-    word_count = len(words)
-    avg_word_len = np.mean([len(w) for w in words]) if words else 0
-    punctuation_ratio = sum(ch in string.punctuation for ch in text) / (len(text)+1)
-    return f"{word_count} {avg_word_len:.2f} {punctuation_ratio:.2f}"
 
-prag_feats = df["text"].astype(str).apply(pragmatic_vector)
+# ============================
+# Phase 3: Semantic Analysis
+# ============================
+def semantic_features(text):
+    blob = TextBlob(text)
+    return f"{blob.sentiment.polarity} {blob.sentiment.subjectivity}"
 
-# Convert to numeric array directly
-X_pragmatic = np.array([
-    list(map(float, s.split())) for s in prag_feats
-])
+X_semantic = X_processed.apply(semantic_features)
+mask_sem = X_semantic.str.strip().astype(bool)
+X_semantic, y_sem = X_semantic[mask_sem], y_filtered[mask_sem]
 
-# Train Naive Bayes (MultinomialNB requires non-negative integers → scale)
-X_pragmatic_int = np.round(X_pragmatic * 100).astype(int)
-train_nb(X_pragmatic_int, df["label"], "Pragmatic")
+if X_semantic.empty:
+    print("\n🔹 Semantic Analysis: No documents left after filtering.")
+    acc3 = None
+else:
+    vec_semantic = TfidfVectorizer().fit_transform(X_semantic)
+    acc3 = train_nb(vec_semantic, y_sem, "Semantic Analysis")
+
+
+# ============================
+# Phase 4: Discourse Integration
+# ============================
+def discourse_features(text):
+    sentences = sent_tokenize(text)
+    if len(sentences) == 0:
+        return "0"
+    return f"{len(sentences)} {' '.join([s.split()[0] for s in sentences if len(s.split())>0])}"
+
+X_discourse = X_processed.apply(discourse_features)
+mask_disc = X_discourse.str.strip().astype(bool)
+X_discourse, y_disc = X_discourse[mask_disc], y_filtered[mask_disc]
+
+if X_discourse.empty:
+    print("\n🔹 Discourse Integration: No documents left after filtering.")
+    acc4 = None
+else:
+    vec_discourse = CountVectorizer().fit_transform(X_discourse)
+    acc4 = train_nb(vec_discourse, y_disc, "Discourse Integration")
+
+
+# ============================
+# Phase 5: Pragmatic Analysis (NUMERIC MATRIX)
+# ============================
+pragmatic_words = ["must", "should", "might", "could", "will", "?", "!"]
+
+def pragmatic_features(text):
+    features = []
+    text_lower = text.lower()
+    for w in pragmatic_words:
+        features.append(str(text_lower.count(w)))
+    return " ".join(features)
+
+X_pragmatic = X_processed.apply(pragmatic_features)
+mask_prag = X_pragmatic.str.strip().astype(bool)
+X_pragmatic, y_prag = X_pragmatic[mask_prag], y_filtered[mask_prag]
+
+if X_pragmatic.empty:
+    print("\n🔹 Pragmatic Analysis: No documents left after filtering.")
+    acc5 = None
+else:
+    # Convert the count strings to a numeric matrix
+    X_pragmatic_matrix = np.array([list(map(int, s.split())) for s in X_pragmatic])
+    acc5 = train_nb(X_pragmatic_matrix, y_prag, "Pragmatic Analysis")
+
+
+# ============================
+# Final Results
+# ============================
+print("\n📊 Phase-wise Naive Bayes Accuracies:")
+print(f"1. Lexical & Morphological: {acc1 if acc1 is not None else 'N/A'}")
+print(f"2. Syntactic: {acc2 if acc2 is not None else 'N/A'}")
+print(f"3. Semantic: {acc3 if acc3 is not None else 'N/A'}")
+print(f"4. Discourse: {acc4 if acc4 is not None else 'N/A'}")
+print(f"5. Pragmatic: {acc5 if acc5 is not None else 'N/A'}")
