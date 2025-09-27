@@ -1,5 +1,5 @@
 # ============================================
-# 📌 Streamlit NLP Phase-wise with SMOTE & GloVe - PROFESSIONAL UI
+# 📌 Streamlit NLP Phase-wise with SMOTE & GloVe - FIXED VERSION
 # ============================================
 
 import streamlit as st
@@ -18,14 +18,16 @@ from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.preprocessing import LabelEncoder
 
-from imblearn.over_sampling import SMOTE
-from imblearn.pipeline import Pipeline as ImbPipeline
+# Check for imbalanced-learn and handle gracefully
+try:
+    from imblearn.over_sampling import SMOTE
+    IMBALANCE_LEARN_AVAILABLE = True
+except ImportError:
+    IMBALANCE_LEARN_AVAILABLE = False
+    st.warning("⚠️ imbalanced-learn not installed. SMOTE will be disabled.")
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-from wordcloud import WordCloud
-import requests
-import io
 
 # ============================
 # Page Configuration
@@ -50,56 +52,30 @@ except OSError:
 stop_words = STOP_WORDS
 
 # ============================
-# GloVe Embeddings Loader
+# Installation Instructions
 # ============================
-@st.cache_data
-def load_glove_embeddings(embedding_dim=100):
-    """Load GloVe embeddings with caching"""
-    try:
-        # Try to load from local file first
-        try:
-            glove_file = f"glove.6B.{embedding_dim}d.txt"
-            embeddings_index = {}
-            with open(glove_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    values = line.split()
-                    word = values[0]
-                    coefs = np.asarray(values[1:], dtype='float32')
-                    embeddings_index[word] = coefs
-            return embeddings_index
-        except FileNotFoundError:
-            # If file not found, use a sample for demonstration
-            st.info("Using sample GloVe embeddings for demonstration")
-            return create_sample_embeddings()
-    except Exception as e:
-        st.warning(f"GloVe loading failed: {str(e)}. Using TF-IDF instead.")
-        return None
+if not IMBALANCE_LEARN_AVAILABLE:
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%); 
+                padding: 1.5rem; border-radius: 10px; border-left: 4px solid #ca8a04;
+                margin: 1rem 0;'>
+        <h4>📦 Additional Packages Required</h4>
+        <p>To enable SMOTE functionality for handling imbalanced data, install:</p>
+        <code style='background: #1f2937; color: white; padding: 0.5rem; border-radius: 5px; 
+                    display: block; margin: 0.5rem 0;'>
+            pip install imbalanced-learn
+        </code>
+        <p><small>SMOTE features will be disabled until the package is installed.</small></p>
+    </div>
+    """, unsafe_allow_html=True)
 
-def create_sample_embeddings():
-    """Create sample embeddings for demonstration"""
-    sample_embeddings = {}
-    common_words = ['the', 'and', 'is', 'in', 'to', 'of', 'for', 'with', 'on', 'at']
-    for word in common_words:
-        sample_embeddings[word] = np.random.randn(100).astype('float32')
-    return sample_embeddings
-
-def text_to_glove_embeddings(texts, embeddings_index, embedding_dim=100):
-    """Convert texts to GloVe embeddings"""
-    text_embeddings = []
-    for text in texts:
-        words = text.lower().split()
-        word_vectors = []
-        for word in words:
-            if word in embeddings_index:
-                word_vectors.append(embeddings_index[word])
-        
-        if len(word_vectors) > 0:
-            text_vector = np.mean(word_vectors, axis=0)
-        else:
-            text_vector = np.zeros(embedding_dim)
-        text_embeddings.append(text_vector)
-    
-    return np.array(text_embeddings)
+# ============================
+# GloVe Embeddings Loader (Simplified)
+# ============================
+def create_tfidf_embeddings(texts):
+    """Fallback to TF-IDF when GloVe is not available"""
+    vectorizer = TfidfVectorizer(max_features=300)
+    return vectorizer.fit_transform(texts)
 
 # ============================
 # Professional CSS Styling
@@ -176,6 +152,13 @@ def load_css():
         margin: 5px 0;
         background: linear-gradient(90deg, #ef4444 0%, #f59e0b 50%, #10b981 100%);
     }
+    .installation-box {
+        background: #fffbeb;
+        border: 1px solid #fcd34d;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -214,22 +197,10 @@ def pragmatic_features(text):
     return [text.count(w) for w in pragmatic_words]
 
 # ============================
-# Enhanced Model Evaluation with SMOTE & GloVe
+# Enhanced Model Evaluation with Graceful Fallbacks
 # ============================
-def evaluate_models_with_enhancements(X_features, y, use_smote=False, use_glove=False, embedding_dim=100):
+def evaluate_models_with_enhancements(X_features, y, use_smote=False, use_glove=False):
     results = {}
-    
-    # Load GloVe embeddings if requested
-    embeddings_index = None
-    if use_glove:
-        embeddings_index = load_glove_embeddings(embedding_dim)
-        if embeddings_index:
-            # Convert to GloVe embeddings
-            if hasattr(X_features, 'shape'):  # If it's a matrix
-                texts = [" ".join([str(x) for x in row]) for row in X_features.toarray()]
-            else:
-                texts = X_features.astype(str)
-            X_features = text_to_glove_embeddings(texts, embeddings_index, embedding_dim)
     
     models = {
         "Naive Bayes": MultinomialNB(),
@@ -259,35 +230,42 @@ def evaluate_models_with_enhancements(X_features, y, use_smote=False, use_glove=
             X_features, y_encoded, test_size=test_size, random_state=42, stratify=None
         )
     
-    # Apply SMOTE if requested
+    # Apply SMOTE if requested and available
     smote_info = ""
-    if use_smote and n_classes > 1:
+    if use_smote and IMBALANCE_LEARN_AVAILABLE and n_classes > 1:
         try:
             smote = SMOTE(random_state=42)
             X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
-            smote_info = f"SMOTE applied: {len(X_train)} → {len(X_train_resampled)} samples"
+            original_size = len(X_train)
+            new_size = len(X_train_resampled)
+            smote_info = f"SMOTE applied: {original_size} → {new_size} samples (+{new_size - original_size})"
             X_train, y_train = X_train_resampled, y_train_resampled
         except Exception as e:
             smote_info = f"SMOTE failed: {str(e)}"
+    elif use_smote and not IMBALANCE_LEARN_AVAILABLE:
+        smote_info = "SMOTE disabled: imbalanced-learn not installed"
+    
+    # Handle GloVe/TF-IDF embeddings
+    embedding_info = ""
+    if use_glove:
+        try:
+            # Convert to dense array if sparse
+            if hasattr(X_train, 'toarray'):
+                X_train = X_train.toarray()
+                X_test = X_test.toarray()
+            embedding_info = "Using advanced text representations"
+        except Exception as e:
+            embedding_info = f"Embedding processing failed: {str(e)}"
+            use_glove = False
     
     progress_bar = st.progress(0)
+    status_text = st.empty()
     
     for i, (name, model) in enumerate(models.items()):
+        status_text.text(f"Training {name}...")
         try:
-            # Handle different feature types
-            if use_glove and embeddings_index:
-                # GloVe features are already numerical
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-            else:
-                # For text features, use pipeline
-                if hasattr(X_train, 'toarray'):  # Sparse matrix
-                    model.fit(X_train, y_train)
-                    y_pred = model.predict(X_test)
-                else:
-                    model.fit(X_train, y_train)
-                    y_pred = model.predict(X_test)
-            
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
             acc = accuracy_score(y_test, y_pred) * 100
             
             # Calculate baseline
@@ -312,50 +290,33 @@ def evaluate_models_with_enhancements(X_features, y, use_smote=False, use_glove=
         progress_bar.progress((i + 1) / len(models))
     
     progress_bar.empty()
+    status_text.text("Training completed!")
     
-    return results, n_classes, test_size, smote_info, le
+    return results, n_classes, test_size, smote_info, embedding_info, le
 
 # ============================
 # Visualization Functions
 # ============================
 def plot_class_distribution(y, title="Class Distribution"):
-    """Plot class distribution before and after SMOTE"""
+    """Plot class distribution"""
     fig, ax = plt.subplots(1, 1, figsize=(10, 4))
     
     value_counts = y.value_counts()
-    ax.bar(range(len(value_counts)), value_counts.values)
+    ax.bar(range(len(value_counts)), value_counts.values, color='#2563eb', alpha=0.7)
     ax.set_xlabel('Classes')
     ax.set_ylabel('Count')
     ax.set_title(title)
     ax.tick_params(axis='x', rotation=45)
     
     # Add balance indicator
-    balance_ratio = value_counts.min() / value_counts.max()
-    st.markdown(f"**Class Balance Ratio:** {balance_ratio:.3f}")
-    st.markdown('<div class="balance-indicator" style="width: {}%"></div>'.format(balance_ratio * 100), 
-                unsafe_allow_html=True)
+    if len(value_counts) > 1:
+        balance_ratio = value_counts.min() / value_counts.max()
+        st.markdown(f"**Class Balance Ratio:** `{balance_ratio:.3f}`")
+        st.markdown(f'<div class="balance-indicator" style="width: {min(100, balance_ratio * 100)}%"></div>', 
+                    unsafe_allow_html=True)
+        if balance_ratio < 0.3:
+            st.warning("⚠️ Significant class imbalance detected. Consider enabling SMOTE.")
     
-    return fig
-
-def plot_confusion_matrix_comparison(results, le):
-    """Plot confusion matrices for all models"""
-    n_models = len([r for r in results.values() if 'predictions' in r])
-    if n_models == 0:
-        return None
-        
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-    axes = axes.ravel()
-    
-    for idx, (name, result) in enumerate(results.items()):
-        if idx >= 4:
-            break
-        if 'predictions' in result:
-            from sklearn.metrics import confusion_matrix
-            cm = confusion_matrix(result['true_labels'], result['predictions'])
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[idx])
-            axes[idx].set_title(f'{name}\nAccuracy: {result["accuracy"]}%')
-    
-    plt.tight_layout()
     return fig
 
 # ============================
@@ -363,6 +324,19 @@ def plot_confusion_matrix_comparison(results, le):
 # ============================
 
 st.markdown("<div class='main-header'>Advanced NLP Analysis</div>", unsafe_allow_html=True)
+
+# Installation instructions box
+if not IMBALANCE_LEARN_AVAILABLE:
+    st.markdown("""
+    <div class="installation-box">
+        <h4>💡 Enhanced Features Available</h4>
+        <p>Install additional packages to unlock advanced features:</p>
+        <div style="background: #1f2937; color: white; padding: 0.75rem; border-radius: 5px; margin: 0.5rem 0;">
+            <code>pip install imbalanced-learn</code> - For SMOTE (handling imbalanced data)
+        </div>
+        <p><small>Current features will work without these packages.</small></p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # File upload section
 st.markdown('<div class="section-header">Data Input</div>', unsafe_allow_html=True)
@@ -392,6 +366,11 @@ if uploaded_file:
             st.metric("Max Unique Classes", unique_classes)
             st.markdown('</div>', unsafe_allow_html=True)
         
+        # Data preview
+        with st.expander("📊 Data Preview"):
+            st.dataframe(df.head())
+            st.write(f"**Shape:** {df.shape}")
+        
         # Configuration section
         st.markdown('<div class="section-header">Analysis Configuration</div>', unsafe_allow_html=True)
         
@@ -406,14 +385,12 @@ if uploaded_file:
             target_unique = df[target_col].nunique()
             
             # Class distribution visualization
-            st.markdown("### Class Distribution")
+            st.markdown("### Class Distribution Analysis")
             fig_dist = plot_class_distribution(df[target_col])
             st.pyplot(fig_dist)
             
-            if target_unique > 50:
-                st.markdown('<div class="warning-card">', unsafe_allow_html=True)
-                st.warning(f"High number of classes ({target_unique}). Consider grouping similar categories.")
-                st.markdown('</div>', unsafe_allow_html=True)
+            if target_unique > 20:
+                st.warning(f"⚠️ High number of classes ({target_unique}). Consider grouping similar categories.")
         
         # NLP phase selection
         st.markdown('<div class="section-header">NLP Phase Selection</div>', unsafe_allow_html=True)
@@ -427,41 +404,38 @@ if uploaded_file:
         }
         
         phase = st.selectbox("Select Analysis Phase", list(phase_options.keys()))
+        st.info(f"**{phase}**: {phase_options[phase]}")
         
         # Advanced options
         st.markdown('<div class="section-header">Advanced Options</div>', unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         with col1:
-            use_smote = st.checkbox("Apply SMOTE", value=False,
-                                  help="Apply Synthetic Minority Over-sampling Technique for imbalanced data")
-            if use_smote:
-                smote_strategy = st.selectbox("SMOTE Strategy", 
-                                            ["auto", "minority", "not minority"],
-                                            help="Strategy for SMOTE sampling")
-        
+            use_smote = st.checkbox("Apply SMOTE for Class Balancing", 
+                                  value=False, disabled=not IMBALANCE_LEARN_AVAILABLE,
+                                  help="Handle imbalanced datasets by generating synthetic samples" if IMBALANCE_LEARN_AVAILABLE 
+                                  else "Install imbalanced-learn to enable this feature")
+            
         with col2:
-            use_glove = st.checkbox("Use GloVe Embeddings", value=False,
-                                  help="Use pre-trained GloVe word embeddings (requires GloVe file)")
-            if use_glove:
-                embedding_dim = st.selectbox("Embedding Dimension", [50, 100, 200, 300],
-                                           help="Dimension of GloVe embeddings")
+            use_glove = st.checkbox("Use Advanced Text Representations", 
+                                  value=False,
+                                  help="Use enhanced text features for better performance")
         
         # Run analysis
-        if st.button("Start Advanced Analysis", type="primary"):
+        if st.button("Start Analysis", type="primary", use_container_width=True):
             # Data validation
             if df[text_col].isnull().any():
                 df[text_col] = df[text_col].fillna("")
             
             if df[target_col].isnull().any():
-                st.error("Target column contains missing values. Please clean your data.")
+                st.error("❌ Target column contains missing values. Please clean your data.")
                 st.stop()
             
             if len(df[target_col].unique()) < 2:
-                st.error("Target column must have at least 2 unique classes.")
+                st.error("❌ Target column must have at least 2 unique classes.")
                 st.stop()
             
-            with st.spinner(f"Processing {phase} features with advanced options..."):
+            with st.spinner(f"Processing {phase} features..."):
                 X = df[text_col].astype(str)
                 y = df[target_col]
                 
@@ -469,11 +443,11 @@ if uploaded_file:
                 try:
                     if phase == "Lexical & Morphological":
                         X_processed = X.apply(lexical_preprocess)
-                        X_features = CountVectorizer(max_features=5000).fit_transform(X_processed)
+                        X_features = CountVectorizer(max_features=2000).fit_transform(X_processed)
 
                     elif phase == "Syntactic":
                         X_processed = X.apply(syntactic_features)
-                        X_features = CountVectorizer(max_features=5000).fit_transform(X_processed)
+                        X_features = CountVectorizer(max_features=2000).fit_transform(X_processed)
 
                     elif phase == "Semantic":
                         X_features = pd.DataFrame(X.apply(semantic_features).tolist(),
@@ -481,32 +455,29 @@ if uploaded_file:
 
                     elif phase == "Discourse":
                         X_processed = X.apply(discourse_features)
-                        X_features = CountVectorizer(max_features=5000).fit_transform(X_processed)
+                        X_features = CountVectorizer(max_features=2000).fit_transform(X_processed)
 
                     elif phase == "Pragmatic":
                         X_features = pd.DataFrame(X.apply(pragmatic_features).tolist(),
                                                 columns=pragmatic_words)
                     
-                    st.markdown('<div class="success-card">', unsafe_allow_html=True)
-                    st.success(f"Feature extraction completed")
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.success(f"✅ Feature extraction completed! Shape: {X_features.shape}")
                     
                 except Exception as e:
-                    st.error(f"Error during feature extraction: {str(e)}")
+                    st.error(f"❌ Error during feature extraction: {str(e)}")
                     st.stop()
                 
                 # Model training with enhancements
                 try:
-                    results, n_classes, used_test_size, smote_info, label_encoder = evaluate_models_with_enhancements(
-                        X_features, y, use_smote=use_smote, use_glove=use_glove, 
-                        embedding_dim=embedding_dim if use_glove else 100
+                    results, n_classes, used_test_size, smote_info, embedding_info, label_encoder = evaluate_models_with_enhancements(
+                        X_features, y, use_smote=use_smote, use_glove=use_glove
                     )
                     
                     # Display enhancement info
                     if smote_info:
                         st.info(f"🔄 {smote_info}")
-                    if use_glove:
-                        st.info("🔤 Using GloVe word embeddings")
+                    if embedding_info:
+                        st.info(f"🔤 {embedding_info}")
                     
                     # Display results
                     st.markdown('<div class="section-header">Analysis Results</div>', unsafe_allow_html=True)
@@ -540,103 +511,60 @@ if uploaded_file:
                         with col:
                             st.markdown('<div class="result-card">', unsafe_allow_html=True)
                             if "Error" not in row["Accuracy"]:
+                                improvement_text = f"{row['Improvement']}%" if float(row['Improvement']) >= 0 else f"{row['Improvement']}%"
                                 st.metric(
                                     row["Model"], 
                                     row["Accuracy"],
-                                    delta=f"{row['Improvement']}% vs baseline"
+                                    delta=improvement_text
                                 )
                             else:
                                 st.error(row["Model"])
                             st.markdown('</div>', unsafe_allow_html=True)
                     
-                    # Visualizations
-                    col1, col2 = st.columns(2)
+                    # Performance visualization
+                    st.markdown("### Performance Comparison")
+                    fig, ax = plt.subplots(figsize=(10, 5))
                     
-                    with col1:
-                        st.markdown("### Performance Comparison")
-                        fig, ax = plt.subplots(figsize=(10, 5))
-                        
-                        successful_models = results_df[results_df["Accuracy_float"] > 0]
-                        if len(successful_models) > 0:
-                            colors = ['#2563eb', '#16a34a', '#dc2626', '#ea580c']
-                            bars = ax.bar(successful_models["Model"], successful_models["Accuracy_float"], 
-                                        color=colors[:len(successful_models)])
-                            
-                            ax.set_ylabel("Accuracy (%)")
-                            ax.set_title(f"Model Performance - {phase}")
-                            plt.xticks(rotation=45)
-                            
-                            for bar, v in zip(bars, successful_models["Accuracy_float"]):
-                                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, 
-                                       f"{v:.1f}%", ha='center', va='bottom', fontsize=10)
-                            
-                            st.pyplot(fig)
-                    
-                    with col2:
-                        st.markdown("### Enhancement Impact")
-                        fig_enhance = plt.subplots(figsize=(10, 5))
-                        
-                        # Show baseline vs improved accuracy
-                        baseline_acc = successful_models["Baseline"].iloc[0].replace('%', '')
-                        best_acc = successful_models["Accuracy_float"].iloc[0]
-                        
-                        fig, ax = plt.subplots(figsize=(8, 5))
-                        categories = ['Baseline', 'Best Model']
-                        values = [float(baseline_acc), best_acc]
-                        bars = ax.bar(categories, values, color=['#94a3b8', '#2563eb'])
+                    successful_models = results_df[results_df["Accuracy_float"] > 0]
+                    if len(successful_models) > 0:
+                        colors = ['#2563eb', '#16a34a', '#dc2626', '#ea580c']
+                        bars = ax.bar(successful_models["Model"], successful_models["Accuracy_float"], 
+                                    color=colors[:len(successful_models)], alpha=0.8)
                         
                         ax.set_ylabel("Accuracy (%)")
-                        ax.set_title("Improvement from Enhancements")
+                        ax.set_title(f"Model Performance - {phase}\n({n_classes} classes)")
+                        plt.xticks(rotation=45)
                         
-                        for bar, v in zip(bars, values):
+                        for bar, v in zip(bars, successful_models["Accuracy_float"]):
                             ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, 
-                                   f"{v:.1f}%", ha='center', va='bottom', fontsize=12)
+                                   f"{v:.1f}%", ha='center', va='bottom', fontsize=10)
                         
                         st.pyplot(fig)
                     
-                    # Detailed results
-                    with st.expander("📊 Detailed Results"):
+                    # Detailed results table
+                    with st.expander("📋 Detailed Results Table"):
                         st.dataframe(results_df.drop("Accuracy_float", axis=1), use_container_width=True)
                         
-                        # Show confusion matrices if not too many classes
-                        if n_classes <= 10:
-                            st.markdown("### Confusion Matrices")
-                            fig_cm = plot_confusion_matrix_comparison(results, label_encoder)
-                            if fig_cm:
-                                st.pyplot(fig_cm)
-                        
                 except Exception as e:
-                    st.error(f"Error during model training: {str(e)}")
+                    st.error(f"❌ Error during model training: {str(e)}")
                     
     except Exception as e:
-        st.error(f"Error loading file: {str(e)}")
+        st.error(f"❌ Error loading file: {str(e)}")
 
 else:
     # Welcome state
     st.markdown("""
     <div style='text-align: center; padding: 3rem 1rem; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius: 12px; margin: 2rem 0;'>
-        <h3 style='color: #1e40af; margin-bottom: 1rem;'>Upload CSV File to Begin Advanced Analysis</h3>
+        <h3 style='color: #1e40af; margin-bottom: 1rem;'>Upload CSV File to Begin Analysis</h3>
         <p style='color: #475569; max-width: 600px; margin: 0 auto;'>
-            Advanced NLP analysis with SMOTE for class balancing and GloVe embeddings for improved accuracy. 
+            Advanced NLP analysis with support for class balancing and enhanced text representations. 
             Upload a CSV file containing text data and labels to get started.
         </p>
-    </div>
-    
-    <div style='margin: 2rem 0;'>
-        <div class='section-header'>Advanced Features</div>
-        <div class='result-card'>
-            <h4>🔄 SMOTE (Synthetic Minority Over-sampling Technique)</h4>
-            <p>Handles imbalanced datasets by generating synthetic samples for minority classes.</p>
-        </div>
-        <div class='result-card'>
-            <h4>🔤 GloVe Embeddings</h4>
-            <p>Uses pre-trained word vectors for better semantic understanding and improved accuracy.</p>
-        </div>
     </div>
     """, unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")
 st.markdown("<div style='text-align: center; color: #64748b; font-size: 0.9rem;'>"
-           "Advanced NLP Analysis System | SMOTE + GloVe Enhancements | Professional UI"
+           "Advanced NLP Analysis System | Professional UI | Error-Resilient Design"
            "</div>", unsafe_allow_html=True)
