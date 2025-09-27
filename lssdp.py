@@ -1,5 +1,6 @@
+
 # ============================================
-# 📌 Streamlit NLP Phase-wise with All Models - FIXED VERSION
+# 📌 Streamlit NLP Phase-wise with All Models - PROFESSIONAL UI
 # ============================================
 
 import streamlit as st
@@ -25,7 +26,8 @@ import numpy as np
 st.set_page_config(
     page_title="NLP Phase Analyzer",
     page_icon="🧠",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 # ============================
@@ -34,37 +36,80 @@ st.set_page_config(
 try:
     nlp = spacy.load("en_core_web_sm")
 except OSError:
-    st.error("⚠️ Please install the spaCy English model first:")
+    st.error("Please install the spaCy English model:")
     st.code("python -m spacy download en_core_web_sm")
     st.stop()
 
 stop_words = STOP_WORDS
 
 # ============================
-# Custom CSS Styling
+# Professional CSS Styling
 # ============================
 def load_css():
     st.markdown("""
     <style>
     .main-header {
-        font-size: 2.5rem;
-        color: #1f77b4;
+        font-size: 2.8rem;
+        color: #2563eb;
         text-align: center;
-        margin-bottom: 1rem;
+        margin-bottom: 2rem;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+    }
+    .section-header {
+        font-size: 1.4rem;
+        color: #1e40af;
+        margin: 2rem 0 1rem 0;
+        font-weight: 600;
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 0.5rem;
     }
     .metric-card {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 10px;
-        border-left: 4px solid #1f77b4;
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        padding: 1.5rem;
+        border-radius: 12px;
+        border-left: 4px solid #2563eb;
         margin: 0.5rem 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    .warning-box {
-        background-color: #fff3cd;
-        border-left: 4px solid #ffc107;
-        padding: 1rem;
-        border-radius: 5px;
+    .success-card {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        border-left: 4px solid #16a34a;
+    }
+    .warning-card {
+        background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+        border-left: 4px solid #ca8a04;
+    }
+    .result-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
         margin: 1rem 0;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    }
+    .stButton button {
+        width: 100%;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .stButton button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    .feature-preview {
+        background: #f8fafc;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 3px solid #94a3b8;
+        font-family: monospace;
+        font-size: 0.9rem;
+        margin: 0.5rem 0;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -104,7 +149,7 @@ def pragmatic_features(text):
     return [text.count(w) for w in pragmatic_words]
 
 # ============================
-# FIXED Model Evaluation with Smart Sampling
+# Model Evaluation
 # ============================
 def evaluate_models(X_features, y):
     results = {}
@@ -115,58 +160,38 @@ def evaluate_models(X_features, y):
         "SVM": SVC(random_state=42)
     }
 
-    # Calculate optimal test size based on number of classes
     n_classes = len(y.unique())
     n_samples = len(y)
     
-    # Ensure at least 2 samples per class in test set and at least 20% training data
-    min_test_size = n_classes * 2  # At least 2 samples per class in test
-    max_test_size = n_samples - n_classes  # Leave at least one sample per class in train
+    min_test_size = n_classes * 2
+    max_test_size = n_samples - n_classes
     
     if min_test_size >= n_samples * 0.2:
-        # Too many classes, use smaller test size but ensure min samples per class
-        test_size = min(0.1, (n_samples - n_classes) / n_samples)  # Use 10% or less
-        st.warning(f"⚠️ Many classes detected ({n_classes}). Using smaller test size: {test_size:.1%}")
+        test_size = min(0.1, (n_samples - n_classes) / n_samples)
     else:
-        test_size = 0.2  # Default 20% test size
+        test_size = 0.2
     
-    # Adjust test size if it's too large
-    test_size = min(test_size, 0.3)  # Cap at 30%
-    test_size = max(test_size, 0.05)  # At least 5%
-    
-    st.info(f"📊 Using test size: {test_size:.1%} (Samples: {int(n_samples * test_size)})")
+    test_size = min(test_size, 0.3)
+    test_size = max(test_size, 0.05)
     
     try:
-        # Try stratified split first
         X_train, X_test, y_train, y_test = train_test_split(
             X_features, y, test_size=test_size, random_state=42, stratify=y
         )
     except ValueError:
-        # If stratified fails, use random split
-        st.warning("🔄 Stratified split failed. Using random split instead.")
         X_train, X_test, y_train, y_test = train_test_split(
             X_features, y, test_size=test_size, random_state=42, stratify=None
         )
     
-    # Check if any class has only one sample in test set
-    test_class_counts = y_test.value_counts()
-    if (test_class_counts == 1).any():
-        st.warning("⚠️ Some classes have only one sample in test set. Results may be unstable.")
-    
     progress_bar = st.progress(0)
-    status_text = st.empty()
     
     for i, (name, model) in enumerate(models.items()):
-        status_text.text(f"Training {name}... ({i+1}/{len(models)})")
-        
         try:
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
             acc = accuracy_score(y_test, y_pred) * 100
             
-            # Additional metrics for multi-class scenario
-            if n_classes > 10:  # For high number of classes
-                # Calculate baseline accuracy (majority class)
+            if n_classes > 10:
                 baseline_acc = y.value_counts().max() / len(y) * 100
                 improvement = acc - baseline_acc
                 
@@ -190,7 +215,6 @@ def evaluate_models(X_features, y):
         
         progress_bar.progress((i + 1) / len(models))
     
-    status_text.text("Training completed!")
     progress_bar.empty()
     
     return results, n_classes, test_size
@@ -199,69 +223,57 @@ def evaluate_models(X_features, y):
 # Streamlit UI
 # ============================
 
-st.markdown("<div class='main-header'>🧠 NLP Phase-wise Analysis</div>", unsafe_allow_html=True)
+st.markdown("<div class='main-header'>NLP Phase Analysis</div>", unsafe_allow_html=True)
 
 # File upload section
-uploaded_file = st.file_uploader("📤 Upload CSV File", type=["csv"], 
-                               help="CSV should contain text data and labels")
+st.markdown('<div class="section-header">Data Input</div>', unsafe_allow_html=True)
+uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
 
 if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file)
         
-        st.success(f"✅ File loaded successfully! Shape: {df.shape}")
-        
         # Data overview
         col1, col2, col3, col4 = st.columns(4)
         with col1:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             st.metric("Total Records", len(df))
+            st.markdown('</div>', unsafe_allow_html=True)
         with col2:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             st.metric("Columns", len(df.columns))
+            st.markdown('</div>', unsafe_allow_html=True)
         with col3:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             st.metric("Missing Values", df.isnull().sum().sum())
+            st.markdown('</div>', unsafe_allow_html=True)
         with col4:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             unique_classes = df.select_dtypes(include=['object']).nunique().max()
             st.metric("Max Unique Classes", unique_classes)
-        
-        # Data preview
-        with st.expander("📊 Data Preview & Statistics"):
-            tab1, tab2, tab3 = st.tabs(["Data", "Info", "Descriptive Stats"])
-            with tab1:
-                st.dataframe(df.head(10))
-            with tab2:
-                st.write("**Data Types:**")
-                st.write(df.dtypes)
-                st.write("**Missing Values:**")
-                st.write(df.isnull().sum())
-            with tab3:
-                st.write(df.describe(include='all'))
+            st.markdown('</div>', unsafe_allow_html=True)
         
         # Configuration section
-        st.markdown("---")
-        st.subheader("⚙️ Analysis Configuration")
+        st.markdown('<div class="section-header">Analysis Configuration</div>', unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         with col1:
-            text_col = st.selectbox("Select Text Column", df.columns, 
-                                  help="Column containing text data")
+            text_col = st.selectbox("Text Column", df.columns)
         with col2:
-            target_col = st.selectbox("Select Target Column", df.columns,
-                                    help="Column containing labels/categories")
+            target_col = st.selectbox("Target Column", df.columns)
         
-        # Show target distribution
+        # Target analysis
         if target_col:
             target_unique = df[target_col].nunique()
-            st.info(f"**Target Analysis**: {target_unique} unique classes")
             
             if target_unique > 50:
-                st.warning(f"⚠️ High number of classes ({target_unique}). This is a multi-class classification problem. Consider grouping similar categories.")
-            
-            # Show top classes
-            top_classes = df[target_col].value_counts().head(10)
-            st.write("**Top 10 Classes:**")
-            st.bar_chart(top_classes)
+                st.markdown('<div class="warning-card">', unsafe_allow_html=True)
+                st.warning(f"High number of classes ({target_unique}). Consider grouping similar categories.")
+                st.markdown('</div>', unsafe_allow_html=True)
         
         # NLP phase selection
+        st.markdown('<div class="section-header">NLP Phase Selection</div>', unsafe_allow_html=True)
+        
         phase_options = {
             "Lexical & Morphological": "Word-level processing (tokenization, lemmatization)",
             "Syntactic": "Grammar analysis (part-of-speech tagging)", 
@@ -270,29 +282,20 @@ if uploaded_file:
             "Pragmatic": "Context analysis (intent, modality)"
         }
         
-        phase = st.selectbox("Select NLP Phase", list(phase_options.keys()))
-        st.info(f"**{phase}**: {phase_options[phase]}")
-        
-        # Advanced options
-        with st.expander("⚡ Advanced Options"):
-            custom_test_size = st.slider("Custom Test Size", 0.05, 0.4, 0.2, 0.05,
-                                       help="Adjust test set size for datasets with many classes")
-            enable_stratified = st.checkbox("Enable Stratified Sampling", value=True,
-                                          help="Maintain class distribution in train/test splits")
+        phase = st.selectbox("Select Analysis Phase", list(phase_options.keys()))
         
         # Run analysis
-        if st.button("🚀 Run Analysis", type="primary", use_container_width=True):
-            # Validate data
+        if st.button("Start Analysis", type="primary"):
+            # Data validation
             if df[text_col].isnull().any():
-                st.warning("⚠️ Text column contains missing values. Filling with empty strings.")
                 df[text_col] = df[text_col].fillna("")
             
             if df[target_col].isnull().any():
-                st.error("❌ Target column contains missing values. Please clean your data first.")
+                st.error("Target column contains missing values. Please clean your data.")
                 st.stop()
             
             if len(df[target_col].unique()) < 2:
-                st.error("❌ Target column must have at least 2 unique classes.")
+                st.error("Target column must have at least 2 unique classes.")
                 st.stop()
             
             with st.spinner(f"Processing {phase} features..."):
@@ -321,10 +324,12 @@ if uploaded_file:
                         X_features = pd.DataFrame(X.apply(pragmatic_features).tolist(),
                                                 columns=pragmatic_words)
                     
-                    st.success(f"✅ Feature extraction completed! Shape: {X_features.shape}")
+                    st.markdown('<div class="success-card">', unsafe_allow_html=True)
+                    st.success(f"Feature extraction completed")
+                    st.markdown('</div>', unsafe_allow_html=True)
                     
                 except Exception as e:
-                    st.error(f"❌ Error during feature extraction: {str(e)}")
+                    st.error(f"Error during feature extraction: {str(e)}")
                     st.stop()
                 
                 # Model training
@@ -332,10 +337,9 @@ if uploaded_file:
                     results, n_classes, used_test_size = evaluate_models(X_features, y)
                     
                     # Display results
-                    st.markdown("---")
-                    st.subheader("📊 Results")
+                    st.markdown('<div class="section-header">Analysis Results</div>', unsafe_allow_html=True)
                     
-                    # Convert results to DataFrame
+                    # Results metrics
                     results_data = []
                     for model_name, result in results.items():
                         if "error" in result:
@@ -363,90 +367,78 @@ if uploaded_file:
                     results_df = pd.DataFrame(results_data)
                     results_df = results_df.sort_values("Accuracy_float", ascending=False)
                     
-                    # Results metrics
-                    st.subheader("🏆 Model Performance")
+                    # Model performance cards
+                    st.markdown("### Model Performance")
+                    cols = st.columns(4)
                     
-                    if n_classes > 10:
-                        # Multi-class results display
-                        cols = st.columns(4)
-                        for i, (col, (_, row)) in enumerate(zip(cols, results_df.iterrows())):
-                            with col:
-                                if "Error" not in row["Accuracy"]:
-                                    if "Improvement" in row:
-                                        st.metric(
-                                            row["Model"], 
-                                            row["Accuracy"],
-                                            delta=f"{row['Improvement']} vs baseline"
-                                        )
-                                    else:
-                                        st.metric(row["Model"], row["Accuracy"])
+                    for i, (col, (_, row)) in enumerate(zip(cols, results_df.iterrows())):
+                        with col:
+                            st.markdown('<div class="result-card">', unsafe_allow_html=True)
+                            if "Error" not in row["Accuracy"]:
+                                if "Improvement" in row:
+                                    st.metric(
+                                        row["Model"], 
+                                        row["Accuracy"],
+                                        delta=f"{row['Improvement']} vs baseline"
+                                    )
                                 else:
-                                    st.error(row["Model"])
-                    else:
-                        # Binary/multi-class results
-                        cols = st.columns(4)
-                        for i, (col, (_, row)) in enumerate(zip(cols, results_df.iterrows())):
-                            with col:
-                                if "Error" not in row["Accuracy"]:
                                     st.metric(row["Model"], row["Accuracy"])
-                                else:
-                                    st.error(row["Model"])
+                            else:
+                                st.error(row["Model"])
+                            st.markdown('</div>', unsafe_allow_html=True)
                     
                     # Visualization
-                    st.subheader("📈 Performance Chart")
-                    fig, ax = plt.subplots(figsize=(10, 6))
+                    st.markdown("### Performance Comparison")
+                    fig, ax = plt.subplots(figsize=(10, 5))
                     
                     successful_models = results_df[results_df["Accuracy_float"] > 0]
                     if len(successful_models) > 0:
+                        colors = ['#2563eb', '#16a34a', '#dc2626', '#ea580c']
                         bars = ax.bar(successful_models["Model"], successful_models["Accuracy_float"], 
-                                    color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62727'])
+                                    color=colors[:len(successful_models)])
                         
                         ax.set_ylabel("Accuracy (%)")
-                        ax.set_title(f"Model Performance - {phase}\n({n_classes} classes, test size: {used_test_size:.1%})")
+                        ax.set_title(f"Model Performance - {phase}")
                         plt.xticks(rotation=45)
                         
-                        # Add value labels on bars
                         for bar, v in zip(bars, successful_models["Accuracy_float"]):
                             ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, 
-                                   f"{v:.1f}%", ha='center', va='bottom', fontsize=9)
+                                   f"{v:.1f}%", ha='center', va='bottom', fontsize=10)
                         
                         st.pyplot(fig)
                     
-                    # Results table
-                    st.subheader("📋 Detailed Results")
-                    st.dataframe(results_df.drop("Accuracy_float", axis=1), use_container_width=True)
-                    
                     # Technical details
-                    with st.expander("🔧 Technical Details"):
-                        st.write(f"**Feature Matrix Shape:** {X_features.shape}")
-                        st.write(f"**Number of Classes:** {n_classes}")
-                        st.write(f"**Test Size Used:** {used_test_size:.1%}")
-                        st.write("**Class Distribution:**")
-                        st.bar_chart(y.value_counts().head(20))  # Show top 20 classes
+                    with st.expander("Technical Details"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("**Dataset Info**")
+                            st.write(f"Feature Matrix: {X_features.shape}")
+                            st.write(f"Number of Classes: {n_classes}")
+                        with col2:
+                            st.write("**Training Info**")
+                            st.write(f"Test Size: {used_test_size:.1%}")
+                            st.write(f"Models: 4 algorithms")
                         
                 except Exception as e:
-                    st.error(f"❌ Error during model training: {str(e)}")
+                    st.error(f"Error during model training: {str(e)}")
                     
     except Exception as e:
-        st.error(f"❌ Error loading file: {str(e)}")
+        st.error(f"Error loading file: {str(e)}")
 
 else:
-    # Instructions when no file is uploaded
-    st.info("👆 Please upload a CSV file to begin analysis")
+    # Welcome state
     st.markdown("""
-    ### 📋 Expected Data Format:
-    - **CSV file** with text data and labels
-    - **Text column**: Contains the text to analyze
-    - **Target column**: Contains categories/labels
-    
-    ### 💡 Tips for Better Results:
-    - Ensure your target column has reasonable number of classes (<50 ideal)
-    - Clean your text data before uploading
-    - For many classes, consider grouping similar categories
-    """)
+    <div style='text-align: center; padding: 3rem 1rem; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius: 12px; margin: 2rem 0;'>
+        <h3 style='color: #1e40af; margin-bottom: 1rem;'>Upload CSV File to Begin Analysis</h3>
+        <p style='color: #475569; max-width: 600px; margin: 0 auto;'>
+            Analyze text data across different NLP phases using machine learning models. 
+            Upload a CSV file containing text data and labels to get started.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")
-st.markdown("<div style='text-align: center; color: #666;'>"
-           "NLP Phase Analyzer | Handles multi-class datasets | Built with Streamlit 🎈"
+st.markdown("<div style='text-align: center; color: #64748b; font-size: 0.9rem;'>"
+           "NLP Phase Analysis System | Professional UI"
            "</div>", unsafe_allow_html=True)
