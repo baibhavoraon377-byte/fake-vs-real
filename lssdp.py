@@ -15,12 +15,11 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.preprocessing import LabelEncoder
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-from matplotlib.gridspec import GridSpec
 
 # ============================
 # Configuration
@@ -87,6 +86,23 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(20, 110, 180, 0.2);
     }
     
+    .prime-button {
+        background: linear-gradient(135deg, var(--prime-orange) 0%, #E67E22 100%) !important;
+        color: var(--prime-white) !important;
+        border: none !important;
+        padding: 1rem 2.5rem !important;
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        font-size: 1.1rem !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 12px rgba(255, 153, 0, 0.3) !important;
+    }
+    
+    .prime-button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(255, 153, 0, 0.4) !important;
+    }
+    
     .section-title {
         font-size: 2rem;
         color: var(--prime-navy);
@@ -97,13 +113,103 @@ st.markdown("""
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
     
-    .dashboard-section {
-        background: var(--prime-white);
+    .feature-tag {
+        background: linear-gradient(135deg, var(--prime-light) 0%, #E1E8ED 100%);
+        color: var(--prime-text);
+        padding: 0.6rem 1.2rem;
+        border-radius: 25px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin: 0.4rem;
+        display: inline-block;
+        border: 1px solid #D1D9E0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    
+    .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 0.8rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    .status-active { background: #27AE60; }
+    .status-warning { background: #F39C12; }
+    .status-error { background: #E74C3C; }
+    
+    .nav-bar {
+        background: linear-gradient(135deg, var(--prime-navy) 0%, var(--prime-dark) 100%);
+        padding: 1.5rem 3rem;
         border-radius: 12px;
+        margin-bottom: 2.5rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    .nav-title {
+        color: var(--prime-white);
+        font-size: 1.8rem;
+        font-weight: 700;
+        margin: 0;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .insight-box {
+        background: linear-gradient(135deg, #F8FBFF 0%, #E8F2FF 100%);
+        border-left: 4px solid var(--prime-blue);
         padding: 2rem;
+        border-radius: 12px;
         margin: 1.5rem 0;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 12px rgba(20, 110, 180, 0.1);
         border: 1px solid #E1E8ED;
+    }
+    
+    .performance-badge {
+        background: linear-gradient(135deg, var(--prime-orange) 0%, #E67E22 100%);
+        color: var(--prime-white);
+        padding: 0.8rem 1.5rem;
+        border-radius: 25px;
+        font-size: 1rem;
+        font-weight: 700;
+        display: inline-block;
+        box-shadow: 0 4px 12px rgba(255, 153, 0, 0.3);
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: var(--prime-blue);
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .metric-label {
+        font-size: 1rem;
+        color: var(--prime-text-light);
+        font-weight: 600;
+        margin-top: 0.5rem;
+    }
+    
+    /* Text color enhancements */
+    .stMarkdown, .stText, .stLabel {
+        color: var(--prime-text) !important;
+    }
+    
+    .stSelectbox label, .stRadio label, .stSlider label {
+        color: var(--prime-text) !important;
+        font-weight: 600 !important;
+    }
+    
+    .stExpander {
+        border: 1px solid #E1E8ED !important;
+        border-radius: 12px !important;
+        margin: 1rem 0 !important;
+    }
+    
+    .stExpander summary {
+        color: var(--prime-navy) !important;
+        font-weight: 700 !important;
+        font-size: 1.1rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -220,11 +326,23 @@ class PrimeModelTrainer:
             X, y_encoded, test_size=test_size, random_state=42, stratify=y_encoded
         )
         
-        for name, model in self.models.items():
+        progress_container = st.empty()
+        
+        for i, (name, model) in enumerate(self.models.items()):
+            with progress_container.container():
+                cols = st.columns([1, 4])
+                with cols[0]:
+                    st.markdown(f"**{name}**")
+                with cols[1]:
+                    progress_bar = st.progress(0)
+                    for step in range(5):
+                        progress_bar.progress((step + 1) / 5)
+                        import time
+                        time.sleep(0.1)
+            
             try:
                 model.fit(X_train, y_train)
                 y_pred = model.predict(X_test)
-                y_proba = model.predict_proba(X_test) if hasattr(model, 'predict_proba') else None
                 
                 accuracy = accuracy_score(y_test, y_pred)
                 precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
@@ -237,9 +355,6 @@ class PrimeModelTrainer:
                     'recall': recall,
                     'f1_score': f1,
                     'model': model,
-                    'predictions': y_pred,
-                    'true_labels': y_test,
-                    'probabilities': y_proba,
                     'n_classes': n_classes,
                     'test_size': len(y_test)
                 }
@@ -247,207 +362,22 @@ class PrimeModelTrainer:
             except Exception as e:
                 results[name] = {'error': str(e)}
         
+        progress_container.empty()
         return results, le
 
 # ============================
-# Enhanced Dashboard Visualizer
+# Enhanced Visualization Engine
 # ============================
-class EnhancedDashboard:
+class PrimeVisualizer:
     @staticmethod
-    def create_comprehensive_dashboard(results):
-        """Create a highly organized and spaced dashboard"""
-        # Create figure with GridSpec for better control
-        fig = plt.figure(figsize=(20, 16))
-        gs = GridSpec(3, 3, figure=fig, hspace=0.4, wspace=0.3)
+    def create_performance_dashboard(results):
+        """Create enhanced performance dashboard"""
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+        fig.suptitle('Model Performance Dashboard', fontsize=18, fontweight='bold', color='#1A3E6B')
         
         # Set overall style
         plt.rcParams['font.family'] = 'sans-serif'
-        plt.rcParams['axes.facecolor'] = '#F8FBFF'
-        
-        models = []
-        metrics_data = {'Accuracy': [], 'Precision': [], 'Recall': [], 'F1-Score': []}
-        
-        for model_name, result in results.items():
-            if 'error' not in result:
-                clean_name = model_name.replace('🎯 ', '').replace('🌲 ', '').replace('⚡ ', '').replace('📊 ', '')
-                models.append(clean_name)
-                metrics_data['Accuracy'].append(result['accuracy'])
-                metrics_data['Precision'].append(result['precision'])
-                metrics_data['Recall'].append(result['recall'])
-                metrics_data['F1-Score'].append(result['f1_score'])
-        
-        colors = ['#146EB4', '#FF9900', '#27AE60', '#E74C3C']
-        
-        # Chart 1: Main Performance Comparison (Top Left - Larger)
-        ax1 = fig.add_subplot(gs[0, 0])
-        x_pos = np.arange(len(models))
-        width = 0.2
-        
-        bars1 = ax1.bar(x_pos - width*1.5, metrics_data['Accuracy'], width, label='Accuracy', 
-                       color=colors[0], alpha=0.9, edgecolor='white', linewidth=1.5)
-        bars2 = ax1.bar(x_pos - width*0.5, metrics_data['Precision'], width, label='Precision', 
-                       color=colors[1], alpha=0.9, edgecolor='white', linewidth=1.5)
-        bars3 = ax1.bar(x_pos + width*0.5, metrics_data['Recall'], width, label='Recall', 
-                       color=colors[2], alpha=0.9, edgecolor='white', linewidth=1.5)
-        bars4 = ax1.bar(x_pos + width*1.5, metrics_data['F1-Score'], width, label='F1-Score', 
-                       color=colors[3], alpha=0.9, edgecolor='white', linewidth=1.5)
-        
-        ax1.set_facecolor('#F8FBFF')
-        ax1.set_title('Comprehensive Model Performance', fontweight='bold', fontsize=14, color='#1A3E6B', pad=20)
-        ax1.set_ylabel('Scores', fontweight='bold', color='#4A5568', fontsize=12)
-        ax1.set_xticks(x_pos)
-        ax1.set_xticklabels(models, rotation=45, color='#4A5568', fontsize=11)
-        ax1.tick_params(axis='y', colors='#4A5568')
-        ax1.legend(facecolor='#F8FBFF', edgecolor='none', fontsize=10)
-        ax1.grid(True, alpha=0.2, axis='y')
-        ax1.spines[['top', 'right']].set_visible(False)
-        
-        # Add value labels on bars
-        for bars in [bars1, bars2, bars3, bars4]:
-            for bar in bars:
-                height = bar.get_height()
-                ax1.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                        f'{height:.3f}', ha='center', va='bottom', fontweight='bold', 
-                        color='#1A3E6B', fontsize=9)
-        
-        # Chart 2: Accuracy Comparison (Top Middle)
-        ax2 = fig.add_subplot(gs[0, 1])
-        bars = ax2.bar(models, metrics_data['Accuracy'], color=colors, alpha=0.9, 
-                      edgecolor='white', linewidth=2)
-        ax2.set_facecolor('#F8FBFF')
-        ax2.set_title('Accuracy Comparison', fontweight='bold', fontsize=14, color='#1A3E6B', pad=20)
-        ax2.set_ylabel('Accuracy', fontweight='bold', color='#4A5568', fontsize=12)
-        ax2.tick_params(axis='x', rotation=45, colors='#4A5568')
-        ax2.tick_params(axis='y', colors='#4A5568')
-        ax2.grid(True, alpha=0.2, axis='y')
-        ax2.spines[['top', 'right']].set_visible(False)
-        
-        for bar in bars:
-            height = bar.get_height()
-            ax2.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', 
-                    color='#1A3E6B', fontsize=10)
-        
-        # Chart 3: F1-Score Comparison (Top Right)
-        ax3 = fig.add_subplot(gs[0, 2])
-        bars = ax3.bar(models, metrics_data['F1-Score'], color=colors, alpha=0.9, 
-                      edgecolor='white', linewidth=2)
-        ax3.set_facecolor('#F8FBFF')
-        ax3.set_title('F1-Score Comparison', fontweight='bold', fontsize=14, color='#1A3E6B', pad=20)
-        ax3.set_ylabel('F1-Score', fontweight='bold', color='#4A5568', fontsize=12)
-        ax3.tick_params(axis='x', rotation=45, colors='#4A5568')
-        ax3.tick_params(axis='y', colors='#4A5568')
-        ax3.grid(True, alpha=0.2, axis='y')
-        ax3.spines[['top', 'right']].set_visible(False)
-        
-        for bar in bars:
-            height = bar.get_height()
-            ax3.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', 
-                    color='#1A3E6B', fontsize=10)
-        
-        # Chart 4: Radar Chart (Middle Row - Span all columns)
-        ax4 = fig.add_subplot(gs[1, :])
-        metrics_array = np.array([metrics_data['Accuracy'], metrics_data['Precision'], 
-                                metrics_data['Recall'], metrics_data['F1-Score']])
-        metrics_normalized = metrics_array / metrics_array.max(axis=1, keepdims=True)
-        
-        angles = np.linspace(0, 2*np.pi, len(metrics_normalized), endpoint=False).tolist()
-        angles += angles[:1]
-        
-        for i, model in enumerate(models):
-            values = metrics_normalized[:, i].tolist()
-            values += values[:1]
-            ax4.plot(angles, values, 'o-', linewidth=3, label=model, color=colors[i], 
-                    markersize=8, markerfacecolor='white', markeredgewidth=2)
-            ax4.fill(angles, values, alpha=0.1, color=colors[i])
-        
-        ax4.set_facecolor('#F8FBFF')
-        ax4.set_yticklabels([])
-        ax4.set_xticks(angles[:-1])
-        ax4.set_xticklabels(['Accuracy', 'Precision', 'Recall', 'F1-Score'], 
-                           color='#4A5568', fontweight='bold', fontsize=12)
-        ax4.set_title('Performance Radar Chart - Normalized Comparison', fontweight='bold', 
-                     fontsize=16, color='#1A3E6B', pad=20)
-        ax4.legend(facecolor='#F8FBFF', edgecolor='none', bbox_to_anchor=(0.5, -0.15), 
-                  loc='upper center', ncol=4, fontsize=11)
-        ax4.grid(True, alpha=0.3)
-        
-        # Chart 5: Model Ranking (Bottom Left)
-        ax5 = fig.add_subplot(gs[2, 0])
-        # Create ranking based on average performance
-        avg_scores = []
-        for i in range(len(models)):
-            avg_score = np.mean([metrics_data[metric][i] for metric in metrics_data])
-            avg_scores.append(avg_score)
-        
-        ranked_indices = np.argsort(avg_scores)[::-1]
-        ranked_models = [models[i] for i in ranked_indices]
-        ranked_scores = [avg_scores[i] for i in ranked_indices]
-        
-        bars = ax5.barh(range(len(ranked_models)), ranked_scores, color=[colors[i] for i in ranked_indices], 
-                       alpha=0.9, edgecolor='white', linewidth=2)
-        ax5.set_facecolor('#F8FBFF')
-        ax5.set_title('Model Performance Ranking', fontweight='bold', fontsize=14, color='#1A3E6B', pad=20)
-        ax5.set_xlabel('Average Score', fontweight='bold', color='#4A5568', fontsize=12)
-        ax5.set_yticks(range(len(ranked_models)))
-        ax5.set_yticklabels(ranked_models, color='#4A5568', fontsize=11)
-        ax5.grid(True, alpha=0.2, axis='x')
-        ax5.spines[['top', 'right']].set_visible(False)
-        
-        for i, bar in enumerate(bars):
-            width = bar.get_width()
-            ax5.text(width + 0.01, bar.get_y() + bar.get_height()/2.,
-                    f'{width:.3f}', ha='left', va='center', fontweight='bold', 
-                    color='#1A3E6B', fontsize=10)
-        
-        # Chart 6: Performance Distribution (Bottom Middle)
-        ax6 = fig.add_subplot(gs[2, 1])
-        all_scores = []
-        for metric in metrics_data.values():
-            all_scores.extend(metric)
-        
-        ax6.hist(all_scores, bins=15, color='#146EB4', alpha=0.7, edgecolor='white', linewidth=1.5)
-        ax6.set_facecolor('#F8FBFF')
-        ax6.set_title('Score Distribution Across Models', fontweight='bold', fontsize=14, color='#1A3E6B', pad=20)
-        ax6.set_xlabel('Performance Score', fontweight='bold', color='#4A5568', fontsize=12)
-        ax6.set_ylabel('Frequency', fontweight='bold', color='#4A5568', fontsize=12)
-        ax6.tick_params(axis='both', colors='#4A5568')
-        ax6.grid(True, alpha=0.2)
-        ax6.spines[['top', 'right']].set_visible(False)
-        
-        # Chart 7: Metric Correlation (Bottom Right)
-        ax7 = fig.add_subplot(gs[2, 2])
-        metrics_df = pd.DataFrame(metrics_data, index=models)
-        correlation = metrics_df.corr()
-        
-        im = ax7.imshow(correlation, cmap='Blues', vmin=0.5, vmax=1.0, aspect='auto')
-        ax7.set_facecolor('#F8FBFF')
-        ax7.set_title('Metric Correlation Matrix', fontweight='bold', fontsize=14, color='#1A3E6B', pad=20)
-        ax7.set_xticks(range(len(correlation.columns)))
-        ax7.set_yticks(range(len(correlation.columns)))
-        ax7.set_xticklabels(correlation.columns, rotation=45, color='#4A5568', fontsize=10)
-        ax7.set_yticklabels(correlation.columns, color='#4A5568', fontsize=10)
-        
-        # Add correlation values
-        for i in range(len(correlation.columns)):
-            for j in range(len(correlation.columns)):
-                text = ax7.text(j, i, f'{correlation.iloc[i, j]:.2f}',
-                               ha="center", va="center", color="white" if correlation.iloc[i, j] > 0.7 else "black",
-                               fontweight='bold', fontsize=9)
-        
-        # Add colorbar
-        cbar = plt.colorbar(im, ax=ax7, shrink=0.8)
-        cbar.ax.tick_params(colors='#4A5568')
-        
-        plt.tight_layout()
-        return fig
-
-    @staticmethod
-    def create_quick_overview(results):
-        """Create a quick overview for the main results section"""
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
-        fig.suptitle('Quick Performance Overview', fontsize=16, fontweight='bold', color='#1A3E6B', y=0.95)
+        plt.rcParams['axes.facecolor'] = '#F5F8FA'
         
         models = []
         metrics = {'Accuracy': [], 'Precision': [], 'Recall': [], 'F1-Score': []}
@@ -461,25 +391,74 @@ class EnhancedDashboard:
                 metrics['Recall'].append(result['recall'])
                 metrics['F1-Score'].append(result['f1_score'])
         
+        # Color scheme
         colors = ['#146EB4', '#FF9900', '#27AE60', '#E74C3C']
         
-        # Simple bar charts for quick overview
-        axes = [ax1, ax2, ax3, ax4]
-        metric_names = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+        # Accuracy plot
+        bars1 = ax1.bar(models, metrics['Accuracy'], color=colors, alpha=0.9)
+        ax1.set_facecolor('#F8FBFF')
+        ax1.set_title('Accuracy Comparison', fontweight='bold', fontsize=14, color='#1A3E6B')
+        ax1.set_ylabel('Accuracy', fontweight='bold', color='#4A5568')
+        ax1.tick_params(axis='x', rotation=45, colors='#4A5568')
+        ax1.tick_params(axis='y', colors='#4A5568')
+        ax1.grid(True, alpha=0.3)
         
-        for idx, (ax, metric) in enumerate(zip(axes, metric_names)):
-            bars = ax.bar(models, metrics[metric], color=colors, alpha=0.8)
-            ax.set_facecolor('#F8FBFF')
-            ax.set_title(f'{metric} Comparison', fontweight='bold', color='#1A3E6B')
-            ax.set_ylabel(metric, fontweight='bold', color='#4A5568')
-            ax.tick_params(axis='x', rotation=45, colors='#4A5568')
-            ax.tick_params(axis='y', colors='#4A5568')
-            ax.grid(True, alpha=0.2, axis='y')
-            
-            for bar in bars:
-                height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                       f'{height:.3f}', ha='center', va='bottom', fontweight='bold')
+        for bar in bars1:
+            height = bar.get_height()
+            ax1.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='#1A3E6B')
+        
+        # F1-Score plot
+        bars2 = ax2.bar(models, metrics['F1-Score'], color=colors, alpha=0.9)
+        ax2.set_facecolor('#F8FBFF')
+        ax2.set_title('F1-Score Comparison', fontweight='bold', fontsize=14, color='#1A3E6B')
+        ax2.set_ylabel('F1-Score', fontweight='bold', color='#4A5568')
+        ax2.tick_params(axis='x', rotation=45, colors='#4A5568')
+        ax2.tick_params(axis='y', colors='#4A5568')
+        ax2.grid(True, alpha=0.3)
+        
+        for bar in bars2:
+            height = bar.get_height()
+            ax2.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='#1A3E6B')
+        
+        # Precision-Recall comparison
+        x_index = np.arange(len(models))
+        width = 0.35
+        bars3 = ax3.bar(x_index - width/2, metrics['Precision'], width, label='Precision', 
+                       color='#146EB4', alpha=0.9)
+        bars4 = ax3.bar(x_index + width/2, metrics['Recall'], width, label='Recall', 
+                       color='#FF9900', alpha=0.9)
+        ax3.set_facecolor('#F8FBFF')
+        ax3.set_title('Precision vs Recall', fontweight='bold', fontsize=14, color='#1A3E6B')
+        ax3.set_ylabel('Scores', fontweight='bold', color='#4A5568')
+        ax3.set_xticks(x_index)
+        ax3.set_xticklabels(models, rotation=45, color='#4A5568')
+        ax3.tick_params(axis='y', colors='#4A5568')
+        ax3.legend(facecolor='#F8FBFF')
+        ax3.grid(True, alpha=0.3)
+        
+        # Model comparison radar
+        metrics_array = np.array([metrics['Accuracy'], metrics['Precision'], 
+                                metrics['Recall'], metrics['F1-Score']])
+        metrics_normalized = metrics_array / metrics_array.max(axis=1, keepdims=True)
+        
+        angles = np.linspace(0, 2*np.pi, len(metrics_normalized), endpoint=False).tolist()
+        angles += angles[:1]
+        
+        for i, model in enumerate(models):
+            values = metrics_normalized[:, i].tolist()
+            values += values[:1]
+            ax4.plot(angles, values, 'o-', linewidth=3, label=model, color=colors[i], markersize=8)
+            ax4.fill(angles, values, alpha=0.1, color=colors[i])
+        
+        ax4.set_facecolor('#F8FBFF')
+        ax4.set_yticklabels([])
+        ax4.set_xticks(angles[:-1])
+        ax4.set_xticklabels(['Accuracy', 'Precision', 'Recall', 'F1-Score'], 
+                           color='#4A5568', fontweight='bold')
+        ax4.set_title('Performance Radar', fontweight='bold', fontsize=14, color='#1A3E6B')
+        ax4.legend(facecolor='#F8FBFF', bbox_to_anchor=(1.2, 1.0))
         
         plt.tight_layout()
         return fig
@@ -488,20 +467,25 @@ class EnhancedDashboard:
 # Main Application
 # ============================
 def main():
-    # Header
+    # Enhanced Amazon Prime Style Header
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #1A3E6B 0%, #0F4E8A 100%); 
-                padding: 2rem; border-radius: 12px; margin-bottom: 2.5rem;">
-        <h1 style="color: white; text-align: center; margin: 0; font-size: 2.5rem;">🎯 NLP Pro Analysis Suite</h1>
-        <p style="color: #A0BCC8; text-align: center; margin: 0.5rem 0 0 0; font-size: 1.2rem;">
-            Enterprise-grade Text Analytics Platform
-        </p>
+    <div class="nav-bar">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1 class="nav-title">🎯 NLP Pro Analysis Suite</h1>
+                <p style="color: #A0BCC8; margin: 0; font-size: 1.1rem;">Enterprise-grade Text Analytics Platform</p>
+            </div>
+            <div style="display: flex; gap: 1.5rem; align-items: center;">
+                <span class="status-indicator status-active"></span>
+                <span style="color: white; font-weight: 600;">System Online</span>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("<div class='main-header'>Advanced Text Intelligence Platform</div>", unsafe_allow_html=True)
     
-    # Feature Highlights
+    # Enhanced Feature Highlights
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown("""
@@ -542,7 +526,16 @@ def main():
         try:
             df = pd.read_csv(uploaded_file)
             
-            # Data Explorer
+            # Enhanced Success Message
+            st.markdown(f"""
+            <div class="insight-box">
+                <h4 style="color: #146EB4; margin-bottom: 1rem;">✅ Dataset Loaded Successfully</h4>
+                <p style="color: #4A5568; margin: 0.5rem 0;"><strong>Dimensions:</strong> {df.shape[0]} records × {df.shape[1]} features</p>
+                <p style="color: #4A5568; margin: 0.5rem 0;"><strong>Memory Usage:</strong> {df.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Enhanced Data Explorer
             with st.expander("🔍 Data Explorer", expanded=True):
                 tab1, tab2 = st.tabs(["📊 Preview", "📈 Statistics"])
                 
@@ -552,39 +545,68 @@ def main():
                 with tab2:
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("Total Records", df.shape[0])
+                        st.markdown(f'<div class="metric-value">{df.shape[0]}</div>', unsafe_allow_html=True)
+                        st.markdown('<div class="metric-label">Total Records</div>', unsafe_allow_html=True)
                     with col2:
-                        st.metric("Features", df.shape[1])
+                        st.markdown(f'<div class="metric-value">{df.shape[1]}</div>', unsafe_allow_html=True)
+                        st.markdown('<div class="metric-label">Features</div>', unsafe_allow_html=True)
                     with col3:
-                        st.metric("Missing Values", df.isnull().sum().sum())
+                        st.markdown(f'<div class="metric-value">{df.isnull().sum().sum()}</div>', unsafe_allow_html=True)
+                        st.markdown('<div class="metric-label">Missing Values</div>', unsafe_allow_html=True)
                     with col4:
-                        st.metric("Data Types", len(df.dtypes.unique()))
+                        st.markdown(f'<div class="metric-value">{len(df.dtypes.unique())}</div>', unsafe_allow_html=True)
+                        st.markdown('<div class="metric-label">Data Types</div>', unsafe_allow_html=True)
             
             # Analysis Configuration
             st.markdown('<div class="section-title">⚙️ Analysis Configuration</div>', unsafe_allow_html=True)
             
             col1, col2 = st.columns(2)
             with col1:
-                text_col = st.selectbox("Text Column", df.columns)
+                text_col = st.selectbox("Text Column", df.columns, 
+                                      help="Select the column containing text data")
             with col2:
-                target_col = st.selectbox("Target Column", df.columns)
+                target_col = st.selectbox("Target Column", df.columns,
+                                        help="Select the column containing labels")
+            
+            # Feature Type Selection
+            st.markdown('<div class="section-title">🎯 Feature Engineering</div>', unsafe_allow_html=True)
             
             feature_type = st.radio("Select Analysis Type:", 
                                   ["📖 Lexical Features", "🎭 Semantic Features", 
                                    "🔧 Syntactic Features", "🎯 Pragmatic Features"],
                                   horizontal=True)
             
+            # Enhanced Analysis Button
             if st.button("🚀 Launch Advanced Analysis", use_container_width=True):
+                # Data Validation
                 if df[text_col].isnull().any():
                     df[text_col] = df[text_col].fillna('')
                 
                 if df[target_col].isnull().any():
-                    st.error("Target column contains missing values.")
+                    st.error("Target column contains missing values. Please clean your data.")
                     return
                 
                 if len(df[target_col].unique()) < 2:
                     st.error("Target column must have at least 2 unique classes.")
                     return
+                
+                # Enhanced Class Distribution
+                st.markdown('<div class="section-title">📊 Class Distribution Analysis</div>', unsafe_allow_html=True)
+                fig, ax = plt.subplots(figsize=(12, 5))
+                value_counts = df[target_col].value_counts()
+                bars = ax.bar(range(len(value_counts)), value_counts.values, 
+                            color='#146EB4', alpha=0.8, edgecolor='#0F4E8A', linewidth=2)
+                ax.set_facecolor('#F8FBFF')
+                ax.set_xlabel('Classes', fontweight='bold', color='#4A5568')
+                ax.set_ylabel('Count', fontweight='bold', color='#4A5568')
+                ax.set_title('Class Distribution Analysis', fontweight='bold', fontsize=14, color='#1A3E6B')
+                ax.grid(True, alpha=0.3)
+                
+                for bar, count in zip(bars, value_counts.values):
+                    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1, 
+                           str(count), ha='center', va='bottom', fontweight='bold', color='#1A3E6B')
+                
+                st.pyplot(fig)
                 
                 # Feature Extraction
                 with st.spinner("🔄 Extracting advanced features..."):
@@ -594,48 +616,85 @@ def main():
                     
                     if feature_type == "📖 Lexical Features":
                         X_features = extractor.extract_lexical_features(X)
+                        feature_desc = "Word-level analysis with lemmatization and n-grams"
                     elif feature_type == "🎭 Semantic Features":
                         X_features = extractor.extract_semantic_features(X)
+                        feature_desc = "Sentiment analysis and text complexity features"
                     elif feature_type == "🔧 Syntactic Features":
                         X_features = extractor.extract_syntactic_features(X)
-                    else:
+                        feature_desc = "Grammar structure and part-of-speech analysis"
+                    else:  # Pragmatic Features
                         X_features = extractor.extract_pragmatic_features(X)
+                        feature_desc = "Context analysis, modality, and intent detection"
+                
+                # Feature Extraction Success
+                st.markdown(f"""
+                <div class="insight-box">
+                    <h4 style="color: #146EB4; margin-bottom: 1rem;">✅ Feature Extraction Complete</h4>
+                    <p style="color: #4A5568; margin: 0.5rem 0;"><strong>Feature Type:</strong> {feature_type}</p>
+                    <p style="color: #4A5568; margin: 0.5rem 0;"><strong>Description:</strong> {feature_desc}</p>
+                    <p style="color: #4A5568; margin: 0.5rem 0;"><strong>Feature Matrix:</strong> {X_features.shape}</p>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 # Model Training
                 with st.spinner("🤖 Training advanced models..."):
                     trainer = PrimeModelTrainer()
                     results, label_encoder = trainer.train_and_evaluate(X_features, y)
                 
+                # Enhanced Results Display
+                st.markdown('<div class="section-title">📈 Performance Results</div>', unsafe_allow_html=True)
+                
                 successful_models = {k: v for k, v in results.items() if 'error' not in v}
                 
                 if successful_models:
-                    # Enhanced Dashboard Section
-                    st.markdown('<div class="section-title">📊 Enhanced Performance Dashboard</div>', unsafe_allow_html=True)
+                    # Performance Metrics Cards
+                    st.markdown("#### 🏆 Model Performance Summary")
                     
-                    # Quick Overview
-                    st.markdown("#### 📈 Quick Performance Overview")
-                    dashboard = EnhancedDashboard()
-                    quick_fig = dashboard.create_quick_overview(successful_models)
-                    st.pyplot(quick_fig)
+                    cols = st.columns(len(successful_models))
+                    for idx, (model_name, result) in enumerate(successful_models.items()):
+                        with cols[idx]:
+                            accuracy = result['accuracy']
+                            badge_color = "#27AE60" if accuracy > 0.8 else "#F39C12" if accuracy > 0.6 else "#E74C3C"
+                            
+                            st.markdown(f"""
+                            <div class="prime-card">
+                                <h4 style="color: #1A3E6B; margin-bottom: 1rem;">{model_name}</h4>
+                                <div class="performance-badge" style="background: {badge_color}">
+                                    {accuracy:.1%}
+                                </div>
+                                <p style="color: #4A5568; margin: 0.5rem 0;"><small>F1: {result['f1_score']:.3f}</small></p>
+                                <p style="color: #4A5568; margin: 0.5rem 0;"><small>Precision: {result['precision']:.3f}</small></p>
+                                <p style="color: #4A5568; margin: 0.5rem 0;"><small>Classes: {result['n_classes']}</small></p>
+                            </div>
+                            """, unsafe_allow_html=True)
                     
-                    # Comprehensive Dashboard
-                    st.markdown("#### 🎯 Comprehensive Analysis Dashboard")
-                    with st.expander("📊 Expand Full Dashboard", expanded=True):
-                        comprehensive_fig = dashboard.create_comprehensive_dashboard(successful_models)
-                        st.pyplot(comprehensive_fig)
+                    # Enhanced Performance Dashboard
+                    st.markdown("#### 📊 Performance Dashboard")
+                    viz = PrimeVisualizer()
+                    dashboard_fig = viz.create_performance_dashboard(successful_models)
+                    st.pyplot(dashboard_fig)
                     
-                    # Best Model Recommendation
-                    best_model = max(successful_models.items(), key=lambda x: x[1]['accuracy'])
-                    st.success(f"🎯 **Recommended Model**: {best_model[0]} with {best_model[1]['accuracy']:.1%} accuracy")
+                    # Best Model Highlight
+                    best_model_name = max(successful_models.items(), key=lambda x: x[1]['accuracy'])[0]
+                    best_accuracy = successful_models[best_model_name]['accuracy']
+                    
+                    st.markdown(f"""
+                    <div class="insight-box">
+                        <h4 style="color: #146EB4; margin-bottom: 1rem;">🎯 Recommended Model</h4>
+                        <p style="color: #4A5568; margin: 0.5rem 0;"><strong>{best_model_name}</strong> achieved the highest accuracy of <strong style="color: #27AE60;">{best_accuracy:.1%}</strong></p>
+                        <p style="color: #4A5568; margin: 0.5rem 0;">This model is recommended for deployment based on comprehensive performance metrics.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
                 
                 else:
-                    st.error("No models were successfully trained.")
+                    st.error("No models were successfully trained. Please check your data and configuration.")
         
         except Exception as e:
             st.error(f"Error processing file: {str(e)}")
     
     else:
-        # Welcome Section
+        # Enhanced Welcome Section
         st.markdown("""
         <div style='text-align: center; padding: 4rem 2rem; background: linear-gradient(135deg, #F8FBFF 0%, #E8F2FF 100%); 
                     border-radius: 16px; margin: 3rem 0; border: 2px dashed #146EB4;'>
@@ -643,9 +702,34 @@ def main():
             <p style='color: #4A5568; font-size: 1.3rem; margin-bottom: 2.5rem; font-weight: 500;'>
                 Upload your CSV file to unlock powerful text analysis capabilities
             </p>
+            <div style="display: inline-flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center;">
+                <span class="feature-tag">🤖 4 Advanced Models</span>
+                <span class="feature-tag">🎯 Pragmatic Analysis</span>
+                <span class="feature-tag">📊 Real-time Analytics</span>
+                <span class="feature-tag">⚡ Enterprise Grade</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Enhanced Feature Showcase
+        st.markdown('<div class="section-title">✨ Advanced Features</div>', unsafe_allow_html=True)
+        
+        features = [
+            {"icon": "📖", "title": "Lexical Analysis", "desc": "Advanced tokenization and lemmatization"},
+            {"icon": "🎭", "title": "Semantic Intelligence", "desc": "Sentiment analysis and meaning extraction"},
+            {"icon": "🔧", "title": "Syntactic Processing", "desc": "Grammar and structure analysis"},
+            {"icon": "🎯", "title": "Pragmatic Context", "desc": "Intent detection and modality analysis"}
+        ]
+        
+        cols = st.columns(4)
+        for idx, feature in enumerate(features):
+            with cols[idx]:
+                st.markdown(f"""
+                <div class="prime-card">
+                    <h4 style="color: #1A3E6B; margin-bottom: 1rem;">{feature['icon']} {feature['title']}</h4>
+                    <p style="color: #4A5568; font-size: 0.95rem; line-height: 1.5;">{feature['desc']}</p>
+                </div>
+                """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
-    
