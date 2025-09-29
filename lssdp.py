@@ -28,7 +28,7 @@ st.set_page_config(
     page_title="TextInsight - Professional Text Analysis",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # ============================
@@ -60,117 +60,13 @@ st.markdown("""
         color: var(--text-dark);
     }
 
-    /* Hide default elements */
+    /* Sidebar styling */
+    .css-1d391kg, .css-1lcbmhc {
+        background: var(--primary-dark) !important;
+    }
+
     .css-1d391kg {
-        display: none !important;
-    }
-
-    .main .block-container {
-        padding: 0;
-        margin: 0;
-        max-width: 100%;
-    }
-
-    /* Professional Sidebar */
-    .professional-sidebar {
-        position: fixed;
-        left: 0;
-        top: 0;
-        width: 280px;
-        height: 100vh;
-        background: var(--primary-dark);
-        padding: 32px 24px;
-        z-index: 1000;
-        overflow-y: auto;
-        box-shadow: 2px 0 20px rgba(0,0,0,0.1);
-    }
-
-    .sidebar-content {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-    }
-
-    /* Main Content Area */
-    .main-content {
-        margin-left: 280px;
-        padding: 32px 40px;
-        min-height: 100vh;
-        background: var(--primary-light);
-    }
-
-    /* Logo */
-    .professional-logo {
-        font-size: 24px;
-        font-weight: 800;
-        color: var(--text-white);
-        margin-bottom: 48px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding-bottom: 20px;
-        border-bottom: 2px solid var(--primary-blue);
-    }
-
-    .logo-icon {
-        background: var(--primary-blue);
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
-        font-weight: 700;
-    }
-
-    /* Navigation */
-    .nav-section {
-        margin-bottom: 40px;
-    }
-
-    .nav-title {
-        color: var(--text-light);
-        font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 1.2px;
-        margin-bottom: 20px;
-        opacity: 0.7;
-    }
-
-    .nav-item {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        padding: 12px 16px;
-        color: var(--text-white);
-        font-weight: 600;
-        font-size: 15px;
-        transition: all 0.3s ease;
-        cursor: pointer;
-        border-radius: 8px;
-        margin-bottom: 8px;
-        opacity: 0.8;
-    }
-
-    .nav-item:hover {
-        background: rgba(46, 134, 222, 0.1);
-        opacity: 1;
-        transform: translateX(4px);
-    }
-
-    .nav-item.active {
-        background: var(--primary-blue);
-        opacity: 1;
-        box-shadow: 0 4px 12px rgba(46, 134, 222, 0.3);
-    }
-
-    .nav-icon {
-        font-size: 20px;
-        width: 24px;
-        text-align: center;
-        opacity: 0.9;
+        border-right: 1px solid var(--border-light) !important;
     }
 
     /* Cards */
@@ -178,6 +74,7 @@ st.markdown("""
         background: var(--card-bg);
         border-radius: 12px;
         padding: 24px;
+        margin: 16px 0;
         transition: all 0.3s ease;
         border: 1px solid var(--border-light);
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
@@ -207,6 +104,7 @@ st.markdown("""
         border: 1px solid var(--border-light);
         transition: all 0.3s ease;
         box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        margin: 8px;
     }
 
     .metric-card:hover {
@@ -231,38 +129,22 @@ st.markdown("""
     }
 
     /* Buttons */
-    .professional-btn {
-        background: var(--primary-blue);
-        color: var(--text-white);
-        border: none;
-        border-radius: 8px;
-        padding: 14px 32px;
-        font-weight: 700;
-        font-size: 15px;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 12px rgba(46, 134, 222, 0.3);
+    .stButton button {
+        background: var(--primary-blue) !important;
+        color: var(--text-white) !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 14px 32px !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 12px rgba(46, 134, 222, 0.3) !important;
     }
 
-    .professional-btn:hover {
-        background: #2678C8;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(46, 134, 222, 0.4);
-    }
-
-    .secondary-btn {
-        background: transparent;
-        color: var(--primary-blue);
-        border: 2px solid var(--primary-blue);
-        border-radius: 8px;
-        padding: 12px 32px;
-        font-weight: 600;
-        font-size: 15px;
-        transition: all 0.3s ease;
-    }
-
-    .secondary-btn:hover {
-        background: rgba(46, 134, 222, 0.1);
-        transform: translateY(-2px);
+    .stButton button:hover {
+        background: #2678C8 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(46, 134, 222, 0.4) !important;
     }
 
     /* Headers */
@@ -320,6 +202,7 @@ st.markdown("""
         border: 1px solid var(--border-light);
         transition: all 0.3s ease;
         box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        margin: 8px;
     }
 
     .model-card:hover {
@@ -343,35 +226,12 @@ st.markdown("""
         padding: 48px;
         text-align: center;
         transition: all 0.3s ease;
+        margin: 16px 0;
     }
 
     .upload-area:hover {
         border-color: var(--primary-blue);
         background: rgba(46, 134, 222, 0.02);
-    }
-
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0;
-        background: transparent;
-        border-bottom: 2px solid var(--border-light);
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        background: transparent !important;
-        color: var(--text-light) !important;
-        border-radius: 8px 8px 0 0;
-        padding: 16px 32px;
-        border: none;
-        font-weight: 600;
-        font-size: 15px;
-        transition: all 0.3s ease;
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: transparent !important;
-        color: var(--primary-blue) !important;
-        border-bottom: 3px solid var(--primary-blue) !important;
     }
 
     /* Inputs */
@@ -398,42 +258,6 @@ st.markdown("""
         color: var(--text-dark) !important;
         border: 1px solid var(--border-light) !important;
         border-radius: 8px !important;
-    }
-
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-        width: 8px;
-    }
-
-    ::-webkit-scrollbar-track {
-        background: var(--primary-light);
-    }
-
-    ::-webkit-scrollbar-thumb {
-        background: var(--border-light);
-        border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-        background: var(--text-light);
-    }
-
-    /* Analysis Status */
-    .analysis-status {
-        background: var(--card-bg);
-        border-radius: 12px;
-        padding: 20px;
-        margin: 20px 0;
-        border-left: 4px solid var(--success);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    }
-
-    /* Results Grid */
-    .results-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        gap: 20px;
-        margin: 24px 0;
     }
 
     /* Feature Icons */
@@ -513,6 +337,54 @@ st.markdown("""
         font-size: 14px;
         color: var(--text-light);
         font-weight: 600;
+    }
+
+    /* Sidebar styling */
+    .sidebar-header {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--text-white);
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+
+    .sidebar-section {
+        margin-bottom: 2rem;
+    }
+
+    .sidebar-title {
+        color: var(--text-white);
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 1rem;
+        opacity: 0.7;
+    }
+
+    /* Custom success/error messages */
+    .stSuccess {
+        background: linear-gradient(135deg, #d4edda, #c3e6cb) !important;
+        border: 2px solid var(--success) !important;
+        color: #155724 !important;
+        border-radius: 12px;
+        padding: 1rem;
+    }
+
+    .stError {
+        background: linear-gradient(135deg, #f8d7da, #f5c6cb) !important;
+        border: 2px solid var(--error) !important;
+        color: #721c24 !important;
+        border-radius: 12px;
+        padding: 1rem;
+    }
+
+    .stInfo {
+        background: linear-gradient(135deg, #d1ecf1, #bee5eb) !important;
+        border: 2px solid var(--primary-blue) !important;
+        color: #0c5460 !important;
+        border-radius: 12px;
+        padding: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -756,120 +628,95 @@ class Visualizer:
         return fig
 
 # ============================
-# Professional Sidebar Component
+# Sidebar Configuration
 # ============================
-def create_professional_sidebar():
-    """Create professional sidebar"""
-    st.markdown("""
-    <div class="professional-sidebar">
-        <div class="sidebar-content">
-            <div class="professional-logo">
-                <div class="logo-icon">T</div>
-                TextInsight
-            </div>
-            
-            <div class="nav-section">
-                <div class="nav-title">Navigation</div>
-                <div class="nav-item active">
-                    <div class="nav-icon">📊</div>
-                    <div>Dashboard</div>
-                </div>
-                <div class="nav-item">
-                    <div class="nav-icon">🔍</div>
-                    <div>Text Analysis</div>
-                </div>
-                <div class="nav-item">
-                    <div class="nav-icon">📈</div>
-                    <div>Model Performance</div>
-                </div>
-                <div class="nav-item">
-                    <div class="nav-icon">📋</div>
-                    <div>Reports</div>
-                </div>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-title">Analysis Methods</div>
-                <div class="nav-item">
-                    <div class="nav-icon">📖</div>
-                    <div>Lexical Analysis</div>
-                </div>
-                <div class="nav-item">
-                    <div class="nav-icon">🎭</div>
-                    <div>Semantic Analysis</div>
-                </div>
-                <div class="nav-item">
-                    <div class="nav-icon">🔧</div>
-                    <div>Syntactic Analysis</div>
-                </div>
-                <div class="nav-item">
-                    <div class="nav-icon">🎯</div>
-                    <div>Pragmatic Analysis</div>
-                </div>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-title">Machine Learning</div>
-                <div class="nav-item">
-                    <div class="nav-icon">🤖</div>
-                    <div>Model Training</div>
-                </div>
-                <div class="nav-item">
-                    <div class="nav-icon">📊</div>
-                    <div>Performance Metrics</div>
-                </div>
-                <div class="nav-item">
-                    <div class="nav-icon">🔬</div>
-                    <div>Feature Engineering</div>
-                </div>
-                <div class="nav-item">
-                    <div class="nav-icon">📝</div>
-                    <div>Model Evaluation</div>
-                </div>
-            </div>
-
-            <div style="flex: 1;"></div>
-
-            <div class="nav-section">
-                <div class="nav-item">
-                    <div class="nav-icon">⚙️</div>
-                    <div>Settings</div>
-                </div>
-                <div class="nav-item">
-                    <div class="nav-icon">❓</div>
-                    <div>Help & Support</div>
-                </div>
-            </div>
-        </div>
+def setup_sidebar():
+    """Setup professional sidebar"""
+    st.sidebar.markdown("""
+    <div style="text-align: center; margin-bottom: 2rem;">
+        <h1 style="color: #2E86DE; font-size: 24px; font-weight: 800; margin: 0;">TextInsight</h1>
+        <p style="color: #636E72; font-size: 14px; margin: 0;">Professional NLP Analysis</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    st.sidebar.markdown("---")
+    
+    # File Upload
+    st.sidebar.markdown("### 📁 Data Upload")
+    uploaded_file = st.sidebar.file_uploader(
+        "Choose CSV File",
+        type=["csv"],
+        help="Upload your dataset for analysis",
+        label_visibility="collapsed"
+    )
+    
+    if uploaded_file is not None:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.session_state.df = df
+            st.session_state.file_uploaded = True
+            
+            st.sidebar.success(f"✅ Loaded {df.shape[0]} records")
+            
+            # Configuration
+            st.sidebar.markdown("---")
+            st.sidebar.markdown("### ⚙️ Configuration")
+            
+            text_col = st.sidebar.selectbox(
+                "Text Column",
+                df.columns,
+                help="Select column containing text data"
+            )
+            
+            target_col = st.sidebar.selectbox(
+                "Target Column", 
+                df.columns,
+                index=min(1, len(df.columns)-1) if len(df.columns) > 1 else 0,
+                help="Select column containing labels"
+            )
+            
+            feature_type = st.sidebar.selectbox(
+                "Analysis Type",
+                ["Lexical", "Semantic", "Syntactic", "Pragmatic"],
+                help="Choose analysis method"
+            )
+            
+            st.session_state.config = {
+                'text_col': text_col,
+                'target_col': target_col,
+                'feature_type': feature_type
+            }
+            
+            if st.sidebar.button("🚀 Start Analysis", use_container_width=True):
+                st.session_state.analyze_clicked = True
+                
+        except Exception as e:
+            st.sidebar.error(f"❌ Error: {str(e)}")
+    else:
+        st.session_state.file_uploaded = False
+        st.session_state.analyze_clicked = False
+    
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 📊 Analysis Types")
+    st.sidebar.markdown("""
+    - **Lexical**: Word-level analysis
+    - **Semantic**: Meaning and sentiment
+    - **Syntactic**: Grammar structure
+    - **Pragmatic**: Context and intent
+    """)
+    
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🤖 ML Models")
+    st.sidebar.markdown("""
+    - Logistic Regression
+    - Random Forest
+    - Support Vector
+    - Naive Bayes
+    """)
 
 # ============================
 # Main Content Components
 # ============================
-def create_upload_section():
-    """Create professional upload section"""
-    st.markdown("""
-    <div class="upload-area">
-        <div style="font-size: 64px; margin-bottom: 24px; color: #2E86DE;">📁</div>
-        <h3 style="color: #2D3436; margin-bottom: 16px; font-weight: 700;">Upload Dataset</h3>
-        <p style="color: #636E72; margin-bottom: 32px; font-size: 16px;">
-            Upload your CSV file to begin text analysis. Supported formats: CSV with text columns.
-        </p>
-        <div style="color: #2E86DE; font-weight: 600; font-size: 14px;">
-            Click or drag and drop to upload
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    uploaded_file = st.file_uploader(
-        "Choose CSV File",
-        type=["csv"],
-        label_visibility="collapsed"
-    )
-    
-    return uploaded_file
-
 def create_analysis_cards():
     """Create professional analysis method cards"""
     st.markdown('<div class="section-header">Analysis Methods</div>', unsafe_allow_html=True)
@@ -982,116 +829,17 @@ def main():
     if 'config' not in st.session_state:
         st.session_state.config = {}
 
-    # Create professional layout
-    create_professional_sidebar()
-    
-    # Main content area
-    st.markdown('<div class="main-content">', unsafe_allow_html=True)
-    
-    # Page header
+    # Setup sidebar
+    setup_sidebar()
+
+    # Main content
     st.markdown('<div class="page-header">TextInsight Analytics</div>', unsafe_allow_html=True)
     st.markdown('<p style="color: #636E72; margin-bottom: 40px; font-size: 18px; line-height: 1.6;">Professional text analysis platform with advanced machine learning capabilities for comprehensive NLP insights.</p>', unsafe_allow_html=True)
     
     # Platform overview
     create_stats_overview()
     
-    # Upload section
-    st.markdown('<div class="section-header">Data Upload</div>', unsafe_allow_html=True)
-    uploaded_file = create_upload_section()
-    
-    if uploaded_file is not None:
-        try:
-            df = pd.read_csv(uploaded_file)
-            st.session_state.df = df
-            st.session_state.file_uploaded = True
-            
-            st.success("✅ Dataset loaded successfully!")
-            
-            # Show dataset info
-            st.markdown('<div class="section-header">Dataset Overview</div>', unsafe_allow_html=True)
-            
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-value">{df.shape[0]}</div>
-                    <div class="metric-label">Total Records</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with col2:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-value">{df.shape[1]}</div>
-                    <div class="metric-label">Features</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with col3:
-                missing_vals = df.isnull().sum().sum()
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-value">{missing_vals}</div>
-                    <div class="metric-label">Missing Values</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with col4:
-                unique_classes = len(df.columns)
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-value">{unique_classes}</div>
-                    <div class="metric-label">Columns</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Configuration
-            st.markdown('<div class="section-header">Analysis Configuration</div>', unsafe_allow_html=True)
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                text_col = st.selectbox(
-                    "Text Column",
-                    df.columns,
-                    help="Select column containing text data"
-                )
-            
-            with col2:
-                target_col = st.selectbox(
-                    "Target Column", 
-                    df.columns,
-                    index=min(1, len(df.columns)-1) if len(df.columns) > 1 else 0,
-                    help="Select column containing labels"
-                )
-            
-            with col3:
-                feature_type = st.selectbox(
-                    "Analysis Type",
-                    ["Lexical", "Semantic", "Syntactic", "Pragmatic"],
-                    help="Choose analysis method"
-                )
-            
-            st.session_state.config = {
-                'text_col': text_col,
-                'target_col': target_col,
-                'feature_type': feature_type
-            }
-            
-            # Start analysis button
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                if st.button("🚀 Start Analysis", use_container_width=True, key="analyze_btn"):
-                    st.session_state.analyze_clicked = True
-            
-            # Show analysis methods
-            create_analysis_cards()
-            
-            # Data preview
-            with st.expander("📋 Dataset Preview", expanded=True):
-                st.dataframe(df.head(10), use_container_width=True)
-                
-        except Exception as e:
-            st.error(f"❌ Error reading file: {str(e)}")
-    else:
-        # Show analysis methods when no file is uploaded
+    if not st.session_state.get('file_uploaded', False):
         create_analysis_cards()
         
         # Quick actions
@@ -1130,12 +878,55 @@ def main():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-    
-    # Analysis results
-    if st.session_state.get('analyze_clicked', False) and st.session_state.get('file_uploaded', False):
-        perform_analysis(st.session_state.df, st.session_state.config)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        df = st.session_state.df
+        config = st.session_state.get('config', {})
+        
+        # Show dataset info
+        st.markdown('<div class="section-header">Dataset Overview</div>', unsafe_allow_html=True)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{df.shape[0]}</div>
+                <div class="metric-label">Total Records</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{df.shape[1]}</div>
+                <div class="metric-label">Features</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col3:
+            missing_vals = df.isnull().sum().sum()
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{missing_vals}</div>
+                <div class="metric-label">Missing Values</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col4:
+            unique_classes = len(df.columns)
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{unique_classes}</div>
+                <div class="metric-label">Columns</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Show analysis methods
+        create_analysis_cards()
+        
+        # Data preview
+        with st.expander("📋 Dataset Preview", expanded=True):
+            st.dataframe(df.head(10), use_container_width=True)
+        
+        # Analysis results
+        if st.session_state.get('analyze_clicked', False):
+            perform_analysis(df, config)
 
 # ============================
 # Analysis Function
