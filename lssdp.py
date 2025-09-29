@@ -1,5 +1,5 @@
 # ============================================
-# 📊 TextInsight - Professional NLP Analysis
+# ✨ TextInsight - AI-Powered Writing Analytics
 # ============================================
 
 import streamlit as st
@@ -25,104 +25,139 @@ import seaborn as sns
 # Page Configuration
 # ============================
 st.set_page_config(
-    page_title="TextInsight - Professional Text Analysis",
-    page_icon="📊",
+    page_title="TextInsight - AI Writing Analytics",
+    page_icon="✨",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # ============================
-# Professional Style CSS
+# Grammarly Style CSS
 # ============================
 st.markdown("""
 <style>
-    /* Professional Color Scheme */
+    /* Grammarly Color Scheme */
     :root {
-        --primary-blue: #2E86DE;
-        --primary-dark: #1A1A2E;
-        --primary-light: #F8F9FA;
-        --accent-teal: #00CEC9;
-        --accent-orange: #FF9F43;
-        --accent-purple: #6C5CE7;
-        --text-dark: #2D3436;
-        --text-light: #636E72;
-        --text-white: #FFFFFF;
-        --card-bg: #FFFFFF;
-        --border-light: #E9ECEF;
-        --success: #00B894;
-        --warning: #FDCB6E;
-        --error: #E84393;
+        --grammarly-green: #15C39A;
+        --grammarly-dark: #0F172A;
+        --grammarly-card: #1E293B;
+        --grammarly-light: #334155;
+        --grammarly-text: #F8FAFC;
+        --grammarly-subtle: #94A3B8;
+        --grammarly-accent: #06D6A0;
+        --grammarly-warning: #FFD166;
+        --grammarly-error: #EF476F;
     }
 
     /* Main background */
     .stApp {
-        background: var(--primary-light);
-        color: var(--text-dark);
+        background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+        color: var(--grammarly-text);
     }
 
-    /* Sidebar styling */
-    .css-1d391kg, .css-1lcbmhc {
-        background: var(--primary-dark) !important;
-    }
-
+    /* Hide sidebar and default elements */
     .css-1d391kg {
-        border-right: 1px solid var(--border-light) !important;
+        display: none !important;
+    }
+
+    .main .block-container {
+        padding: 2rem;
+        max-width: 100%;
+    }
+
+    /* Header Section */
+    .grammarly-header {
+        background: linear-gradient(135deg, var(--grammarly-card) 0%, #1E293B 100%);
+        border-radius: 16px;
+        padding: 3rem 2rem;
+        margin: 1rem 0 3rem 0;
+        text-align: center;
+        border: 1px solid var(--grammarly-light);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .header-badge {
+        background: var(--grammarly-green);
+        color: var(--grammarly-dark);
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 700;
+        display: inline-block;
+        margin-bottom: 1rem;
     }
 
     /* Cards */
-    .professional-card {
-        background: var(--card-bg);
+    .grammarly-card {
+        background: var(--grammarly-card);
         border-radius: 12px;
-        padding: 24px;
-        margin: 16px 0;
+        padding: 2rem;
+        margin: 1rem 0;
+        border: 1px solid var(--grammarly-light);
         transition: all 0.3s ease;
-        border: 1px solid var(--border-light);
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        position: relative;
+        overflow: hidden;
     }
 
-    .professional-card:hover {
+    .grammarly-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: var(--grammarly-green);
+    }
+
+    .grammarly-card:hover {
         transform: translateY(-4px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.12);
-        border-color: var(--primary-blue);
+        border-color: var(--grammarly-green);
+        box-shadow: 0 12px 40px rgba(21, 195, 154, 0.15);
     }
 
-    .analysis-card {
-        background: linear-gradient(135deg, var(--card-bg) 0%, #F8F9FF 100%);
+    .feature-card {
+        background: linear-gradient(135deg, var(--grammarly-card) 0%, #1E293B 100%);
         border-radius: 12px;
-        padding: 28px;
-        margin-bottom: 20px;
-        border-left: 4px solid var(--primary-blue);
-        border: 1px solid var(--border-light);
+        padding: 2.5rem 2rem;
+        text-align: center;
+        border: 1px solid var(--grammarly-light);
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+
+    .feature-card:hover {
+        transform: translateY(-6px);
+        border-color: var(--grammarly-green);
+        box-shadow: 0 16px 48px rgba(21, 195, 154, 0.2);
     }
 
     /* Metrics */
     .metric-card {
-        background: var(--card-bg);
+        background: var(--grammarly-card);
         border-radius: 12px;
-        padding: 24px;
+        padding: 2rem;
         text-align: center;
-        border: 1px solid var(--border-light);
+        border: 1px solid var(--grammarly-light);
         transition: all 0.3s ease;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        margin: 8px;
+        margin: 0.5rem;
     }
 
     .metric-card:hover {
-        border-color: var(--primary-blue);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+        border-color: var(--grammarly-green);
+        transform: scale(1.02);
     }
 
     .metric-value {
         font-size: 2.5rem;
         font-weight: 800;
-        color: var(--primary-blue);
-        margin-bottom: 8px;
+        color: var(--grammarly-green);
+        margin-bottom: 0.5rem;
     }
 
     .metric-label {
         font-size: 14px;
-        color: var(--text-light);
+        color: var(--grammarly-subtle);
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 1px;
@@ -130,64 +165,75 @@ st.markdown("""
 
     /* Buttons */
     .stButton button {
-        background: var(--primary-blue) !important;
-        color: var(--text-white) !important;
+        background: var(--grammarly-green) !important;
+        color: var(--grammarly-dark) !important;
         border: none !important;
         border-radius: 8px !important;
         padding: 14px 32px !important;
         font-weight: 700 !important;
         font-size: 15px !important;
         transition: all 0.3s ease !important;
-        box-shadow: 0 4px 12px rgba(46, 134, 222, 0.3) !important;
+        box-shadow: 0 4px 12px rgba(21, 195, 154, 0.3) !important;
     }
 
     .stButton button:hover {
-        background: #2678C8 !important;
+        background: #13B18C !important;
         transform: translateY(-2px) !important;
-        box-shadow: 0 6px 20px rgba(46, 134, 222, 0.4) !important;
+        box-shadow: 0 8px 24px rgba(21, 195, 154, 0.4) !important;
+    }
+
+    .secondary-btn {
+        background: transparent !important;
+        color: var(--grammarly-green) !important;
+        border: 2px solid var(--grammarly-green) !important;
+        border-radius: 8px !important;
+        padding: 12px 32px !important;
+        font-weight: 600 !important;
+        font-size: 15px !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .secondary-btn:hover {
+        background: rgba(21, 195, 154, 0.1) !important;
+        transform: translateY(-2px) !important;
     }
 
     /* Headers */
     .page-header {
-        font-size: 2.5rem;
+        font-size: 3rem;
         font-weight: 800;
-        color: var(--text-dark);
-        margin-bottom: 12px;
-        background: linear-gradient(135deg, var(--text-dark) 0%, var(--primary-blue) 100%);
+        color: var(--grammarly-text);
+        margin-bottom: 1rem;
+        background: linear-gradient(135deg, var(--grammarly-text) 0%, var(--grammarly-green) 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
 
     .section-header {
-        font-size: 1.75rem;
+        font-size: 2rem;
         font-weight: 700;
-        color: var(--text-dark);
-        margin: 40px 0 24px 0;
-        padding-bottom: 12px;
-        border-bottom: 2px solid var(--border-light);
+        color: var(--grammarly-text);
+        margin: 3rem 0 1.5rem 0;
     }
 
     .card-header {
-        font-size: 1.2rem;
+        font-size: 1.3rem;
         font-weight: 700;
-        color: var(--text-dark);
-        margin-bottom: 16px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
+        color: var(--grammarly-text);
+        margin-bottom: 1rem;
     }
 
     /* Progress */
     .progress-container {
-        background: var(--border-light);
+        background: var(--grammarly-light);
         border-radius: 10px;
         height: 6px;
         overflow: hidden;
-        margin: 16px 0;
+        margin: 1rem 0;
     }
 
     .progress-fill {
-        background: linear-gradient(90deg, var(--primary-blue), var(--accent-teal));
+        background: linear-gradient(90deg, var(--grammarly-green), var(--grammarly-accent));
         height: 100%;
         border-radius: 10px;
         transition: width 0.3s ease;
@@ -195,196 +241,166 @@ st.markdown("""
 
     /* Model Cards */
     .model-card {
-        background: var(--card-bg);
+        background: var(--grammarly-card);
         border-radius: 12px;
-        padding: 24px;
+        padding: 2rem;
         text-align: center;
-        border: 1px solid var(--border-light);
+        border: 1px solid var(--grammarly-light);
         transition: all 0.3s ease;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        margin: 8px;
+        margin: 0.5rem;
     }
 
     .model-card:hover {
-        border-color: var(--primary-blue);
+        border-color: var(--grammarly-green);
         transform: translateY(-4px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        box-shadow: 0 12px 36px rgba(21, 195, 154, 0.15);
     }
 
     .model-accuracy {
         font-size: 2.2rem;
         font-weight: 800;
-        color: var(--primary-blue);
-        margin: 16px 0;
+        color: var(--grammarly-green);
+        margin: 1rem 0;
     }
 
     /* File Upload */
     .upload-area {
-        background: var(--card-bg);
-        border: 2px dashed var(--border-light);
+        background: var(--grammarly-card);
+        border: 2px dashed var(--grammarly-light);
         border-radius: 12px;
-        padding: 48px;
+        padding: 3rem;
         text-align: center;
         transition: all 0.3s ease;
-        margin: 16px 0;
+        margin: 1rem 0;
     }
 
     .upload-area:hover {
-        border-color: var(--primary-blue);
-        background: rgba(46, 134, 222, 0.02);
+        border-color: var(--grammarly-green);
+        background: rgba(21, 195, 154, 0.05);
     }
 
     /* Inputs */
     .stSelectbox, .stTextInput, .stNumberInput {
-        background: var(--card-bg) !important;
-        border: 2px solid var(--border-light) !important;
+        background: var(--grammarly-card) !important;
+        border: 2px solid var(--grammarly-light) !important;
         border-radius: 8px !important;
+        color: var(--grammarly-text) !important;
     }
 
     .stSelectbox:focus, .stTextInput:focus, .stNumberInput:focus {
-        border-color: var(--primary-blue) !important;
-        box-shadow: 0 0 0 3px rgba(46, 134, 222, 0.1) !important;
+        border-color: var(--grammarly-green) !important;
+        box-shadow: 0 0 0 3px rgba(21, 195, 154, 0.1) !important;
     }
 
     .stSelectbox div, .stTextInput input, .stNumberInput input {
-        background: var(--card-bg) !important;
-        color: var(--text-dark) !important;
+        background: var(--grammarly-card) !important;
+        color: var(--grammarly-text) !important;
         font-weight: 500;
-    }
-
-    /* Dataframes */
-    .dataframe {
-        background: var(--card-bg) !important;
-        color: var(--text-dark) !important;
-        border: 1px solid var(--border-light) !important;
-        border-radius: 8px !important;
     }
 
     /* Feature Icons */
     .feature-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
+        width: 64px;
+        height: 64px;
+        border-radius: 16px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 20px;
-        margin-bottom: 16px;
+        font-size: 24px;
+        margin: 0 auto 1.5rem auto;
+        background: linear-gradient(135deg, var(--grammarly-green), var(--grammarly-accent));
+        color: var(--grammarly-dark);
     }
 
-    .icon-lexical {
-        background: linear-gradient(135deg, var(--primary-blue), #4A90E2);
-        color: white;
+    /* Stats */
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin: 2rem 0;
     }
 
-    .icon-semantic {
-        background: linear-gradient(135deg, var(--accent-teal), #00B894);
-        color: white;
-    }
-
-    .icon-syntactic {
-        background: linear-gradient(135deg, var(--accent-orange), #FF7675);
-        color: white;
-    }
-
-    .icon-pragmatic {
-        background: linear-gradient(135deg, var(--accent-purple), #A29BFE);
-        color: white;
-    }
-
-    /* Stat Items */
     .stat-item {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        padding: 16px;
-        background: var(--card-bg);
-        border-radius: 8px;
-        margin-bottom: 12px;
-        border: 1px solid var(--border-light);
+        background: var(--grammarly-card);
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+        border: 1px solid var(--grammarly-light);
         transition: all 0.3s ease;
     }
 
     .stat-item:hover {
-        border-color: var(--primary-blue);
-        transform: translateX(4px);
-    }
-
-    .stat-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
-        background: rgba(46, 134, 222, 0.1);
-        color: var(--primary-blue);
-    }
-
-    .stat-content {
-        flex: 1;
+        border-color: var(--grammarly-green);
+        transform: translateY(-2px);
     }
 
     .stat-value {
-        font-size: 1.5rem;
+        font-size: 2rem;
         font-weight: 800;
-        color: var(--text-dark);
-        margin-bottom: 4px;
+        color: var(--grammarly-green);
+        margin-bottom: 0.5rem;
     }
 
     .stat-label {
         font-size: 14px;
-        color: var(--text-light);
+        color: var(--grammarly-subtle);
         font-weight: 600;
     }
 
-    /* Sidebar styling */
-    .sidebar-header {
-        font-size: 1.5rem;
-        font-weight: 800;
-        color: var(--text-white);
+    /* Analysis Results */
+    .result-card {
+        background: var(--grammarly-card);
+        border-radius: 12px;
+        padding: 2rem;
+        margin: 1rem 0;
+        border-left: 4px solid var(--grammarly-green);
+        border: 1px solid var(--grammarly-light);
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: var(--grammarly-dark);
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: var(--grammarly-light);
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--grammarly-green);
+    }
+
+    /* Text styles */
+    .subtitle {
+        color: var(--grammarly-subtle);
+        font-size: 1.2rem;
+        line-height: 1.6;
         margin-bottom: 2rem;
-        text-align: center;
     }
 
-    .sidebar-section {
-        margin-bottom: 2rem;
+    .feature-description {
+        color: var(--grammarly-subtle);
+        font-size: 15px;
+        line-height: 1.6;
+        margin-top: 1rem;
     }
 
-    .sidebar-title {
-        color: var(--text-white);
-        font-size: 0.9rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 1rem;
-        opacity: 0.7;
+    /* Warning and success states */
+    .warning-card {
+        border-left-color: var(--grammarly-warning);
     }
 
-    /* Custom success/error messages */
-    .stSuccess {
-        background: linear-gradient(135deg, #d4edda, #c3e6cb) !important;
-        border: 2px solid var(--success) !important;
-        color: #155724 !important;
-        border-radius: 12px;
-        padding: 1rem;
+    .success-card {
+        border-left-color: var(--grammarly-green);
     }
 
-    .stError {
-        background: linear-gradient(135deg, #f8d7da, #f5c6cb) !important;
-        border: 2px solid var(--error) !important;
-        color: #721c24 !important;
-        border-radius: 12px;
-        padding: 1rem;
-    }
-
-    .stInfo {
-        background: linear-gradient(135deg, #d1ecf1, #bee5eb) !important;
-        border: 2px solid var(--primary-blue) !important;
-        color: #0c5460 !important;
-        border-radius: 12px;
-        padding: 1rem;
+    .error-card {
+        border-left-color: var(--grammarly-error);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -548,10 +564,10 @@ class ModelTrainer:
 class Visualizer:
     @staticmethod
     def create_performance_dashboard(results):
-        """Create professional performance dashboard"""
-        plt.style.use('default')
+        """Create Grammarly-style performance dashboard"""
+        plt.style.use('dark_background')
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
-        fig.patch.set_facecolor('#FFFFFF')
+        fig.patch.set_facecolor('#0F172A')
 
         models = []
         metrics_data = {
@@ -566,256 +582,66 @@ class Visualizer:
                 metrics_data['Recall'].append(result['recall'])
                 metrics_data['F1-Score'].append(result['f1_score'])
 
-        colors = ['#2E86DE', '#00CEC9', '#FF9F43', '#6C5CE7']
+        colors = ['#15C39A', '#06D6A0', '#13B18C', '#0EA47A']
 
         # Accuracy
-        bars1 = ax1.bar(models, metrics_data['Accuracy'], color=colors, alpha=0.9, edgecolor='white', linewidth=2)
-        ax1.set_facecolor('#F8F9FA')
-        ax1.set_title('Model Accuracy', fontweight='bold', color='#2D3436', fontsize=16, pad=20)
-        ax1.set_ylabel('Score', fontweight='bold', color='#636E72')
-        ax1.tick_params(axis='x', rotation=45, colors='#636E72')
-        ax1.tick_params(axis='y', colors='#636E72')
-        ax1.grid(True, alpha=0.2, axis='y', color='#E9ECEF')
+        bars1 = ax1.bar(models, metrics_data['Accuracy'], color=colors, alpha=0.9)
+        ax1.set_facecolor('#1E293B')
+        ax1.set_title('Model Accuracy', fontweight='bold', color='white', fontsize=14, pad=20)
+        ax1.set_ylabel('Score', fontweight='bold', color='#94A3B8')
+        ax1.tick_params(axis='x', rotation=45, colors='#94A3B8')
+        ax1.tick_params(axis='y', colors='#94A3B8')
+        ax1.grid(True, alpha=0.1, axis='y', color='#334155')
 
         for bar in bars1:
             height = bar.get_height()
             ax1.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='#2D3436')
+                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='white')
 
         # Precision
-        bars2 = ax2.bar(models, metrics_data['Precision'], color=colors, alpha=0.9, edgecolor='white', linewidth=2)
-        ax2.set_facecolor('#F8F9FA')
-        ax2.set_title('Model Precision', fontweight='bold', color='#2D3436', fontsize=16, pad=20)
-        ax2.set_ylabel('Score', fontweight='bold', color='#636E72')
-        ax2.tick_params(axis='x', rotation=45, colors='#636E72')
-        ax2.tick_params(axis='y', colors='#636E72')
-        ax2.grid(True, alpha=0.2, axis='y', color='#E9ECEF')
+        bars2 = ax2.bar(models, metrics_data['Precision'], color=colors, alpha=0.9)
+        ax2.set_facecolor('#1E293B')
+        ax2.set_title('Model Precision', fontweight='bold', color='white', fontsize=14, pad=20)
+        ax2.set_ylabel('Score', fontweight='bold', color='#94A3B8')
+        ax2.tick_params(axis='x', rotation=45, colors='#94A3B8')
+        ax2.tick_params(axis='y', colors='#94A3B8')
+        ax2.grid(True, alpha=0.1, axis='y', color='#334155')
 
         for bar in bars2:
             height = bar.get_height()
             ax2.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='#2D3436')
+                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='white')
 
         # Recall
-        bars3 = ax3.bar(models, metrics_data['Recall'], color=colors, alpha=0.9, edgecolor='white', linewidth=2)
-        ax3.set_facecolor('#F8F9FA')
-        ax3.set_title('Model Recall', fontweight='bold', color='#2D3436', fontsize=16, pad=20)
-        ax3.set_ylabel('Score', fontweight='bold', color='#636E72')
-        ax3.tick_params(axis='x', rotation=45, colors='#636E72')
-        ax3.tick_params(axis='y', colors='#636E72')
-        ax3.grid(True, alpha=0.2, axis='y', color='#E9ECEF')
+        bars3 = ax3.bar(models, metrics_data['Recall'], color=colors, alpha=0.9)
+        ax3.set_facecolor('#1E293B')
+        ax3.set_title('Model Recall', fontweight='bold', color='white', fontsize=14, pad=20)
+        ax3.set_ylabel('Score', fontweight='bold', color='#94A3B8')
+        ax3.tick_params(axis='x', rotation=45, colors='#94A3B8')
+        ax3.tick_params(axis='y', colors='#94A3B8')
+        ax3.grid(True, alpha=0.1, axis='y', color='#334155')
 
         for bar in bars3:
             height = bar.get_height()
             ax3.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='#2D3436')
+                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='white')
 
         # F1-Score
-        bars4 = ax4.bar(models, metrics_data['F1-Score'], color=colors, alpha=0.9, edgecolor='white', linewidth=2)
-        ax4.set_facecolor('#F8F9FA')
-        ax4.set_title('Model F1-Score', fontweight='bold', color='#2D3436', fontsize=16, pad=20)
-        ax4.set_ylabel('Score', fontweight='bold', color='#636E72')
-        ax4.tick_params(axis='x', rotation=45, colors='#636E72')
-        ax4.tick_params(axis='y', colors='#636E72')
-        ax4.grid(True, alpha=0.2, axis='y', color='#E9ECEF')
+        bars4 = ax4.bar(models, metrics_data['F1-Score'], color=colors, alpha=0.9)
+        ax4.set_facecolor('#1E293B')
+        ax4.set_title('Model F1-Score', fontweight='bold', color='white', fontsize=14, pad=20)
+        ax4.set_ylabel('Score', fontweight='bold', color='#94A3B8')
+        ax4.tick_params(axis='x', rotation=45, colors='#94A3B8')
+        ax4.tick_params(axis='y', colors='#94A3B8')
+        ax4.grid(True, alpha=0.1, axis='y', color='#334155')
 
         for bar in bars4:
             height = bar.get_height()
             ax4.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='#2D3436')
+                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='white')
 
         plt.tight_layout()
         return fig
-
-# ============================
-# Sidebar Configuration
-# ============================
-def setup_sidebar():
-    """Setup professional sidebar"""
-    st.sidebar.markdown("""
-    <div style="text-align: center; margin-bottom: 2rem;">
-        <h1 style="color: #2E86DE; font-size: 24px; font-weight: 800; margin: 0;">TextInsight</h1>
-        <p style="color: #636E72; font-size: 14px; margin: 0;">Professional NLP Analysis</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.sidebar.markdown("---")
-    
-    # File Upload
-    st.sidebar.markdown("### 📁 Data Upload")
-    uploaded_file = st.sidebar.file_uploader(
-        "Choose CSV File",
-        type=["csv"],
-        help="Upload your dataset for analysis",
-        label_visibility="collapsed"
-    )
-    
-    if uploaded_file is not None:
-        try:
-            df = pd.read_csv(uploaded_file)
-            st.session_state.df = df
-            st.session_state.file_uploaded = True
-            
-            st.sidebar.success(f"✅ Loaded {df.shape[0]} records")
-            
-            # Configuration
-            st.sidebar.markdown("---")
-            st.sidebar.markdown("### ⚙️ Configuration")
-            
-            text_col = st.sidebar.selectbox(
-                "Text Column",
-                df.columns,
-                help="Select column containing text data"
-            )
-            
-            target_col = st.sidebar.selectbox(
-                "Target Column", 
-                df.columns,
-                index=min(1, len(df.columns)-1) if len(df.columns) > 1 else 0,
-                help="Select column containing labels"
-            )
-            
-            feature_type = st.sidebar.selectbox(
-                "Analysis Type",
-                ["Lexical", "Semantic", "Syntactic", "Pragmatic"],
-                help="Choose analysis method"
-            )
-            
-            st.session_state.config = {
-                'text_col': text_col,
-                'target_col': target_col,
-                'feature_type': feature_type
-            }
-            
-            if st.sidebar.button("🚀 Start Analysis", use_container_width=True):
-                st.session_state.analyze_clicked = True
-                
-        except Exception as e:
-            st.sidebar.error(f"❌ Error: {str(e)}")
-    else:
-        st.session_state.file_uploaded = False
-        st.session_state.analyze_clicked = False
-    
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 📊 Analysis Types")
-    st.sidebar.markdown("""
-    - **Lexical**: Word-level analysis
-    - **Semantic**: Meaning and sentiment
-    - **Syntactic**: Grammar structure
-    - **Pragmatic**: Context and intent
-    """)
-    
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🤖 ML Models")
-    st.sidebar.markdown("""
-    - Logistic Regression
-    - Random Forest
-    - Support Vector
-    - Naive Bayes
-    """)
-
-# ============================
-# Main Content Components
-# ============================
-def create_analysis_cards():
-    """Create professional analysis method cards"""
-    st.markdown('<div class="section-header">Analysis Methods</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown("""
-        <div class="professional-card">
-            <div class="feature-icon icon-lexical">📖</div>
-            <div class="card-header">Lexical Analysis</div>
-            <div style="color: #636E72; font-size: 15px; line-height: 1.6;">
-                Advanced word-level processing, lemmatization, and n-gram analysis for comprehensive text understanding.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="professional-card">
-            <div class="feature-icon icon-semantic">🎭</div>
-            <div class="card-header">Semantic Analysis</div>
-            <div style="color: #636E72; font-size: 15px; line-height: 1.6;">
-                Sentiment analysis, emotion detection, and meaning extraction for deeper text comprehension.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div class="professional-card">
-            <div class="feature-icon icon-syntactic">🔧</div>
-            <div class="card-header">Syntactic Analysis</div>
-            <div style="color: #636E72; font-size: 15px; line-height: 1.6;">
-                Grammar structure analysis, part-of-speech tagging, and syntactic pattern recognition.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown("""
-        <div class="professional-card">
-            <div class="feature-icon icon-pragmatic">🎯</div>
-            <div class="card-header">Pragmatic Analysis</div>
-            <div style="color: #636E72; font-size: 15px; line-height: 1.6;">
-                Context analysis, intent detection, and pragmatic feature extraction for complete text understanding.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-def create_stats_overview():
-    """Create professional stats overview"""
-    st.markdown('<div class="section-header">Platform Overview</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown("""
-        <div class="stat-item">
-            <div class="stat-icon">🤖</div>
-            <div class="stat-content">
-                <div class="stat-value">4</div>
-                <div class="stat-label">ML Models</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="stat-item">
-            <div class="stat-icon">📊</div>
-            <div class="stat-content">
-                <div class="stat-value">4</div>
-                <div class="stat-label">Analysis Types</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div class="stat-item">
-            <div class="stat-icon">⚡</div>
-            <div class="stat-content">
-                <div class="stat-value">Real-time</div>
-                <div class="stat-label">Processing</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown("""
-        <div class="stat-item">
-            <div class="stat-icon">📈</div>
-            <div class="stat-content">
-                <div class="stat-value">95%+</div>
-                <div class="stat-label">Accuracy</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
 
 # ============================
 # Main Application
@@ -829,111 +655,275 @@ def main():
     if 'config' not in st.session_state:
         st.session_state.config = {}
 
-    # Setup sidebar
-    setup_sidebar()
+    # Header Section
+    st.markdown("""
+    <div class="grammarly-header">
+        <div class="header-badge">AI-Powered Writing Analytics</div>
+        <h1 class="page-header">Elevate Your Text Analysis</h1>
+        <p class="subtitle">
+            Transform your writing with advanced AI insights. Get detailed analytics on tone, clarity, 
+            and effectiveness across all your content.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Main content
-    st.markdown('<div class="page-header">TextInsight Analytics</div>', unsafe_allow_html=True)
-    st.markdown('<p style="color: #636E72; margin-bottom: 40px; font-size: 18px; line-height: 1.6;">Professional text analysis platform with advanced machine learning capabilities for comprehensive NLP insights.</p>', unsafe_allow_html=True)
+    # Platform Stats
+    st.markdown("""
+    <div class="stat-grid">
+        <div class="stat-item">
+            <div class="stat-value">99.9%</div>
+            <div class="stat-label">Accuracy Rate</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">50+</div>
+            <div class="stat-label">Writing Metrics</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">0.2s</div>
+            <div class="stat-label">Analysis Speed</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">24/7</div>
+            <div class="stat-label">AI Assistance</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # File Upload Section
+    st.markdown('<div class="section-header">📁 Start Your Analysis</div>', unsafe_allow_html=True)
     
-    # Platform overview
-    create_stats_overview()
+    col1, col2 = st.columns([2, 1])
     
-    if not st.session_state.get('file_uploaded', False):
-        create_analysis_cards()
+    with col1:
+        st.markdown("""
+        <div class="upload-area">
+            <div style="font-size: 64px; margin-bottom: 24px;">📊</div>
+            <h3 style="color: var(--grammarly-text); margin-bottom: 16px;">Upload Your Text Data</h3>
+            <p style="color: var(--grammarly-subtle); margin-bottom: 32px;">
+                Upload a CSV file containing your text documents. Our AI will analyze writing patterns, 
+                sentiment, and provide actionable insights to improve your content.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Quick actions
-        st.markdown('<div class="section-header">Quick Analysis</div>', unsafe_allow_html=True)
+        uploaded_file = st.file_uploader(
+            "Choose CSV File",
+            type=["csv"],
+            label_visibility="collapsed"
+        )
+    
+    with col2:
+        st.markdown("""
+        <div class="grammarly-card">
+            <h4 style="color: var(--grammarly-text); margin-bottom: 16px;">💡 Quick Tips</h4>
+            <ul style="color: var(--grammarly-subtle); padding-left: 20px;">
+                <li>Include text columns for analysis</li>
+                <li>Ensure proper encoding (UTF-8)</li>
+                <li>Label your target categories</li>
+                <li>Clean data works best</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+    if uploaded_file is not None:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.session_state.df = df
+            st.session_state.file_uploaded = True
+            
+            st.success("🎉 Dataset successfully loaded! Ready for AI analysis.")
+            
+            # Configuration Section
+            st.markdown('<div class="section-header">⚙️ Analysis Configuration</div>', unsafe_allow_html=True)
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                text_col = st.selectbox(
+                    "📝 Text Column",
+                    df.columns,
+                    help="Select the column containing your text content"
+                )
+            
+            with col2:
+                target_col = st.selectbox(
+                    "🎯 Target Column", 
+                    df.columns,
+                    index=min(1, len(df.columns)-1) if len(df.columns) > 1 else 0,
+                    help="Select the column containing your categories or labels"
+                )
+            
+            with col3:
+                feature_type = st.selectbox(
+                    "🔍 Analysis Type",
+                    ["Lexical", "Semantic", "Syntactic", "Pragmatic"],
+                    help="Choose the depth of text analysis"
+                )
+            
+            st.session_state.config = {
+                'text_col': text_col,
+                'target_col': target_col,
+                'feature_type': feature_type
+            }
+            
+            # Start Analysis Button
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("🚀 Launch AI Analysis", use_container_width=True):
+                    st.session_state.analyze_clicked = True
+
+            # Dataset Overview
+            st.markdown('<div class="section-header">📈 Dataset Overview</div>', unsafe_allow_html=True)
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value">{df.shape[0]}</div>
+                    <div class="metric-label">Documents</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value">{df.shape[1]}</div>
+                    <div class="metric-label">Features</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col3:
+                missing_vals = df.isnull().sum().sum()
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value">{missing_vals}</div>
+                    <div class="metric-label">Missing Values</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with col4:
+                unique_classes = df[target_col].nunique() if target_col in df.columns else 0
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-value">{unique_classes}</div>
+                    <div class="metric-label">Categories</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # Data Preview
+            with st.expander("🔍 Preview Your Data", expanded=True):
+                st.dataframe(df.head(10), use_container_width=True)
+                
+        except Exception as e:
+            st.error(f"❌ Error reading file: {str(e)}")
+    else:
+        # Features Section
+        st.markdown('<div class="section-header">✨ Advanced Writing Analytics</div>', unsafe_allow_html=True)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown("""
+            <div class="feature-card">
+                <div class="feature-icon">📖</div>
+                <div class="card-header">Lexical Analysis</div>
+                <p class="feature-description">
+                    Deep word-level analysis with advanced lemmatization and vocabulary richness scoring. 
+                    Identify overused words and improve lexical diversity.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("""
+            <div class="feature-card">
+                <div class="feature-icon">🎭</div>
+                <div class="card-header">Semantic Analysis</div>
+                <p class="feature-description">
+                    Understand emotional tone, sentiment polarity, and contextual meaning. 
+                    Optimize your message for the desired emotional impact.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown("""
+            <div class="feature-card">
+                <div class="feature-icon">🔧</div>
+                <div class="card-header">Syntactic Analysis</div>
+                <p class="feature-description">
+                    Analyze sentence structure, grammar patterns, and readability scores. 
+                    Improve flow and comprehension with structural insights.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown("""
+            <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <div class="card-header">Pragmatic Analysis</div>
+                <p class="feature-description">
+                    Detect intent, context, and persuasive elements. Understand how your 
+                    writing influences readers and drives action.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Use Cases
+        st.markdown('<div class="section-header">🚀 Perfect For</div>', unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         
         with col1:
             st.markdown("""
-            <div class="analysis-card">
-                <div class="card-header">📝 Text Classification</div>
-                <div style="color: #636E72; font-size: 15px; margin-bottom: 20px; line-height: 1.6;">
-                    Automatically classify text documents into predefined categories using advanced machine learning algorithms.
-                </div>
-                <div class="progress-container">
-                    <div class="progress-fill" style="width: 85%"></div>
-                </div>
-                <div style="color: #2E86DE; font-size: 14px; font-weight: 600; margin-top: 8px;">
-                    85% Average Accuracy
-                </div>
+            <div class="result-card">
+                <h4 style="color: var(--grammarly-text); margin-bottom: 12px;">📝 Content Marketing</h4>
+                <p style="color: var(--grammarly-subtle); margin: 0;">
+                    Optimize blog posts, social media content, and marketing copy for maximum engagement 
+                    and conversion rates. Analyze what makes content perform better.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("""
+            <div class="result-card">
+                <h4 style="color: var(--grammarly-text); margin-bottom: 12px;">🎓 Academic Writing</h4>
+                <p style="color: var(--grammarly-subtle); margin: 0;">
+                    Improve research papers, theses, and academic publications with advanced 
+                    readability analysis and formal writing style optimization.
+                </p>
             </div>
             """, unsafe_allow_html=True)
         
         with col2:
             st.markdown("""
-            <div class="analysis-card">
-                <div class="card-header">😊 Sentiment Analysis</div>
-                <div style="color: #636E72; font-size: 15px; margin-bottom: 20px; line-height: 1.6;">
-                    Analyze emotional tone and sentiment polarity in text data with high precision sentiment detection.
-                </div>
-                <div class="progress-container">
-                    <div class="progress-fill" style="width: 92%"></div>
-                </div>
-                <div style="color: #00CEC9; font-size: 14px; font-weight: 600; margin-top: 8px;">
-                    92% Accuracy Rate
-                </div>
+            <div class="result-card">
+                <h4 style="color: var(--grammarly-text); margin-bottom: 12px;">💼 Business Communication</h4>
+                <p style="color: var(--grammarly-subtle); margin: 0;">
+                    Enhance emails, reports, and professional documents with tone analysis, 
+                    clarity scoring, and persuasive language optimization.
+                </p>
             </div>
             """, unsafe_allow_html=True)
-    else:
-        df = st.session_state.df
-        config = st.session_state.get('config', {})
-        
-        # Show dataset info
-        st.markdown('<div class="section-header">Dataset Overview</div>', unsafe_allow_html=True)
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-value">{df.shape[0]}</div>
-                <div class="metric-label">Total Records</div>
+            
+            st.markdown("""
+            <div class="result-card">
+                <h4 style="color: var(--grammarly-text); margin-bottom: 12px;">📱 Customer Support</h4>
+                <p style="color: var(--grammarly-subtle); margin: 0;">
+                    Analyze support tickets, chat transcripts, and customer feedback to 
+                    improve response quality and customer satisfaction metrics.
+                </p>
             </div>
             """, unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-value">{df.shape[1]}</div>
-                <div class="metric-label">Features</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col3:
-            missing_vals = df.isnull().sum().sum()
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-value">{missing_vals}</div>
-                <div class="metric-label">Missing Values</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col4:
-            unique_classes = len(df.columns)
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-value">{unique_classes}</div>
-                <div class="metric-label">Columns</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Show analysis methods
-        create_analysis_cards()
-        
-        # Data preview
-        with st.expander("📋 Dataset Preview", expanded=True):
-            st.dataframe(df.head(10), use_container_width=True)
-        
-        # Analysis results
-        if st.session_state.get('analyze_clicked', False):
-            perform_analysis(df, config)
+    
+    # Analysis results
+    if st.session_state.get('analyze_clicked', False) and st.session_state.get('file_uploaded', False):
+        perform_analysis(st.session_state.df, st.session_state.config)
 
 # ============================
 # Analysis Function
 # ============================
 def perform_analysis(df, config):
-    """Perform analysis with professional style"""
-    st.markdown('<div class="section-header">Analysis Results</div>', unsafe_allow_html=True)
+    """Perform analysis with Grammarly style"""
+    st.markdown('<div class="section-header">📊 Analysis Results</div>', unsafe_allow_html=True)
     
     # Data validation
     if config['text_col'] not in df.columns or config['target_col'] not in df.columns:
@@ -953,7 +943,7 @@ def perform_analysis(df, config):
         return
 
     # Feature extraction
-    with st.spinner("🔍 Extracting features..."):
+    with st.spinner("🔍 Analyzing writing patterns..."):
         extractor = FeatureExtractor()
         X = df[config['text_col']].astype(str)
         y = df[config['target_col']]
@@ -967,10 +957,10 @@ def perform_analysis(df, config):
         else:  # Pragmatic
             X_features = extractor.extract_pragmatic_features(X)
 
-    st.success("✅ Feature extraction completed!")
+    st.success("✅ Writing analysis completed!")
 
     # Model training
-    with st.spinner("🤖 Training machine learning models..."):
+    with st.spinner("🤖 Training AI models for text classification..."):
         trainer = ModelTrainer()
         results, label_encoder = trainer.train_and_evaluate(X_features, y)
 
@@ -989,39 +979,40 @@ def perform_analysis(df, config):
                 <div class="model-card">
                     <div class="card-header">{model_name}</div>
                     <div class="model-accuracy">{accuracy:.1%}</div>
-                    <div style="color: #636E72; font-size: 14px; margin-bottom: 16px;">
-                        Precision: {result['precision']:.3f} | Recall: {result['recall']:.3f}
+                    <div style="color: var(--grammarly-subtle); font-size: 14px; margin-bottom: 16px;">
+                        Precision: {result['precision']:.3f}<br>
+                        Recall: {result['recall']:.3f}
                     </div>
                     <div class="progress-container">
                         <div class="progress-fill" style="width: {accuracy*100}%"></div>
                     </div>
-                    <div style="color: #2E86DE; font-size: 12px; font-weight: 600; margin-top: 8px;">
+                    <div style="color: var(--grammarly-green); font-size: 12px; font-weight: 600; margin-top: 8px;">
                         F1-Score: {result['f1_score']:.3f}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
         # Performance Dashboard
-        st.markdown("#### 📊 Performance Dashboard")
+        st.markdown("#### 📈 Performance Dashboard")
         viz = Visualizer()
         dashboard_fig = viz.create_performance_dashboard(successful_models)
         st.pyplot(dashboard_fig)
 
-        # Best Model
+        # Best Model Recommendation
         best_model = max(successful_models.items(), key=lambda x: x[1]['accuracy'])
         st.markdown(f"""
-        <div class="analysis-card">
-            <h3 style="color: #2E86DE; margin-bottom: 1rem; display: flex; align-items: center; gap: 12px;">
-                <span>🏆</span> Recommended Model
+        <div class="result-card success-card">
+            <h3 style="color: var(--grammarly-green); margin-bottom: 1rem; display: flex; align-items: center; gap: 12px;">
+                <span>🏆</span> Recommended AI Model
             </h3>
-            <p style="color: #2D3436; font-size: 1.1rem; margin-bottom: 0.5rem; line-height: 1.6;">
+            <p style="color: var(--grammarly-text); font-size: 1.1rem; margin-bottom: 0.5rem; line-height: 1.6;">
                 <strong>{best_model[0]}</strong> achieved the highest accuracy of
-                <strong style="color: #2E86DE;">{best_model[1]['accuracy']:.1%}</strong>
-                and is recommended for production deployment.
+                <strong style="color: var(--grammarly-green);">{best_model[1]['accuracy']:.1%}</strong>
+                and is ready for production deployment.
             </p>
-            <p style="color: #636E72; margin: 0; line-height: 1.6;">
-                This model demonstrates superior performance across all evaluation metrics including 
-                precision, recall, and F1-score, making it the optimal choice for your text analysis needs.
+            <p style="color: var(--grammarly-subtle); margin: 0; line-height: 1.6;">
+                This AI model demonstrates exceptional performance in understanding your writing patterns 
+                and can reliably classify text with high precision and recall across all categories.
             </p>
         </div>
         """, unsafe_allow_html=True)
