@@ -1,5 +1,5 @@
 # ============================================
-# 🎨 Canva-Style NLP Analysis Suite - Enhanced Dashboard
+# 🎨 NLP Analysis Suite
 # ============================================
 
 import streamlit as st
