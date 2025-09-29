@@ -1,32 +1,20 @@
 # ============================================
-# 🎨 NLP Analysis Suite
+# 🎨 Canva-Style NLP Analysis Suite - Complete
 # ============================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
-import spacy
-from spacy.lang.en.stop_words import STOP_WORDS
-from textblob import TextBlob
-
 import plotly.express as px
 import plotly.graph_objects as go
-import plotly.figure_factory as ff
 from plotly.subplots import make_subplots
-import altair as alt
-
-from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
-from sklearn.preprocessing import LabelEncoder
-
 import matplotlib.pyplot as plt
 import seaborn as sns
-import time
+from textblob import TextBlob
+import re
+from collections import Counter
+import warnings
+warnings.filterwarnings('ignore')
 
 # ============================
 # Configuration
@@ -39,11 +27,9 @@ st.set_page_config(
 )
 
 # ============================
-# Canva-Style CSS with Google Fonts
+# Canva-Style CSS
 # ============================
 st.markdown("""
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
 <style>
     /* Canva Color Palette */
     :root {
@@ -61,14 +47,12 @@ st.markdown("""
         --canva-success: #10B981;
     }
     
-    /* Main styles */
     .main {
         background-color: var(--canva-bg);
         font-family: 'Inter', sans-serif;
     }
     
     .main-header {
-        font-family: 'Poppins', sans-serif;
         font-size: 3rem;
         font-weight: 700;
         background: linear-gradient(135deg, var(--canva-purple) 0%, var(--canva-teal) 100%);
@@ -76,16 +60,13 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
         text-align: center;
         margin-bottom: 1rem;
-        letter-spacing: -0.02em;
     }
     
     .subheader {
-        font-family: 'Inter', sans-serif;
         font-size: 1.1rem;
         color: var(--canva-text-light);
         text-align: center;
         margin-bottom: 3rem;
-        font-weight: 400;
     }
     
     .canva-card {
@@ -93,14 +74,14 @@ st.markdown("""
         border-radius: 16px;
         padding: 2rem;
         margin: 1rem 0;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         border: 1px solid var(--canva-border);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: all 0.3s ease;
     }
     
     .canva-card:hover {
         transform: translateY(-4px);
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08);
     }
     
     .metric-card {
@@ -118,7 +99,6 @@ st.markdown("""
     }
     
     .section-title {
-        font-family: 'Poppins', sans-serif;
         font-size: 1.8rem;
         font-weight: 600;
         color: var(--canva-text);
@@ -136,12 +116,6 @@ st.markdown("""
         margin: 0.3rem;
         font-size: 0.9rem;
         font-weight: 500;
-        transition: all 0.3s ease;
-    }
-    
-    .feature-pill:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(139, 92, 246, 0.2);
     }
     
     .upload-area {
@@ -151,7 +125,6 @@ st.markdown("""
         text-align: center;
         background: var(--canva-white);
         transition: all 0.3s ease;
-        cursor: pointer;
     }
     
     .upload-area:hover {
@@ -174,399 +147,171 @@ st.markdown("""
         transform: translateY(-2px);
         box-shadow: 0 8px 20px rgba(139, 92, 246, 0.3);
     }
-    
-    /* Custom tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 2rem;
-        background-color: var(--canva-white);
-        padding: 1rem;
-        border-radius: 12px;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: var(--canva-white);
-        border-radius: 8px 8px 0px 0px;
-        gap: 1rem;
-        padding: 0 2rem;
-        font-weight: 500;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: var(--canva-purple);
-        color: white;
-    }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================
-# Initialize NLP
+# Text Analysis Functions
 # ============================
-@st.cache_resource
-def load_nlp_model():
-    try:
-        nlp = spacy.load("en_core_web_sm")
-        return nlp
-    except OSError:
-        st.error("""
-        **SpaCy English model not found.** 
-        Please install: `python -m spacy download en_core_web_sm`
-        """)
-        st.stop()
-
-nlp = load_nlp_model()
-stop_words = STOP_WORDS
-
-# ============================
-# Enhanced Feature Engineering
-# ============================
-class CanvaFeatureExtractor:
+class TextAnalyzer:
     @staticmethod
-    def extract_lexical_features(texts):
-        """Extract lexical features with advanced preprocessing"""
-        processed_texts = []
-        for text in texts:
-            doc = nlp(str(text).lower())
-            tokens = [token.lemma_ for token in doc if token.text not in stop_words and token.is_alpha]
-            processed_texts.append(" ".join(tokens))
-        return TfidfVectorizer(max_features=1000, ngram_range=(1, 2)).fit_transform(processed_texts)
-    
-    @staticmethod
-    def extract_semantic_features(texts):
-        """Extract semantic features with sentiment analysis"""
-        features = []
-        for text in texts:
+    def analyze_sentiment(text):
+        """Analyze text sentiment using TextBlob"""
+        try:
             blob = TextBlob(str(text))
-            features.append([
-                blob.sentiment.polarity,
-                blob.sentiment.subjectivity,
-                len(text.split()),
-                len([word for word in text.split() if len(word) > 6]),
-            ])
-        return np.array(features)
+            return {
+                'polarity': blob.sentiment.polarity,
+                'subjectivity': blob.sentiment.subjectivity,
+                'sentiment': 'positive' if blob.sentiment.polarity > 0.1 else 'negative' if blob.sentiment.polarity < -0.1 else 'neutral'
+            }
+        except:
+            return {'polarity': 0, 'subjectivity': 0, 'sentiment': 'neutral'}
     
     @staticmethod
-    def extract_syntactic_features(texts):
-        """Extract syntactic features with POS analysis"""
-        processed_texts = []
-        for text in texts:
-            doc = nlp(str(text))
-            pos_tags = [f"{token.pos_}_{token.tag_}" for token in doc]
-            processed_texts.append(" ".join(pos_tags))
-        return CountVectorizer(max_features=800, ngram_range=(1, 3)).fit_transform(processed_texts)
+    def extract_entities_simple(text):
+        """Simple entity extraction using regex patterns"""
+        text = str(text)
+        entities = {
+            'emails': re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text),
+            'urls': re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', text),
+            'hashtags': re.findall(r'#\w+', text),
+            'mentions': re.findall(r'@\w+', text)
+        }
+        return entities
     
     @staticmethod
-    def extract_pragmatic_features(texts):
-        """Extract pragmatic features - context and intent analysis"""
-        pragmatic_features = []
-        pragmatic_indicators = {
-            'modality': ['must', 'should', 'could', 'would', 'might', 'may'],
-            'certainty': ['certainly', 'definitely', 'obviously', 'clearly'],
-            'uncertainty': ['perhaps', 'maybe', 'possibly', 'probably'],
-            'question': ['what', 'why', 'how', 'when', 'where', 'which', '?'],
-            'emphasis': ['very', 'extremely', 'highly', 'absolutely']
+    def get_text_stats(text):
+        """Get basic text statistics"""
+        text = str(text)
+        words = text.split()
+        sentences = re.split(r'[.!?]+', text)
+        sentences = [s.strip() for s in sentences if s.strip()]
+        
+        return {
+            'word_count': len(words),
+            'sentence_count': len(sentences),
+            'avg_word_length': np.mean([len(word) for word in words]) if words else 0,
+            'avg_sentence_length': np.mean([len(sent.split()) for sent in sentences]) if sentences else 0,
+            'unique_words': len(set(words)),
+            'readability_score': len(words) / len(sentences) if sentences else 0
         }
-        
-        for text in texts:
-            text_lower = str(text).lower()
-            features = []
-            
-            for category, words in pragmatic_indicators.items():
-                count = sum(text_lower.count(word) for word in words)
-                features.append(count)
-            
-            features.extend([
-                text.count('!'),
-                text.count('?'),
-                len([s for s in text.split('.') if s.strip()]),
-                len([w for w in text.split() if w.istitle()]),
-            ])
-            
-            pragmatic_features.append(features)
-        
-        return np.array(pragmatic_features)
 
 # ============================
-# Canva Model Trainer
-# ============================
-class CanvaModelTrainer:
-    def __init__(self):
-        self.models = {
-            "🎯 Logistic Regression": LogisticRegression(max_iter=1000, random_state=42, class_weight='balanced'),
-            "🌲 Random Forest": RandomForestClassifier(n_estimators=150, random_state=42, class_weight='balanced'),
-            "⚡ Support Vector Machine": SVC(random_state=42, probability=True, class_weight='balanced'),
-            "📊 Naive Bayes": MultinomialNB()
-        }
-    
-    def train_and_evaluate(self, X, y):
-        """Canva-style model training with comprehensive evaluation"""
-        results = {}
-        
-        le = LabelEncoder()
-        y_encoded = le.fit_transform(y)
-        n_classes = len(le.classes_)
-        
-        test_size = max(0.15, min(0.25, 3 * n_classes / len(y_encoded)))
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y_encoded, test_size=test_size, random_state=42, stratify=y_encoded
-        )
-        
-        for name, model in self.models.items():
-            try:
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-                y_proba = model.predict_proba(X_test) if hasattr(model, 'predict_proba') else None
-                
-                accuracy = accuracy_score(y_test, y_pred)
-                precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
-                recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
-                f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
-                
-                results[name] = {
-                    'accuracy': accuracy,
-                    'precision': precision,
-                    'recall': recall,
-                    'f1_score': f1,
-                    'model': model,
-                    'predictions': y_pred,
-                    'true_labels': y_test,
-                    'probabilities': y_proba,
-                    'n_classes': n_classes,
-                    'test_size': len(y_test)
-                }
-                
-            except Exception as e:
-                results[name] = {'error': str(e)}
-        
-        return results, le
-
-# ============================
-# Interactive Visualizations with Plotly
+# Visualization Functions
 # ============================
 class CanvaVisualizer:
     @staticmethod
-    def create_performance_radar(results):
-        """Create an interactive radar chart for model performance"""
-        models = []
-        metrics = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
-        values = []
+    def create_sentiment_chart(sentiment_data):
+        """Create sentiment distribution chart"""
+        sentiment_counts = pd.Series(sentiment_data).value_counts()
         
-        for model_name, result in results.items():
-            if 'error' not in result:
-                clean_name = model_name.replace('🎯 ', '').replace('🌲 ', '').replace('⚡ ', '').replace('📊 ', '')
-                models.append(clean_name)
-                values.append([
-                    result['accuracy'],
-                    result['precision'],
-                    result['recall'],
-                    result['f1_score']
-                ])
-        
-        fig = go.Figure()
-        
-        colors = ['#8B5CF6', '#14B8A6', '#3B82F6', '#EC4899']
-        
-        for i, (model, metric_values) in enumerate(zip(models, values)):
-            fig.add_trace(go.Scatterpolar(
-                r=metric_values + [metric_values[0]],  # Close the radar
-                theta=metrics + [metrics[0]],
-                fill='toself',
-                name=model,
-                line=dict(color=colors[i % len(colors)], width=3),
-                fillcolor=colors[i % len(colors)] + '40',  # Add transparency
-                hovertemplate='<b>%{theta}</b>: %{r:.3f}<extra></extra>'
-            ))
-        
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(
-                    visible=True,
-                    range=[0, 1],
-                    tickfont=dict(size=11),
-                    gridcolor='#E5E7EB'
-                ),
-                angularaxis=dict(
-                    tickfont=dict(size=12),
-                    gridcolor='#E5E7EB'
-                ),
-                bgcolor='rgba(0,0,0,0)'
-            ),
-            showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="center",
-                x=0.5,
-                font=dict(size=12)
-            ),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            height=500,
-            margin=dict(l=50, r=50, t=50, b=50)
+        fig = px.pie(
+            values=sentiment_counts.values,
+            names=sentiment_counts.index,
+            title="Sentiment Distribution",
+            color=sentiment_counts.index,
+            color_discrete_map={
+                'positive': '#10B981',
+                'negative': '#EF4444', 
+                'neutral': '#6B7280'
+            }
         )
-        
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        fig.update_layout(showlegend=False)
         return fig
-
+    
     @staticmethod
-    def create_metric_comparison(results):
-        """Create interactive bar chart for metric comparison"""
-        models = []
-        metrics_data = {
-            'Accuracy': [], 'Precision': [], 'Recall': [], 'F1-Score': []
-        }
-        
-        for model_name, result in results.items():
-            if 'error' not in result:
-                clean_name = model_name.replace('🎯 ', '').replace('🌲 ', '').replace('⚡ ', '').replace('📊 ', '')
-                models.append(clean_name)
-                metrics_data['Accuracy'].append(result['accuracy'])
-                metrics_data['Precision'].append(result['precision'])
-                metrics_data['Recall'].append(result['recall'])
-                metrics_data['F1-Score'].append(result['f1_score'])
-        
-        fig = go.Figure()
-        
-        colors = ['#8B5CF6', '#14B8A6', '#3B82F6', '#EC4899']
-        metrics = list(metrics_data.keys())
-        
-        for i, metric in enumerate(metrics):
-            fig.add_trace(go.Bar(
-                name=metric,
-                x=models,
-                y=metrics_data[metric],
-                marker_color=colors[i],
-                hovertemplate='<b>%{x}</b><br>%{fullData.name}: %{y:.3f}<extra></extra>',
-                text=[f'{val:.3f}' for val in metrics_data[metric]],
-                textposition='auto',
-            ))
-        
-        fig.update_layout(
-            barmode='group',
-            xaxis_title="Models",
-            yaxis_title="Score",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(size=12),
-            height=500,
-            showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="center",
-                x=0.5
-            )
+    def create_word_length_chart(length_data):
+        """Create word length distribution chart"""
+        fig = px.histogram(
+            x=length_data,
+            title="Word Length Distribution",
+            labels={'x': 'Word Count', 'y': 'Frequency'},
+            color_discrete_sequence=['#8B5CF6']
         )
-        
+        fig.update_layout(
+            xaxis_title="Word Count",
+            yaxis_title="Number of Texts",
+            showlegend=False
+        )
         return fig
-
+    
     @staticmethod
-    def create_confusion_matrix_heatmap(results, selected_model):
-        """Create interactive confusion matrix heatmap"""
-        if selected_model in results and 'error' not in results[selected_model]:
-            result = results[selected_model]
-            cm = confusion_matrix(result['true_labels'], result['predictions'])
-            
-            fig = ff.create_annotated_heatmap(
-                z=cm,
-                x=[f'Class {i}' for i in range(result['n_classes'])],
-                y=[f'Class {i}' for i in range(result['n_classes'])],
-                colorscale='Blues',
-                showscale=True,
-                hoverinfo='z'
+    def create_sentiment_over_time(time_data, sentiment_data):
+        """Create sentiment over time chart"""
+        if len(time_data) > 1:
+            fig = px.line(
+                x=time_data,
+                y=sentiment_data,
+                title="Sentiment Over Time",
+                labels={'x': 'Text Index', 'y': 'Sentiment Polarity'},
+                color_discrete_sequence=['#14B8A6']
             )
-            
             fig.update_layout(
-                title=f'Confusion Matrix - {selected_model}',
-                xaxis_title='Predicted',
-                yaxis_title='Actual',
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                height=400
+                xaxis_title="Text Sequence",
+                yaxis_title="Sentiment Polarity",
+                showlegend=False
             )
-            
             return fig
         return None
-
+    
     @staticmethod
-    def create_performance_gauge(results, selected_model):
-        """Create gauge chart for individual model performance"""
-        if selected_model in results and 'error' not in results[selected_model]:
-            result = results[selected_model]
-            accuracy = result['accuracy']
-            
-            fig = go.Figure(go.Indicator(
-                mode = "gauge+number+delta",
-                value = accuracy,
-                domain = {'x': [0, 1], 'y': [0, 1]},
-                title = {'text': f"Accuracy - {selected_model}", 'font': {'size': 20}},
-                delta = {'reference': 0.5, 'increasing': {'color': "#10B981"}},
-                gauge = {
-                    'axis': {'range': [None, 1], 'tickwidth': 1, 'tickcolor': "#1F2937"},
-                    'bar': {'color': "#8B5CF6"},
-                    'bgcolor': "white",
-                    'borderwidth': 2,
-                    'bordercolor': "gray",
-                    'steps': [
-                        {'range': [0, 0.5], 'color': '#FEF3C7'},
-                        {'range': [0.5, 0.8], 'color': '#FDE68A'},
-                        {'range': [0.8, 1], 'color': '#D9F99D'}],
-                    'threshold': {
-                        'line': {'color': "red", 'width': 4},
-                        'thickness': 0.75,
-                        'value': 0.9}}))
-            
-            fig.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                height=300,
-                font={'color': "#1F2937", 'family': "Inter"}
+    def create_entity_chart(entity_counts):
+        """Create entity type distribution chart"""
+        if entity_counts:
+            fig = px.bar(
+                x=list(entity_counts.keys()),
+                y=list(entity_counts.values()),
+                title="Entity Type Distribution",
+                color=list(entity_counts.keys()),
+                color_discrete_sequence=['#8B5CF6', '#14B8A6', '#3B82F6', '#EC4899']
             )
-            
+            fig.update_layout(
+                xaxis_title="Entity Type",
+                yaxis_title="Count",
+                showlegend=False
+            )
             return fig
         return None
 
 # ============================
-# Drill-down Analysis Components
+# Drill-down Analysis
 # ============================
 class DrillDownAnalyzer:
-    @staticmethod
-    def create_entity_explorer(texts, selected_text_index=None):
-        """Create interactive entity explorer with drill-down"""
-        if selected_text_index is not None and 0 <= selected_text_index < len(texts):
-            text = texts.iloc[selected_text_index] if hasattr(texts, 'iloc') else texts[selected_text_index]
-            doc = nlp(str(text))
-            
-            entities = []
-            for ent in doc.ents:
-                entities.append({
-                    'text': ent.text,
-                    'label': ent.label_,
-                    'start': ent.start_char,
-                    'end': ent.end_char
-                })
-            
-            return entities
-        return []
-
-    @staticmethod
-    def create_keyword_context(texts, keyword, n_examples=3):
-        """Show context around specific keywords"""
-        examples = []
-        for text in texts[:100]:  # Limit for performance
-            if keyword.lower() in str(text).lower():
-                context = str(text)
-                examples.append(context)
-                if len(examples) >= n_examples:
-                    break
-        return examples
+    def __init__(self, df, text_column):
+        self.df = df
+        self.text_column = text_column
+    
+    def get_text_samples(self, sentiment_type=None, min_words=0, max_words=1000):
+        """Get text samples filtered by criteria"""
+        samples = self.df.copy()
+        
+        # Filter by word count
+        samples['word_count'] = samples[self.text_column].astype(str).str.split().str.len()
+        samples = samples[(samples['word_count'] >= min_words) & (samples['word_count'] <= max_words)]
+        
+        # Filter by sentiment if specified
+        if sentiment_type:
+            samples['sentiment'] = samples[self.text_column].apply(
+                lambda x: TextAnalyzer.analyze_sentiment(x)['sentiment']
+            )
+            samples = samples[samples['sentiment'] == sentiment_type]
+        
+        return samples.head(10)
+    
+    def find_texts_with_keyword(self, keyword, n_samples=5):
+        """Find texts containing specific keywords"""
+        keyword = keyword.lower()
+        matches = self.df[
+            self.df[self.text_column].astype(str).str.lower().str.contains(keyword, na=False)
+        ].head(n_samples)
+        return matches
 
 # ============================
 # Main Application
 # ============================
 def main():
-    # Header with Canva-style design
+    # Header
     st.markdown("""
     <div style='text-align: center; padding: 3rem 2rem; background: linear-gradient(135deg, #F9FAFB 0%, #FFFFFF 100%); 
                 border-radius: 24px; margin: 2rem 0; border: 1px solid #E5E7EB;'>
@@ -575,7 +320,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
-    # Feature Highlights with interactive pills
+    # Feature Highlights
     st.markdown("""
     <div style='text-align: center; margin: 2rem 0;'>
         <span class='feature-pill'>📖 Lexical Analysis</span>
@@ -590,286 +335,337 @@ def main():
     # File Upload Section
     st.markdown('<div class="section-title">📁 Upload Your Dataset</div>', unsafe_allow_html=True)
     
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        uploaded_file = st.file_uploader("", type=["csv"], 
-                                       help="Upload your CSV file for analysis",
-                                       label_visibility="collapsed")
-    
-    with col2:
-        st.markdown("""
-        <div style='text-align: center; color: #6B7280; font-size: 0.9rem;'>
-            📝 Supports CSV files with text columns<br>
-            🎯 Automatic feature detection<br>
-            ⚡ Real-time processing
-        </div>
-        """, unsafe_allow_html=True)
+    uploaded_file = st.file_uploader(
+        "Choose a CSV file with text data", 
+        type=["csv"],
+        help="Upload a CSV file containing at least one text column"
+    )
     
     if uploaded_file is not None:
         try:
-            # Progress animation
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            for i in range(100):
-                progress_bar.progress(i + 1)
-                status_text.text(f"Loading and processing data... {i+1}%")
-                time.sleep(0.01)
-            
-            status_text.text("Data loaded successfully!")
-            time.sleep(0.5)
-            status_text.empty()
-            
+            # Load data
             df = pd.read_csv(uploaded_file)
             
-            # Data Explorer in Canva Cards
+            # Show success message
+            st.success(f"✅ Successfully loaded {len(df):,} rows and {len(df.columns)} columns")
+            
+            # Data Explorer
             st.markdown('<div class="section-title">🔍 Data Explorer</div>', unsafe_allow_html=True)
             
-            with st.container():
-                tab1, tab2, tab3 = st.tabs(["📊 Data Preview", "📈 Quick Stats", "🎯 Data Quality"])
-                
-                with tab1:
-                    st.markdown('<div class="canva-card">', unsafe_allow_html=True)
-                    st.dataframe(df.head(10), use_container_width=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
-                
-                with tab2:
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <h3 style="color: #8B5CF6; margin: 0; font-size: 2rem;">{df.shape[0]:,}</h3>
-                            <p style="color: #6B7280; margin: 0;">Total Records</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with col2:
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <h3 style="color: #14B8A6; margin: 0; font-size: 2rem;">{df.shape[1]}</h3>
-                            <p style="color: #6B7280; margin: 0;">Features</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with col3:
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <h3 style="color: #3B82F6; margin: 0; font-size: 2rem;">{df.isnull().sum().sum()}</h3>
-                            <p style="color: #6B7280; margin: 0;">Missing Values</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with col4:
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <h3 style="color: #EC4899; margin: 0; font-size: 2rem;">{len(df.dtypes.unique())}</h3>
-                            <p style="color: #6B7280; margin: 0;">Data Types</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                with tab3:
-                    st.markdown('<div class="canva-card">', unsafe_allow_html=True)
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        # Data quality metrics
-                        completeness = (1 - df.isnull().sum().sum() / (df.shape[0] * df.shape[1])) * 100
-                        st.metric("Data Completeness", f"{completeness:.1f}%")
-                        
-                        text_cols = df.select_dtypes(include=['object']).columns
-                        st.metric("Text Columns", len(text_cols))
-                    
-                    with col2:
-                        duplicate_rows = df.duplicated().sum()
-                        st.metric("Duplicate Rows", duplicate_rows)
-                        
-                        memory_usage = df.memory_usage(deep=True).sum() / 1024**2
-                        st.metric("Memory Usage", f"{memory_usage:.2f} MB")
-                    st.markdown('</div>', unsafe_allow_html=True)
+            # Quick Stats
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <h3 style="color: #8B5CF6; margin: 0; font-size: 2rem;">{len(df):,}</h3>
+                    <p style="color: #6B7280; margin: 0;">Total Rows</p>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <h3 style="color: #14B8A6; margin: 0; font-size: 2rem;">{len(df.columns)}</h3>
+                    <p style="color: #6B7280; margin: 0;">Columns</p>
+                </div>
+                """, unsafe_allow_html=True)
+            with col3:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <h3 style="color: #3B82F6; margin: 0; font-size: 2rem;">{df.isnull().sum().sum()}</h3>
+                    <p style="color: #6B7280; margin: 0;">Missing Values</p>
+                </div>
+                """, unsafe_allow_html=True)
+            with col4:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <h3 style="color: #EC4899; margin: 0; font-size: 2rem;">{len(df.select_dtypes(include=['object']).columns)}</h3>
+                    <p style="color: #6B7280; margin: 0;">Text Columns</p>
+                </div>
+                """, unsafe_allow_html=True)
             
-            # Analysis Configuration
-            st.markdown('<div class="section-title">⚙️ Analysis Configuration</div>', unsafe_allow_html=True)
+            # Data Preview
+            tab1, tab2, tab3 = st.tabs(["📊 Data Preview", "📈 Column Info", "🎯 Sample Data"])
             
-            config_col1, config_col2, config_col3 = st.columns([2, 2, 1])
+            with tab1:
+                st.markdown('<div class="canva-card">', unsafe_allow_html=True)
+                st.dataframe(df.head(10), use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with tab2:
+                st.markdown('<div class="canva-card">', unsafe_allow_html=True)
+                col_info = pd.DataFrame({
+                    'Column': df.columns,
+                    'Data Type': df.dtypes.values,
+                    'Non-Null Count': df.notnull().sum().values,
+                    'Null Count': df.isnull().sum().values,
+                    'Unique Values': [df[col].nunique() for col in df.columns]
+                })
+                st.dataframe(col_info, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with tab3:
+                st.markdown('<div class="canva-card">', unsafe_allow_html=True)
+                if len(df) > 0:
+                    sample_idx = st.slider("Select sample row:", 0, len(df)-1, 0)
+                    selected_col = st.selectbox("Select column to view:", df.columns)
+                    st.text_area(
+                        f"Sample text from row {sample_idx}:",
+                        df.iloc[sample_idx][selected_col] if selected_col in df.columns else "No data",
+                        height=150
+                    )
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Text Analysis Configuration
+            st.markdown('<div class="section-title">🔧 Text Analysis Configuration</div>', unsafe_allow_html=True)
+            
+            config_col1, config_col2 = st.columns(2)
             
             with config_col1:
-                text_col = st.selectbox("Select Text Column", df.columns, 
-                                      help="Choose the column containing text data for analysis")
+                text_column = st.selectbox(
+                    "Select text column for analysis:",
+                    df.columns,
+                    help="Choose the column containing text data"
+                )
             
             with config_col2:
-                target_col = st.selectbox("Select Target Column", df.columns,
-                                        help="Choose the column for classification target")
+                analysis_type = st.selectbox(
+                    "Select analysis type:",
+                    ["Basic Text Analysis", "Sentiment Analysis", "Entity Extraction", "Comprehensive Analysis"],
+                    help="Choose the type of analysis to perform"
+                )
             
-            with config_col3:
-                st.markdown("<br>", unsafe_allow_html=True)
-                analyze_btn = st.button("🚀 Launch Analysis", use_container_width=True)
-            
-            # Feature type selection with visual cards
-            st.markdown("### 🎨 Select Analysis Type")
-            feature_cols = st.columns(4)
-            
-            with feature_cols[0]:
-                st.markdown("""
-                <div class="canva-card" style='text-align: center; cursor: pointer;' onclick='alert("Lexical Analysis Selected")'>
-                    <h3 style='color: #8B5CF6;'>📖</h3>
-                    <h4 style='color: #1F2937;'>Lexical</h4>
-                    <p style='color: #6B7280; font-size: 0.9rem;'>Word-level analysis & patterns</p>
-                </div>
-                """, unsafe_allow_html=True)
-                lexical_selected = st.radio("", ["Lexical"], key="lexical", label_visibility="collapsed")
-            
-            with feature_cols[1]:
-                st.markdown("""
-                <div class="canva-card" style='text-align: center; cursor: pointer;'>
-                    <h3 style='color: #14B8A6;'>🎭</h3>
-                    <h4 style='color: #1F2937;'>Semantic</h4>
-                    <p style='color: #6B7280; font-size: 0.9rem;'>Meaning & sentiment analysis</p>
-                </div>
-                """, unsafe_allow_html=True)
-                semantic_selected = st.radio("", ["Semantic"], key="semantic", label_visibility="collapsed")
-            
-            with feature_cols[2]:
-                st.markdown("""
-                <div class="canva-card" style='text-align: center; cursor: pointer;'>
-                    <h3 style='color: #3B82F6;'>🔧</h3>
-                    <h4 style='color: #1F2937;'>Syntactic</h4>
-                    <p style='color: #6B7280; font-size: 0.9rem;'>Grammar & structure analysis</p>
-                </div>
-                """, unsafe_allow_html=True)
-                syntactic_selected = st.radio("", ["Syntactic"], key="syntactic", label_visibility="collapsed")
-            
-            with feature_cols[3]:
-                st.markdown("""
-                <div class="canva-card" style='text-align: center; cursor: pointer;'>
-                    <h3 style='color: #EC4899;'>🎯</h3>
-                    <h4 style='color: #1F2937;'>Pragmatic</h4>
-                    <p style='color: #6B7280; font-size: 0.9rem;'>Context & intent analysis</p>
-                </div>
-                """, unsafe_allow_html=True)
-                pragmatic_selected = st.radio("", ["Pragmatic"], key="pragmatic", label_visibility="collapsed")
-            
-            if analyze_btn:
-                if df[text_col].isnull().any():
-                    df[text_col] = df[text_col].fillna('')
-                
-                if df[target_col].isnull().any():
-                    st.error("🎯 Target column contains missing values. Please clean your data.")
+            # Perform Analysis
+            if st.button("🚀 Perform Analysis", use_container_width=True):
+                if text_column not in df.columns:
+                    st.error("❌ Selected text column not found in dataset")
                     return
                 
-                if len(df[target_col].unique()) < 2:
-                    st.error("🎯 Target column must have at least 2 unique classes for classification.")
+                # Clean text data
+                df_clean = df.dropna(subset=[text_column]).copy()
+                df_clean[text_column] = df_clean[text_column].astype(str)
+                
+                if len(df_clean) == 0:
+                    st.error("❌ No valid text data found in selected column")
                     return
                 
-                # Feature Extraction with progress
-                with st.spinner("🔄 Extracting advanced features..."):
-                    progress_text = st.empty()
-                    progress_bar = st.progress(0)
-                    
-                    extractor = CanvaFeatureExtractor()
-                    X = df[text_col].astype(str)
-                    y = df[target_col]
-                    
-                    # Simulate progress for feature extraction
-                    for i in range(4):
-                        progress_bar.progress((i + 1) * 25)
-                        progress_text.text(f"Extracting features... Step {i + 1}/4")
-                        time.sleep(0.5)
-                    
-                    # Use lexical features for demonstration
-                    X_features = extractor.extract_lexical_features(X)
-                    progress_bar.progress(100)
-                    progress_text.text("Feature extraction complete!")
-                    time.sleep(0.5)
-                    progress_text.empty()
+                # Show analysis progress
+                progress_bar = st.progress(0)
+                status_text = st.empty()
                 
-                # Model Training
-                with st.spinner("🤖 Training machine learning models..."):
-                    trainer = CanvaModelTrainer()
-                    results, label_encoder = trainer.train_and_evaluate(X_features, y)
+                # Perform text analysis
+                status_text.text("📊 Analyzing text data...")
                 
-                successful_models = {k: v for k, v in results.items() if 'error' not in v}
+                # Basic text statistics
+                text_stats = df_clean[text_column].apply(TextAnalyzer.get_text_stats)
+                stats_df = pd.json_normalize(text_stats.tolist())
                 
-                if successful_models:
-                    # Enhanced Visualization Section
-                    st.markdown('<div class="section-title">📊 Interactive Results Dashboard</div>', unsafe_allow_html=True)
-                    
-                    # Performance Overview
-                    col1, col2 = st.columns([3, 2])
+                progress_bar.progress(25)
+                
+                # Sentiment analysis
+                status_text.text("🎭 Analyzing sentiment...")
+                sentiment_results = df_clean[text_column].apply(TextAnalyzer.analyze_sentiment)
+                sentiment_df = pd.json_normalize(sentiment_results.tolist())
+                
+                progress_bar.progress(50)
+                
+                # Entity extraction
+                status_text.text("🔍 Extracting entities...")
+                entity_results = df_clean[text_column].apply(TextAnalyzer.extract_entities_simple)
+                
+                progress_bar.progress(75)
+                
+                # Combine results
+                analysis_df = pd.concat([df_clean, stats_df, sentiment_df], axis=1)
+                
+                progress_bar.progress(100)
+                status_text.text("✅ Analysis complete!")
+                
+                # Display Results
+                st.markdown('<div class="section-title">📊 Analysis Results</div>', unsafe_allow_html=True)
+                
+                # Results in tabs
+                results_tab1, results_tab2, results_tab3, results_tab4 = st.tabs([
+                    "📈 Overview", "🎭 Sentiment", "📖 Text Stats", "🔍 Drill-down"
+                ])
+                
+                with results_tab1:
+                    st.markdown('<div class="canva-card">', unsafe_allow_html=True)
+                    col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
-                        st.markdown("#### 📈 Performance Radar")
-                        radar_fig = CanvaVisualizer.create_performance_radar(successful_models)
-                        st.plotly_chart(radar_fig, use_container_width=True)
+                        avg_words = stats_df['word_count'].mean()
+                        st.metric("Average Word Count", f"{avg_words:.1f}")
                     
                     with col2:
-                        st.markdown("#### 🎯 Model Comparison")
-                        bar_fig = CanvaVisualizer.create_metric_comparison(successful_models)
-                        st.plotly_chart(bar_fig, use_container_width=True)
+                        avg_sentiment = sentiment_df['polarity'].mean()
+                        st.metric("Average Sentiment", f"{avg_sentiment:.3f}")
                     
-                    # Drill-down Analysis
-                    st.markdown('<div class="section-title">🔍 Drill-down Analysis</div>', unsafe_allow_html=True)
+                    with col3:
+                        unique_ratio = stats_df['unique_words'].sum() / stats_df['word_count'].sum()
+                        st.metric("Vocabulary Diversity", f"{unique_ratio:.2%}")
                     
-                    drill_col1, drill_col2 = st.columns(2)
+                    with col4:
+                        positive_ratio = (sentiment_df['sentiment'] == 'positive').mean()
+                        st.metric("Positive Texts", f"{positive_ratio:.1%}")
                     
-                    with drill_col1:
-                        st.markdown("#### 🎛️ Model Details")
-                        selected_model = st.selectbox("Choose a model to explore:", list(successful_models.keys()))
-                        
-                        if selected_model:
-                            gauge_fig = CanvaVisualizer.create_performance_gauge(successful_models, selected_model)
-                            if gauge_fig:
-                                st.plotly_chart(gauge_fig, use_container_width=True)
-                    
-                    with drill_col2:
-                        st.markdown("#### 🎪 Confusion Matrix")
-                        cm_fig = CanvaVisualizer.create_confusion_matrix_heatmap(successful_models, selected_model)
-                        if cm_fig:
-                            st.plotly_chart(cm_fig, use_container_width=True)
-                    
-                    # Entity Explorer
-                    st.markdown("#### 🔍 Text Entity Explorer")
-                    entity_col1, entity_col2 = st.columns([1, 2])
-                    
-                    with entity_col1:
-                        sample_texts = df[text_col].head(10)
-                        selected_text_index = st.selectbox("Select a text sample:", 
-                                                         range(len(sample_texts)),
-                                                         format_func=lambda x: f"Sample {x+1}: {sample_texts.iloc[x][:50]}...")
-                    
-                    with entity_col2:
-                        if selected_text_index is not None:
-                            entities = DrillDownAnalyzer.create_entity_explorer(sample_texts, selected_text_index)
-                            if entities:
-                                st.markdown("**Discovered Entities:**")
-                                for entity in entities:
-                                    st.markdown(f"""
-                                    <div style='background: #F3F4F6; padding: 0.5rem 1rem; border-radius: 8px; margin: 0.3rem 0; 
-                                                border-left: 4px solid #8B5CF6;'>
-                                        <strong>{entity['text']}</strong> → <span style='color: #8B5CF6;'>{entity['label']}</span>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-                            else:
-                                st.info("No named entities found in this text sample.")
-                    
-                    # Best Model Recommendation
-                    best_model_name, best_model_result = max(successful_models.items(), 
-                                                           key=lambda x: x[1]['accuracy'])
-                    
-                    st.success(f"""
-                    🎉 **Analysis Complete!** 
-                    
-                    **Recommended Model**: {best_model_name}  
-                    **Accuracy**: {best_model_result['accuracy']:.1%}  
-                    **F1-Score**: {best_model_result['f1_score']:.1%}
-                    
-                    This model shows the best overall performance for your dataset.
-                    """)
+                    st.markdown('</div>', unsafe_allow_html=True)
                 
-                else:
-                    st.error("❌ No models were successfully trained. Please check your data and try again.")
+                with results_tab2:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Sentiment distribution
+                        sentiment_chart = CanvaVisualizer.create_sentiment_chart(sentiment_df['sentiment'])
+                        st.plotly_chart(sentiment_chart, use_container_width=True)
+                    
+                    with col2:
+                        # Sentiment over text sequence
+                        time_chart = CanvaVisualizer.create_sentiment_over_time(
+                            range(len(sentiment_df)),
+                            sentiment_df['polarity']
+                        )
+                        if time_chart:
+                            st.plotly_chart(time_chart, use_container_width=True)
+                        else:
+                            st.info("Not enough data for time series analysis")
+                
+                with results_tab3:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Word length distribution
+                        word_chart = CanvaVisualizer.create_word_length_chart(stats_df['word_count'])
+                        st.plotly_chart(word_chart, use_container_width=True)
+                    
+                    with col2:
+                        # Sentence length distribution
+                        if 'sentence_count' in stats_df.columns:
+                            sent_chart = px.histogram(
+                                stats_df, 
+                                x='sentence_count',
+                                title="Sentence Count Distribution",
+                                color_discrete_sequence=['#14B8A6']
+                            )
+                            st.plotly_chart(sent_chart, use_container_width=True)
+                
+                with results_tab4:
+                    st.markdown('<div class="canva-card">', unsafe_allow_html=True)
+                    st.subheader("🔍 Text Explorer")
+                    
+                    drill_down = DrillDownAnalyzer(df_clean, text_column)
+                    
+                    # Filter options
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        sentiment_filter = st.selectbox(
+                            "Filter by sentiment:",
+                            ["All", "positive", "negative", "neutral"]
+                        )
+                    
+                    with col2:
+                        min_words = st.number_input("Min words:", min_value=0, value=0)
+                    
+                    with col3:
+                        max_words = st.number_input("Max words:", min_value=1, value=1000)
+                    
+                    # Get filtered samples
+                    filtered_samples = drill_down.get_text_samples(
+                        sentiment_filter if sentiment_filter != "All" else None,
+                        min_words,
+                        max_words
+                    )
+                    
+                    # Display samples
+                    if len(filtered_samples) > 0:
+                        st.write(f"Found {len(filtered_samples)} samples:")
+                        
+                        for idx, sample in filtered_samples.iterrows():
+                            with st.expander(f"Sample {idx} - {len(str(sample[text_column]).split())} words"):
+                                st.text_area("Text:", sample[text_column], height=100, key=f"text_{idx}")
+                                
+                                # Show analysis for this sample
+                                sample_stats = TextAnalyzer.get_text_stats(sample[text_column])
+                                sample_sentiment = TextAnalyzer.analyze_sentiment(sample[text_column])
+                                
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("Word Count", sample_stats['word_count'])
+                                with col2:
+                                    st.metric("Sentiment", sample_sentiment['sentiment'])
+                                with col3:
+                                    st.metric("Polarity", f"{sample_sentiment['polarity']:.3f}")
+                    else:
+                        st.info("No samples found matching the criteria")
+                    
+                    # Keyword search
+                    st.subheader("🔎 Keyword Search")
+                    keyword = st.text_input("Enter keyword to search:")
+                    
+                    if keyword:
+                        keyword_matches = drill_down.find_texts_with_keyword(keyword, 3)
+                        if len(keyword_matches) > 0:
+                            st.write(f"Found {len(keyword_matches)} texts containing '{keyword}':")
+                            
+                            for idx, match in keyword_matches.iterrows():
+                                text = str(match[text_column])
+                                # Highlight keyword in text
+                                highlighted_text = text.replace(
+                                    keyword, 
+                                    f"**{keyword}**"
+                                )
+                                st.markdown(f"**Text {idx}:** {highlighted_text}")
+                                st.divider()
+                        else:
+                            st.info(f"No texts found containing '{keyword}'")
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Download results
+                st.markdown('<div class="canva-card">', unsafe_allow_html=True)
+                st.subheader("📥 Export Results")
+                
+                # Create downloadable DataFrame
+                export_df = analysis_df.copy()
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    csv = export_df.to_csv(index=False)
+                    st.download_button(
+                        label="📊 Download Analysis Results (CSV)",
+                        data=csv,
+                        file_name="nlp_analysis_results.csv",
+                        mime="text/csv"
+                    )
+                
+                with col2:
+                    # Summary statistics
+                    summary_stats = {
+                        'total_texts': len(analysis_df),
+                        'avg_word_count': stats_df['word_count'].mean(),
+                        'avg_sentiment': sentiment_df['polarity'].mean(),
+                        'positive_ratio': (sentiment_df['sentiment'] == 'positive').mean(),
+                        'negative_ratio': (sentiment_df['sentiment'] == 'negative').mean(),
+                        'neutral_ratio': (sentiment_df['sentiment'] == 'neutral').mean()
+                    }
+                    
+                    summary_df = pd.DataFrame([summary_stats])
+                    summary_csv = summary_df.to_csv(index=False)
+                    
+                    st.download_button(
+                        label="📈 Download Summary Stats (CSV)",
+                        data=summary_csv,
+                        file_name="nlp_summary_stats.csv",
+                        mime="text/csv"
+                    )
+                st.markdown('</div>', unsafe_allow_html=True)
         
         except Exception as e:
             st.error(f"❌ Error processing file: {str(e)}")
             st.info("💡 Please ensure your CSV file is properly formatted and contains text data.")
     
     else:
-        # Welcome Section with Canva-style design
+        # Welcome Section
         st.markdown("""
         <div class='canva-card' style='text-align: center; padding: 4rem 2rem;'>
             <div style='font-size: 4rem; margin-bottom: 2rem;'>🎨</div>
@@ -895,8 +691,30 @@ def main():
                 <p style='color: #6B7280;'>Click on entities and metrics to explore detailed insights</p>
             </div>
             <div class='canva-card'>
-                <h3 style='color: #3B82F6;'>🤖 Smart ML Models</h3>
-                <p style='color: #6B7280;'>Multiple algorithms with automatic performance comparison</p>
+                <h3 style='color: #3B82F6;'>🎭 Sentiment Analysis</h3>
+                <p style='color: #6B7280;'>Understand the emotional tone and polarity of your text data</p>
+            </div>
+            <div class='canva-card'>
+                <h3 style='color: #EC4899;'>📈 Text Statistics</h3>
+                <p style='color: #6B7280;'>Comprehensive analysis of word counts, readability, and more</p>
+            </div>
+        </div>
+        
+        <div class='canva-card'>
+            <h3 style='color: #1F2937; text-align: center;'>📋 Sample Data Format</h3>
+            <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; text-align: center;'>
+                <div>
+                    <h4 style='color: #8B5CF6;'>CSV Format</h4>
+                    <p style='color: #6B7280;'>Comma-separated values with header row</p>
+                </div>
+                <div>
+                    <h4 style='color: #14B8A6;'>Text Column</h4>
+                    <p style='color: #6B7280;'>At least one column containing text data</p>
+                </div>
+                <div>
+                    <h4 style='color: #3B82F6;'>Optional Metadata</h4>
+                    <p style='color: #6B7280;'>Additional columns for filtering and analysis</p>
+                </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
