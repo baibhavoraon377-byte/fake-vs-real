@@ -1,5 +1,5 @@
 # ============================================
-# 🎨 Canva Style NLP Analysis Suite
+# 🎨 Canva Style NLP Analysis Suite - FIXED VERSION
 # ============================================
 
 import streamlit as st
@@ -680,19 +680,20 @@ class CanvaVisualizer:
         return fig
 
 # ============================
-# Sidebar Configuration
+# Sidebar Configuration - FIXED
 # ============================
 def setup_sidebar():
     """Setup Canva-style sidebar"""
     st.sidebar.markdown("<div class='sidebar-header'>🎨 CANVA NLP</div>", unsafe_allow_html=True)
     st.sidebar.markdown("---")
 
-    st.sidebar.markdown("<div class='sidebar-header'>📁 UPLOAD DESIGN</div>", unsafe_allow_html=True)
-
+    st.sidebar.markdown("### 📁 UPLOAD YOUR DATA")
+    
     uploaded_file = st.sidebar.file_uploader(
-        "Choose CSV File",
+        "Choose a CSV file",
         type=["csv"],
-        help="Upload your dataset for beautiful analysis"
+        help="Upload your dataset to get started",
+        label_visibility="collapsed"
     )
 
     if uploaded_file is not None:
@@ -701,26 +702,32 @@ def setup_sidebar():
             st.session_state.df = df
             st.session_state.file_uploaded = True
 
-            st.sidebar.success(f"✅ Successfully loaded: {df.shape[0]} records")
+            st.sidebar.success(f"✅ Successfully loaded {df.shape[0]} records")
 
-            st.sidebar.markdown("<div class='sidebar-header'>⚙️ DESIGN SETUP</div>", unsafe_allow_html=True)
+            st.sidebar.markdown("---")
+            st.sidebar.markdown("### ⚙️ ANALYSIS SETTINGS")
 
+            # Get column names safely
+            columns = df.columns.tolist()
+            
             text_col = st.sidebar.selectbox(
-                "Text Column",
-                df.columns,
-                help="Select your text data column"
+                "Select Text Column",
+                columns,
+                index=0 if columns else 0,
+                help="Choose the column containing your text data"
             )
 
             target_col = st.sidebar.selectbox(
-                "Target Column",
-                df.columns,
-                help="Select your labels column"
+                "Select Target Column", 
+                columns,
+                index=min(1, len(columns)-1) if len(columns) > 1 else 0,
+                help="Choose the column containing your labels/target"
             )
 
             feature_type = st.sidebar.selectbox(
-                "Analysis Style",
+                "Analysis Type",
                 ["Lexical", "Semantic", "Syntactic", "Pragmatic"],
-                help="Choose your analysis approach"
+                help="Choose the type of text analysis"
             )
 
             st.session_state.config = {
@@ -729,37 +736,119 @@ def setup_sidebar():
                 'feature_type': feature_type
             }
 
-            if st.sidebar.button("🚀 DESIGN ANALYSIS", use_container_width=True):
+            st.sidebar.markdown("---")
+            
+            if st.sidebar.button("🚀 START ANALYSIS", use_container_width=True):
                 st.session_state.analyze_clicked = True
             else:
-                st.session_state.analyze_clicked = False
+                if 'analyze_clicked' not in st.session_state:
+                    st.session_state.analyze_clicked = False
 
         except Exception as e:
-            st.sidebar.error(f"❌ Error: {str(e)}")
+            st.sidebar.error(f"❌ Error reading file: {str(e)}")
     else:
-        st.session_state.file_uploaded = False
-        st.session_state.analyze_clicked = False
+        # Initialize session state
+        if 'file_uploaded' not in st.session_state:
+            st.session_state.file_uploaded = False
+        if 'analyze_clicked' not in st.session_state:
+            st.session_state.analyze_clicked = False
+
+    # Add some helpful information in sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 💡 HOW TO USE")
+    st.sidebar.markdown("""
+    1. **Upload** your CSV file
+    2. **Select** text and target columns  
+    3. **Choose** analysis type
+    4. **Click** Start Analysis
+    5. **View** beautiful results!
+    """)
 
 # ============================
-# Main Content
+# Welcome Screen
+# ============================
+def show_canva_welcome():
+    """Canva-style welcome screen"""
+    st.markdown("""
+    <div class='hero-section'>
+        <h1 style='color: #2D2D2D; font-size: 4rem; font-weight: 900; margin-bottom: 2rem;'>
+            Welcome to <span class='gradient-text'>CanvaNLP</span>
+        </h1>
+        <p style='color: #6C757D; font-size: 1.5rem; margin-bottom: 3rem; line-height: 1.6;'>
+            Transform your text data into beautiful, actionable insights with our design-first NLP platform
+        </p>
+        <div style='display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 3rem;'>
+            <span class="feature-tag">🎨 Beautiful Visualizations</span>
+            <span class="feature-tag">🤖 4 ML Algorithms</span>
+            <span class="feature-tag">📊 Real-time Analytics</span>
+            <span class="feature-tag">🚀 Professional Results</span>
+        </div>
+        <div style='background: linear-gradient(135deg, rgba(108, 99, 255, 0.1) 0%, rgba(0, 193, 212, 0.1) 100%); 
+                   padding: 2rem; border-radius: 20px; border: 2px dashed #6C63FF;'>
+            <h3 style='color: #2D2D2D; margin-bottom: 1rem;'>📁 Ready to Get Started?</h3>
+            <p style='color: #6C757D; margin: 0;'>
+                Use the sidebar to upload your CSV file and begin your analysis journey!
+            </p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Features section
+    st.markdown("<div class='section-header'>✨ WHY CHOOSE CANVA NLP?</div>", unsafe_allow_html=True)
+
+    features = [
+        {
+            "icon": "🎨", 
+            "title": "DESIGN-FIRST APPROACH", 
+            "desc": "Beautiful, intuitive interface that makes complex NLP accessible to everyone"
+        },
+        {
+            "icon": "⚡", 
+            "title": "LIGHTNING FAST ANALYSIS", 
+            "desc": "Advanced algorithms that deliver insights in seconds, not hours"
+        },
+        {
+            "icon": "🔍", 
+            "title": "MULTI-DIMENSIONAL INSIGHTS", 
+            "desc": "Lexical, semantic, syntactic, and pragmatic analysis in one platform"
+        },
+        {
+            "icon": "📈", 
+            "title": "PROFESSIONAL REPORTING", 
+            "desc": "Export-ready visualizations and reports that impress stakeholders"
+        }
+    ]
+
+    cols = st.columns(2)
+    for i, feature in enumerate(features):
+        with cols[i % 2]:
+            st.markdown(f"""
+            <div class="canva-card">
+                <div style="display: flex; align-items: start; gap: 1.5rem;">
+                    <span style="font-size: 3rem;">{feature['icon']}</span>
+                    <div>
+                        <h3 style="color: #2D2D2D; margin: 0 0 1rem 0; font-size: 1.3rem;">{feature['title']}</h3>
+                        <p style="color: #6C757D; margin: 0; line-height: 1.6;">{feature['desc']}</p>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+# ============================
+# Main Content - FIXED
 # ============================
 def main_content():
     """Main content with Canva style"""
-
+    
     # Canva Header
     st.markdown("""
     <div class='canva-header'>
         <h1 style='font-size: 4.5rem; font-weight: 900; margin: 0; text-shadow: 3px 3px 6px rgba(0,0,0,0.2);'>CANVA NLP</h1>
         <p style='font-size: 1.5rem; margin: 1rem 0 0 0; opacity: 0.9;'>Design Your Text Intelligence</p>
-        <div style='margin-top: 2rem;'>
-            <span class="feature-tag">🎨 Beautiful Visualizations</span>
-            <span class="feature-tag">⚡ Real-time Analysis</span>
-            <span class="feature-tag">🔍 Smart Insights</span>
-            <span class="feature-tag">🚀 Professional Results</span>
-        </div>
     </div>
     """, unsafe_allow_html=True)
 
+    # Check if file is uploaded and show appropriate content
     if not st.session_state.get('file_uploaded', False):
         show_canva_welcome()
         return
@@ -779,4 +868,175 @@ def main_content():
         </div>
         """, unsafe_allow_html=True)
     with col2:
-        st.mark
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-value">{df.shape[1]}</div>
+            <div class="metric-label">FEATURES</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        missing_vals = df.isnull().sum().sum()
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-value">{missing_vals}</div>
+            <div class="metric-label">MISSING VALUES</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col4:
+        unique_classes = df[config.get('target_col', df.columns[0] if len(df.columns) > 0 else '')].nunique() if config.get('target_col') in df.columns else 0
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-value">{unique_classes}</div>
+            <div class="metric-label">UNIQUE CLASSES</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Data Preview
+    with st.expander("📋 DATA PREVIEW", expanded=True):
+        tab1, tab2, tab3 = st.tabs(["First 10 Rows", "Data Types", "Basic Statistics"])
+        with tab1:
+            st.dataframe(df.head(10), use_container_width=True)
+        with tab2:
+            st.write(df.dtypes)
+        with tab3:
+            st.write(df.describe(include='all'))
+
+    # Analysis Results
+    if st.session_state.get('analyze_clicked', False):
+        perform_canva_analysis(df, config)
+
+# ============================
+# Analysis Function
+# ============================
+def perform_canva_analysis(df, config):
+    """Perform Canva-style analysis"""
+    st.markdown("<div class='section-header'>📈 ANALYSIS RESULTS</div>", unsafe_allow_html=True)
+
+    # Data validation
+    if config['text_col'] not in df.columns or config['target_col'] not in df.columns:
+        st.error("❌ Selected columns not found in dataset. Please check your column selections.")
+        return
+
+    # Handle missing values
+    if df[config['text_col']].isnull().any():
+        df[config['text_col']] = df[config['text_col']].fillna('')
+        st.info(f"📝 Filled {df[config['text_col']].isnull().sum()} missing values in text column")
+
+    if df[config['target_col']].isnull().any():
+        st.error("❌ Target column contains missing values. Please clean your data first.")
+        return
+
+    if len(df[config['target_col']].unique()) < 2:
+        st.error("❌ Target column must have at least 2 unique classes for classification.")
+        return
+
+    # Feature extraction
+    with st.spinner("🎨 Extracting features with beautiful precision..."):
+        extractor = CanvaFeatureExtractor()
+        X = df[config['text_col']].astype(str)
+        y = df[config['target_col']]
+
+        feature_descriptions = {
+            "Lexical": "Word-level analysis with lemmatization and n-grams",
+            "Semantic": "Sentiment analysis and text complexity features", 
+            "Syntactic": "Grammar structure and POS analysis",
+            "Pragmatic": "Context analysis and intent detection"
+        }
+
+        if config['feature_type'] == "Lexical":
+            X_features = extractor.extract_lexical_features(X)
+        elif config['feature_type'] == "Semantic":
+            X_features = extractor.extract_semantic_features(X)
+        elif config['feature_type'] == "Syntactic":
+            X_features = extractor.extract_syntactic_features(X)
+        else:  # Pragmatic
+            X_features = extractor.extract_pragmatic_features(X)
+
+    st.success(f"✅ Feature extraction completed: {feature_descriptions[config['feature_type']]}")
+
+    # Model training
+    with st.spinner("🤖 Training machine learning models with creative flair..."):
+        trainer = CanvaModelTrainer()
+        results, label_encoder = trainer.train_and_evaluate(X_features, y)
+
+    # Display results
+    successful_models = {k: v for k, v in results.items() if 'error' not in v}
+
+    if successful_models:
+        # Model Performance Cards
+        st.markdown("#### 🎯 MODEL PERFORMANCE")
+
+        cols = st.columns(len(successful_models))
+        for idx, (model_name, result) in enumerate(successful_models.items()):
+            with cols[idx]:
+                accuracy = result['accuracy']
+                st.markdown(f"""
+                <div class="model-card">
+                    <h4 style="color: #2D2D2D; margin-bottom: 1rem;">{model_name}</h4>
+                    <div class="model-accuracy">{accuracy:.1%}</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; color: #6C757D;">
+                        <div style="text-align: center;">
+                            <small>Precision</small>
+                            <div style="font-weight: bold; color: #6C63FF;">{result['precision']:.3f}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <small>Recall</small>
+                            <div style="font-weight: bold; color: #6C63FF;">{result['recall']:.3f}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <small>F1-Score</small>
+                            <div style="font-weight: bold; color: #6C63FF;">{result['f1_score']:.3f}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <small>Classes</small>
+                            <div style="font-weight: bold; color: #6C63FF;">{result['n_classes']}</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # Performance Dashboard
+        st.markdown("#### 📊 PERFORMANCE DASHBOARD")
+        viz = CanvaVisualizer()
+        dashboard_fig = viz.create_performance_dashboard(successful_models)
+        st.pyplot(dashboard_fig)
+
+        # Best Model Recommendation
+        best_model = max(successful_models.items(), key=lambda x: x[1]['accuracy'])
+        st.markdown(f"""
+        <div class="canva-card">
+            <h3 style="color: #6C63FF; margin-bottom: 1rem;">🏆 RECOMMENDED MODEL</h3>
+            <p style="color: #2D2D2D; font-size: 1.2rem; margin-bottom: 1rem;">
+                <strong>{best_model[0]}</strong> achieved the highest accuracy of
+                <strong style="color: #6C63FF;">{best_model[1]['accuracy']:.1%}</strong>
+            </p>
+            <p style="color: #6C757D; margin: 0;">
+                This model is recommended for deployment based on comprehensive performance metrics 
+                across accuracy, precision, recall, and F1-score.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    else:
+        st.error("❌ No models were successfully trained. Please check your data and try again.")
+
+# ============================
+# Main Application
+# ============================
+def main():
+    # Initialize session state
+    if 'file_uploaded' not in st.session_state:
+        st.session_state.file_uploaded = False
+    if 'analyze_clicked' not in st.session_state:
+        st.session_state.analyze_clicked = False
+    if 'config' not in st.session_state:
+        st.session_state.config = {}
+
+    # Setup sidebar
+    setup_sidebar()
+
+    # Main content
+    main_content()
+
+if __name__ == "__main__":
+    main()
