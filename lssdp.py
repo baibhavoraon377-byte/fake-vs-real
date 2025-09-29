@@ -1,5 +1,5 @@
 # ============================================
-# 🎨 Canva Style NLP Analysis Suite - FIXED VERSION
+# 🎨 NLP Analysis Suite - Modern Design
 # ============================================
 
 import streamlit as st
@@ -25,29 +25,29 @@ import seaborn as sns
 # Page Configuration
 # ============================
 st.set_page_config(
-    page_title="CanvaNLP - Design Your Text Analysis",
-    page_icon="🎨",
+    page_title="TextInsight - Advanced Text Analysis",
+    page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"  # Hide sidebar completely
 )
 
 # ============================
-# Canva Style CSS
+# Modern Style CSS
 # ============================
 st.markdown("""
 <style>
-    /* Canva Color Scheme */
+    /* Modern Color Scheme */
     :root {
-        --canva-purple: #6C63FF;
-        --canva-pink: #FF6584;
-        --canva-teal: #00C1D4;
-        --canva-orange: #FF8C42;
-        --canva-green: #2EC4B6;
-        --canva-dark: #2D2D2D;
-        --canva-light: #F8F9FA;
-        --canva-white: #FFFFFF;
-        --canva-gray: #6C757D;
-        --canva-card: #FFFFFF;
+        --primary-purple: #6C63FF;
+        --primary-pink: #FF6584;
+        --primary-teal: #00C1D4;
+        --primary-orange: #FF8C42;
+        --primary-green: #2EC4B6;
+        --dark-color: #2D2D2D;
+        --light-color: #F8F9FA;
+        --white-color: #FFFFFF;
+        --gray-color: #6C757D;
+        --card-color: #FFFFFF;
     }
 
     /* Main background */
@@ -56,22 +56,27 @@ st.markdown("""
         background-attachment: fixed;
     }
 
-    /* Main content container */
-    .main .block-container {
-        background: var(--canva-white);
-        border-radius: 24px;
-        margin: 2rem 1rem;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.1);
-        padding: 2rem;
-        min-height: 90vh;
+    /* Hide sidebar */
+    .css-1d391kg {
+        display: none !important;
     }
 
-    /* Canva Header */
-    .canva-header {
-        background: linear-gradient(135deg, var(--canva-purple) 0%, var(--canva-teal) 100%);
+    /* Main content container */
+    .main .block-container {
+        background: var(--white-color);
+        border-radius: 24px;
+        margin: 1rem;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+        padding: 2rem;
+        min-height: 95vh;
+    }
+
+    /* Modern Header */
+    .modern-header {
+        background: linear-gradient(135deg, var(--primary-purple) 0%, var(--primary-teal) 100%);
         border-radius: 20px;
         padding: 3rem 2rem;
-        margin: 2rem 0;
+        margin: 1rem 0 2rem 0;
         text-align: center;
         color: white;
         box-shadow: 0 15px 40px rgba(108, 99, 255, 0.3);
@@ -79,7 +84,7 @@ st.markdown("""
         overflow: hidden;
     }
 
-    .canva-header::before {
+    .modern-header::before {
         content: '';
         position: absolute;
         top: -50%;
@@ -90,8 +95,8 @@ st.markdown("""
     }
 
     /* Cards */
-    .canva-card {
-        background: var(--canva-card);
+    .modern-card {
+        background: var(--card-color);
         border-radius: 20px;
         padding: 2rem;
         margin: 1.5rem 0;
@@ -102,24 +107,24 @@ st.markdown("""
         overflow: hidden;
     }
 
-    .canva-card::before {
+    .modern-card::before {
         content: '';
         position: absolute;
         top: 0;
         left: 0;
         right: 0;
         height: 4px;
-        background: linear-gradient(90deg, var(--canva-purple), var(--canva-teal), var(--canva-pink));
+        background: linear-gradient(90deg, var(--primary-purple), var(--primary-teal), var(--primary-pink));
     }
 
-    .canva-card:hover {
+    .modern-card:hover {
         transform: translateY(-8px);
         box-shadow: 0 25px 50px rgba(0,0,0,0.15);
     }
 
     /* Metric Cards */
     .metric-card {
-        background: linear-gradient(135deg, var(--canva-purple) 0%, var(--canva-teal) 100%);
+        background: linear-gradient(135deg, var(--primary-purple) 0%, var(--primary-teal) 100%);
         color: white;
         padding: 2rem 1rem;
         border-radius: 20px;
@@ -166,35 +171,17 @@ st.markdown("""
     .section-header {
         font-size: 2.2rem;
         font-weight: 800;
-        color: var(--canva-dark);
+        color: var(--dark-color);
         margin: 3rem 0 2rem 0;
         padding: 1rem 0;
         border-bottom: 3px solid;
-        border-image: linear-gradient(90deg, var(--canva-purple), var(--canva-teal)) 1;
+        border-image: linear-gradient(90deg, var(--primary-purple), var(--primary-teal)) 1;
         text-shadow: 1px 1px 2px rgba(0,0,0,0.05);
     }
 
-    /* Sidebar - Canva Style */
-    .css-1d391kg, .css-1lcbmhc {
-        background: linear-gradient(180deg, var(--canva-white) 0%, #f8f9fa 100%) !important;
-        border-right: 1px solid rgba(0,0,0,0.1) !important;
-    }
-
-    .sidebar-header {
-        font-size: 1.5rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, var(--canva-purple) 0%, var(--canva-teal) 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 2rem;
-        text-align: center;
-        padding: 1rem;
-    }
-
-    /* Buttons - Canva Style */
+    /* Buttons - Modern Style */
     .stButton button {
-        width: 100%;
-        background: linear-gradient(135deg, var(--canva-purple) 0%, var(--canva-teal) 100%);
+        background: linear-gradient(135deg, var(--primary-purple) 0%, var(--primary-teal) 100%);
         color: white;
         border: none;
         padding: 1rem 2rem;
@@ -231,7 +218,7 @@ st.markdown("""
 
     /* Select boxes and inputs */
     .stSelectbox, .stTextInput, .stNumberInput {
-        background: var(--canva-white) !important;
+        background: var(--white-color) !important;
         border: 2px solid #e9ecef !important;
         border-radius: 12px !important;
         padding: 0.5rem !important;
@@ -239,13 +226,13 @@ st.markdown("""
     }
 
     .stSelectbox:focus, .stTextInput:focus, .stNumberInput:focus {
-        border-color: var(--canva-purple) !important;
+        border-color: var(--primary-purple) !important;
         box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1) !important;
     }
 
     .stSelectbox div, .stTextInput input, .stNumberInput input {
-        background: var(--canva-white) !important;
-        color: var(--canva-dark) !important;
+        background: var(--white-color) !important;
+        color: var(--dark-color) !important;
         font-weight: 500;
     }
 
@@ -258,7 +245,7 @@ st.markdown("""
 
     .stTabs [data-baseweb="tab"] {
         background: transparent !important;
-        color: var(--canva-gray) !important;
+        color: var(--gray-color) !important;
         border-radius: 12px 12px 0 0;
         padding: 1rem 2rem;
         border: none;
@@ -267,17 +254,17 @@ st.markdown("""
     }
 
     .stTabs [aria-selected="true"] {
-        background: var(--canva-white) !important;
-        color: var(--canva-purple) !important;
+        background: var(--white-color) !important;
+        color: var(--primary-purple) !important;
         border: 2px solid #e9ecef;
-        border-bottom: 2px solid var(--canva-white);
+        border-bottom: 2px solid var(--white-color);
         box-shadow: 0 -5px 15px rgba(0,0,0,0.05);
     }
 
     /* Expander */
     .streamlit-expanderHeader {
-        background: var(--canva-white) !important;
-        color: var(--canva-dark) !important;
+        background: var(--white-color) !important;
+        color: var(--dark-color) !important;
         border: 2px solid #e9ecef !important;
         border-radius: 12px !important;
         font-weight: 600;
@@ -285,13 +272,13 @@ st.markdown("""
     }
 
     .streamlit-expanderHeader:hover {
-        border-color: var(--canva-purple) !important;
+        border-color: var(--primary-purple) !important;
         box-shadow: 0 5px 15px rgba(0,0,0,0.05);
     }
 
     /* Progress bar */
     .stProgress > div > div > div {
-        background: linear-gradient(90deg, var(--canva-purple), var(--canva-teal));
+        background: linear-gradient(90deg, var(--primary-purple), var(--primary-teal));
         border-radius: 10px;
     }
 
@@ -322,8 +309,8 @@ st.markdown("""
 
     /* Dataframe styling */
     .dataframe {
-        background: var(--canva-white) !important;
-        color: var(--canva-dark) !important;
+        background: var(--white-color) !important;
+        color: var(--dark-color) !important;
         border-radius: 12px;
         overflow: hidden;
         box-shadow: 0 5px 15px rgba(0,0,0,0.05);
@@ -331,11 +318,10 @@ st.markdown("""
 
     /* Hero Section */
     .hero-section {
-        background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,249,250,0.95) 100%),
-                    url('https://images.unsplash.com/photo-1635776062127-d379bfcba9f8?ixlib=rb-4.0.3') center/cover;
+        background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,249,250,0.95) 100%);
         padding: 4rem 3rem;
         border-radius: 24px;
-        margin: 3rem 0;
+        margin: 2rem 0;
         text-align: center;
         border: none;
         box-shadow: 0 25px 60px rgba(0,0,0,0.1);
@@ -355,7 +341,7 @@ st.markdown("""
 
     /* Model Performance Cards */
     .model-card {
-        background: var(--canva-white);
+        background: var(--white-color);
         border-radius: 20px;
         padding: 2rem;
         margin: 1rem;
@@ -374,7 +360,7 @@ st.markdown("""
         left: 0;
         right: 0;
         height: 6px;
-        background: linear-gradient(90deg, var(--canva-purple), var(--canva-teal), var(--canva-pink));
+        background: linear-gradient(90deg, var(--primary-purple), var(--primary-teal), var(--primary-pink));
     }
 
     .model-card:hover {
@@ -386,7 +372,7 @@ st.markdown("""
         font-size: 2.5rem;
         font-weight: 800;
         margin: 1.5rem 0;
-        background: linear-gradient(135deg, var(--canva-purple) 0%, var(--canva-teal) 100%);
+        background: linear-gradient(135deg, var(--primary-purple) 0%, var(--primary-teal) 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
@@ -395,7 +381,7 @@ st.markdown("""
     /* Feature Tags */
     .feature-tag {
         background: linear-gradient(135deg, rgba(108, 99, 255, 0.1) 0%, rgba(0, 193, 212, 0.1) 100%);
-        color: var(--canva-purple);
+        color: var(--primary-purple);
         padding: 0.8rem 1.5rem;
         border-radius: 50px;
         font-size: 0.9rem;
@@ -410,7 +396,17 @@ st.markdown("""
     .feature-tag:hover {
         transform: translateY(-3px);
         box-shadow: 0 10px 25px rgba(108, 99, 255, 0.2);
-        border-color: var(--canva-purple);
+        border-color: var(--primary-purple);
+    }
+
+    /* Control Panel */
+    .control-panel {
+        background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,249,250,0.95) 100%);
+        border-radius: 20px;
+        padding: 2rem;
+        margin: 2rem 0;
+        border: 2px dashed var(--primary-purple);
+        box-shadow: 0 15px 35px rgba(0,0,0,0.08);
     }
 
     /* Floating elements */
@@ -426,7 +422,7 @@ st.markdown("""
 
     /* Gradient text */
     .gradient-text {
-        background: linear-gradient(135deg, var(--canva-purple) 0%, var(--canva-teal) 100%);
+        background: linear-gradient(135deg, var(--primary-purple) 0%, var(--primary-teal) 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 800;
@@ -455,7 +451,7 @@ stop_words = STOP_WORDS
 # ============================
 # Feature Engineering Classes
 # ============================
-class CanvaFeatureExtractor:
+class FeatureExtractor:
     @staticmethod
     def extract_lexical_features(texts):
         """Extract lexical features with advanced preprocessing"""
@@ -522,9 +518,9 @@ class CanvaFeatureExtractor:
         return np.array(pragmatic_features)
 
 # ============================
-# Canva Style Model Trainer
+# Modern Style Model Trainer
 # ============================
-class CanvaModelTrainer:
+class ModelTrainer:
     def __init__(self):
         self.models = {
             "🎨 Logistic Regression": LogisticRegression(max_iter=1000, random_state=42, class_weight='balanced'),
@@ -534,7 +530,7 @@ class CanvaModelTrainer:
         }
 
     def train_and_evaluate(self, X, y):
-        """Canva style model training with comprehensive evaluation"""
+        """Modern style model training with comprehensive evaluation"""
         results = {}
 
         le = LabelEncoder()
@@ -546,18 +542,18 @@ class CanvaModelTrainer:
             X, y_encoded, test_size=test_size, random_state=42, stratify=y_encoded
         )
 
-        # Canva style progress
+        # Modern style progress
         progress_container = st.empty()
 
         for i, (name, model) in enumerate(self.models.items()):
             with progress_container.container():
                 cols = st.columns([3, 1])
                 with cols[0]:
-                    st.markdown(f"**Designing {name}**")
+                    st.markdown(f"**Training {name}**")
                 with cols[1]:
                     progress_bar = st.progress(0)
 
-                    # Simulate Canva-style loading animation
+                    # Simulate loading animation
                     for step in range(5):
                         progress_bar.progress((step + 1) / 5)
                         import time
@@ -593,12 +589,12 @@ class CanvaModelTrainer:
         return results, le
 
 # ============================
-# Canva Style Visualizations
+# Modern Style Visualizations
 # ============================
-class CanvaVisualizer:
+class Visualizer:
     @staticmethod
     def create_performance_dashboard(results):
-        """Create Canva-style performance dashboard"""
+        """Create modern performance dashboard"""
         # Set clean theme for matplotlib
         plt.style.use('default')
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
@@ -680,72 +676,83 @@ class CanvaVisualizer:
         return fig
 
 # ============================
-# Sidebar Configuration - FIXED
+# Control Panel - REPLACED SIDEBAR
 # ============================
-def setup_sidebar():
-    """Setup Canva-style sidebar"""
-    st.sidebar.markdown("<div class='sidebar-header'>🎨 CANVA NLP</div>", unsafe_allow_html=True)
-    st.sidebar.markdown("---")
-
-    st.sidebar.markdown("### 📁 UPLOAD YOUR DATA")
+def setup_control_panel():
+    """Setup control panel in main content area"""
     
-    uploaded_file = st.sidebar.file_uploader(
-        "Choose a CSV file",
-        type=["csv"],
-        help="Upload your dataset to get started",
-        label_visibility="collapsed"
-    )
-
+    st.markdown("""
+    <div class='control-panel'>
+        <h2 style='color: #2D2D2D; margin-bottom: 2rem; text-align: center;'>⚙️ ANALYSIS CONTROLS</h2>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        uploaded_file = st.file_uploader(
+            "📁 Upload Your CSV File",
+            type=["csv"],
+            help="Upload your dataset to get started"
+        )
+    
+    with col2:
+        if uploaded_file is not None:
+            st.success("✅ File uploaded!")
+        else:
+            st.info("📁 Please upload a CSV file")
+    
     if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
             st.session_state.df = df
             st.session_state.file_uploaded = True
-
-            st.sidebar.success(f"✅ Successfully loaded {df.shape[0]} records")
-
-            st.sidebar.markdown("---")
-            st.sidebar.markdown("### ⚙️ ANALYSIS SETTINGS")
-
-            # Get column names safely
-            columns = df.columns.tolist()
             
-            text_col = st.sidebar.selectbox(
-                "Select Text Column",
-                columns,
-                index=0 if columns else 0,
-                help="Choose the column containing your text data"
-            )
-
-            target_col = st.sidebar.selectbox(
-                "Select Target Column", 
-                columns,
-                index=min(1, len(columns)-1) if len(columns) > 1 else 0,
-                help="Choose the column containing your labels/target"
-            )
-
-            feature_type = st.sidebar.selectbox(
-                "Analysis Type",
-                ["Lexical", "Semantic", "Syntactic", "Pragmatic"],
-                help="Choose the type of text analysis"
-            )
-
+            # Configuration options
+            st.markdown("---")
+            st.markdown("### 🔧 Analysis Configuration")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                text_col = st.selectbox(
+                    "Select Text Column",
+                    df.columns,
+                    help="Choose the column containing your text data"
+                )
+            
+            with col2:
+                target_col = st.selectbox(
+                    "Select Target Column", 
+                    df.columns,
+                    index=min(1, len(df.columns)-1) if len(df.columns) > 1 else 0,
+                    help="Choose the column containing your labels/target"
+                )
+            
+            with col3:
+                feature_type = st.selectbox(
+                    "Analysis Type",
+                    ["Lexical", "Semantic", "Syntactic", "Pragmatic"],
+                    help="Choose the type of text analysis"
+                )
+            
             st.session_state.config = {
                 'text_col': text_col,
                 'target_col': target_col,
                 'feature_type': feature_type
             }
-
-            st.sidebar.markdown("---")
             
-            if st.sidebar.button("🚀 START ANALYSIS", use_container_width=True):
-                st.session_state.analyze_clicked = True
-            else:
-                if 'analyze_clicked' not in st.session_state:
-                    st.session_state.analyze_clicked = False
+            # Start Analysis Button
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("🚀 START ANALYSIS", use_container_width=True):
+                    st.session_state.analyze_clicked = True
+                else:
+                    if 'analyze_clicked' not in st.session_state:
+                        st.session_state.analyze_clicked = False
 
         except Exception as e:
-            st.sidebar.error(f"❌ Error reading file: {str(e)}")
+            st.error(f"❌ Error reading file: {str(e)}")
     else:
         # Initialize session state
         if 'file_uploaded' not in st.session_state:
@@ -753,29 +760,18 @@ def setup_sidebar():
         if 'analyze_clicked' not in st.session_state:
             st.session_state.analyze_clicked = False
 
-    # Add some helpful information in sidebar
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 💡 HOW TO USE")
-    st.sidebar.markdown("""
-    1. **Upload** your CSV file
-    2. **Select** text and target columns  
-    3. **Choose** analysis type
-    4. **Click** Start Analysis
-    5. **View** beautiful results!
-    """)
-
 # ============================
 # Welcome Screen
 # ============================
-def show_canva_welcome():
-    """Canva-style welcome screen"""
+def show_welcome():
+    """Modern welcome screen"""
     st.markdown("""
     <div class='hero-section'>
         <h1 style='color: #2D2D2D; font-size: 4rem; font-weight: 900; margin-bottom: 2rem;'>
-            Welcome to <span class='gradient-text'>CanvaNLP</span>
+            Welcome to <span class='gradient-text'>TextInsight</span>
         </h1>
         <p style='color: #6C757D; font-size: 1.5rem; margin-bottom: 3rem; line-height: 1.6;'>
-            Transform your text data into beautiful, actionable insights with our design-first NLP platform
+            Transform your text data into beautiful, actionable insights with our modern NLP platform
         </p>
         <div style='display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 3rem;'>
             <span class="feature-tag">🎨 Beautiful Visualizations</span>
@@ -783,23 +779,16 @@ def show_canva_welcome():
             <span class="feature-tag">📊 Real-time Analytics</span>
             <span class="feature-tag">🚀 Professional Results</span>
         </div>
-        <div style='background: linear-gradient(135deg, rgba(108, 99, 255, 0.1) 0%, rgba(0, 193, 212, 0.1) 100%); 
-                   padding: 2rem; border-radius: 20px; border: 2px dashed #6C63FF;'>
-            <h3 style='color: #2D2D2D; margin-bottom: 1rem;'>📁 Ready to Get Started?</h3>
-            <p style='color: #6C757D; margin: 0;'>
-                Use the sidebar to upload your CSV file and begin your analysis journey!
-            </p>
-        </div>
     </div>
     """, unsafe_allow_html=True)
 
     # Features section
-    st.markdown("<div class='section-header'>✨ WHY CHOOSE CANVA NLP?</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'>✨ WHY CHOOSE TEXTINSIGHT?</div>", unsafe_allow_html=True)
 
     features = [
         {
             "icon": "🎨", 
-            "title": "DESIGN-FIRST APPROACH", 
+            "title": "MODERN DESIGN", 
             "desc": "Beautiful, intuitive interface that makes complex NLP accessible to everyone"
         },
         {
@@ -823,7 +812,7 @@ def show_canva_welcome():
     for i, feature in enumerate(features):
         with cols[i % 2]:
             st.markdown(f"""
-            <div class="canva-card">
+            <div class="modern-card">
                 <div style="display: flex; align-items: start; gap: 1.5rem;">
                     <span style="font-size: 3rem;">{feature['icon']}</span>
                     <div>
@@ -835,22 +824,25 @@ def show_canva_welcome():
             """, unsafe_allow_html=True)
 
 # ============================
-# Main Content - FIXED
+# Main Content
 # ============================
 def main_content():
-    """Main content with Canva style"""
+    """Main content with modern style"""
     
-    # Canva Header
+    # Modern Header
     st.markdown("""
-    <div class='canva-header'>
-        <h1 style='font-size: 4.5rem; font-weight: 900; margin: 0; text-shadow: 3px 3px 6px rgba(0,0,0,0.2);'>CANVA NLP</h1>
-        <p style='font-size: 1.5rem; margin: 1rem 0 0 0; opacity: 0.9;'>Design Your Text Intelligence</p>
+    <div class='modern-header'>
+        <h1 style='font-size: 4.5rem; font-weight: 900; margin: 0; text-shadow: 3px 3px 6px rgba(0,0,0,0.2);'>TEXTINSIGHT</h1>
+        <p style='font-size: 1.5rem; margin: 1rem 0 0 0; opacity: 0.9;'>Advanced Text Intelligence Platform</p>
     </div>
     """, unsafe_allow_html=True)
 
+    # Setup control panel (replaces sidebar)
+    setup_control_panel()
+
     # Check if file is uploaded and show appropriate content
     if not st.session_state.get('file_uploaded', False):
-        show_canva_welcome()
+        show_welcome()
         return
 
     df = st.session_state.df
@@ -903,13 +895,13 @@ def main_content():
 
     # Analysis Results
     if st.session_state.get('analyze_clicked', False):
-        perform_canva_analysis(df, config)
+        perform_analysis(df, config)
 
 # ============================
 # Analysis Function
 # ============================
-def perform_canva_analysis(df, config):
-    """Perform Canva-style analysis"""
+def perform_analysis(df, config):
+    """Perform modern analysis"""
     st.markdown("<div class='section-header'>📈 ANALYSIS RESULTS</div>", unsafe_allow_html=True)
 
     # Data validation
@@ -931,8 +923,8 @@ def perform_canva_analysis(df, config):
         return
 
     # Feature extraction
-    with st.spinner("🎨 Extracting features with beautiful precision..."):
-        extractor = CanvaFeatureExtractor()
+    with st.spinner("🎨 Extracting features with precision..."):
+        extractor = FeatureExtractor()
         X = df[config['text_col']].astype(str)
         y = df[config['target_col']]
 
@@ -955,8 +947,8 @@ def perform_canva_analysis(df, config):
     st.success(f"✅ Feature extraction completed: {feature_descriptions[config['feature_type']]}")
 
     # Model training
-    with st.spinner("🤖 Training machine learning models with creative flair..."):
-        trainer = CanvaModelTrainer()
+    with st.spinner("🤖 Training machine learning models..."):
+        trainer = ModelTrainer()
         results, label_encoder = trainer.train_and_evaluate(X_features, y)
 
     # Display results
@@ -997,14 +989,14 @@ def perform_canva_analysis(df, config):
 
         # Performance Dashboard
         st.markdown("#### 📊 PERFORMANCE DASHBOARD")
-        viz = CanvaVisualizer()
+        viz = Visualizer()
         dashboard_fig = viz.create_performance_dashboard(successful_models)
         st.pyplot(dashboard_fig)
 
         # Best Model Recommendation
         best_model = max(successful_models.items(), key=lambda x: x[1]['accuracy'])
         st.markdown(f"""
-        <div class="canva-card">
+        <div class="modern-card">
             <h3 style="color: #6C63FF; margin-bottom: 1rem;">🏆 RECOMMENDED MODEL</h3>
             <p style="color: #2D2D2D; font-size: 1.2rem; margin-bottom: 1rem;">
                 <strong>{best_model[0]}</strong> achieved the highest accuracy of
@@ -1031,9 +1023,6 @@ def main():
         st.session_state.analyze_clicked = False
     if 'config' not in st.session_state:
         st.session_state.config = {}
-
-    # Setup sidebar
-    setup_sidebar()
 
     # Main content
     main_content()
