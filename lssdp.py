@@ -20,11 +20,8 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
 from sklearn.decomposition import TruncatedSVD
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-import re
-from collections import Counter
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImbPipeline
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -611,7 +608,7 @@ class AdvancedFeatureExtractor:
         return hybrid_features_reduced
 
 # ============================
-# Enhanced Model Trainer
+# Enhanced Model Trainer with SMOTE
 # ============================
 class AdvancedModelTrainer:
     def __init__(self):
@@ -667,8 +664,49 @@ class AdvancedModelTrainer:
         cv_scores = cross_val_score(model, X, y, cv=skf, scoring='accuracy')
         return cv_scores.mean(), cv_scores.std()
 
-    def train_and_evaluate(self, X, y):
-        """Enhanced model training with comprehensive evaluation"""
+    def apply_smote(self, X, y, sampling_strategy='auto', random_state=42):
+        """Apply SMOTE for handling class imbalance"""
+        try:
+            # Check if SMOTE can be applied (need at least 2 samples per class)
+            unique_classes, class_counts = np.unique(y, return_counts=True)
+            min_samples = min(class_counts)
+            
+            if min_samples < 2:
+                st.warning("SMOTE cannot be applied: Some classes have less than 2 samples")
+                return X, y, False
+                
+            # Adjust sampling strategy based on class distribution
+            if len(unique_classes) == 2:
+                # For binary classification, balance the classes
+                sampling_strategy = 'auto'
+            else:
+                # For multi-class, don't over-sample beyond the majority class
+                sampling_strategy = 'not majority'
+            
+            smote = SMOTE(
+                sampling_strategy=sampling_strategy,
+                random_state=random_state,
+                k_neighbors=min(5, min_samples - 1)
+            )
+            
+            X_resampled, y_resampled = smote.fit_resample(X, y)
+            
+            # Log the resampling results
+            original_dist = np.bincount(y)
+            resampled_dist = np.bincount(y_resampled)
+            
+            st.success(f"SMOTE Applied: {len(X)} → {len(X_resampled)} samples")
+            st.info(f"Class distribution before: {dict(zip(unique_classes, original_dist))}")
+            st.info(f"Class distribution after: {dict(zip(unique_classes, resampled_dist))}")
+            
+            return X_resampled, y_resampled, True
+            
+        except Exception as e:
+            st.warning(f"SMOTE failed: {str(e)}. Using original data.")
+            return X, y, False
+
+    def train_and_evaluate(self, X, y, use_smote=True):
+        """Enhanced model training with SMOTE and comprehensive evaluation"""
         results = {}
 
         le = LabelEncoder()
@@ -690,6 +728,14 @@ class AdvancedModelTrainer:
             random_state=42, 
             stratify=y_encoded
         )
+
+        # Apply SMOTE to training data if requested and applicable
+        smote_applied = False
+        if use_smote and n_classes > 1:
+            X_train_resampled, y_train_resampled, smote_applied = self.apply_smote(X_train, y_train)
+            if smote_applied:
+                X_train = X_train_resampled
+                y_train = y_train_resampled
 
         progress_container = st.empty()
 
@@ -743,6 +789,7 @@ class AdvancedModelTrainer:
                     'probabilities': y_proba,
                     'n_classes': n_classes,
                     'test_size': len(y_test),
+                    'smote_applied': smote_applied,
                     'feature_importance': getattr(best_model, 'feature_importances_', None)
                 }
 
@@ -990,12 +1037,20 @@ def main():
             with st.expander("Advanced Configuration"):
                 col1, col2 = st.columns(2)
                 with col1:
+                    enable_smote = st.checkbox("Enable SMOTE (Handle Class Imbalance)", value=True,
+                                             help="Synthetic Minority Over-sampling Technique to balance classes")
                     enable_cross_validation = st.checkbox("Enable Cross-Validation", value=True)
-                    enable_hyperparameter_tuning = st.checkbox("Enable Hyperparameter Tuning", value=True)
                 with col2:
+                    enable_hyperparameter_tuning = st.checkbox("Enable Hyperparameter Tuning", value=True)
                     min_samples_per_class = st.number_input("Minimum Samples per Class", 
                                                            min_value=10, value=50, 
                                                            help="Ensure sufficient data for reliable analysis")
+            
+            st.session_state.config.update({
+                'enable_smote': enable_smote,
+                'enable_cross_validation': enable_cross_validation,
+                'enable_hyperparameter_tuning': enable_hyperparameter_tuning
+            })
             
             # Start Analysis Button
             col1, col2, col3 = st.columns([1, 2, 1])
@@ -1164,10 +1219,10 @@ def main():
         perform_advanced_analysis(st.session_state.df, st.session_state.config)
 
 # ============================
-# Enhanced Analysis Function
+# Enhanced Analysis Function with SMOTE
 # ============================
 def perform_advanced_analysis(df, config):
-    """Perform advanced analysis with professional styling"""
+    """Perform advanced analysis with SMOTE integration"""
     st.markdown('<div class="section-header">Advanced Analysis Results</div>', unsafe_allow_html=True)
     
     # Data validation
@@ -1219,10 +1274,11 @@ def perform_advanced_analysis(df, config):
 
     st.success("Feature extraction completed successfully!")
 
-    # Enhanced model training
-    with st.spinner("Training advanced AI models with optimized parameters..."):
+    # Enhanced model training with SMOTE
+    with st.spinner("Training advanced AI models with SMOTE and optimized parameters..."):
         trainer = AdvancedModelTrainer()
-        results, label_encoder = trainer.train_and_evaluate(X_features, y)
+        use_smote = config.get('enable_smote', True)
+        results, label_encoder = trainer.train_and_evaluate(X_features, y, use_smote=use_smote)
 
     # Display enhanced results
     successful_models = {k: v for k, v in results.items() if 'error' not in v}
@@ -1237,6 +1293,7 @@ def perform_advanced_analysis(df, config):
                 accuracy = result['accuracy']
                 cv_mean = result.get('cv_mean', accuracy)
                 cv_std = result.get('cv_std', 0)
+                smote_status = "Yes" if result.get('smote_applied', False) else "No"
                 
                 st.markdown(f"""
                 <div class="model-card">
@@ -1245,7 +1302,8 @@ def perform_advanced_analysis(df, config):
                     <div style="color: var(--primary-subtle); font-size: 14px; margin-bottom: 12px;">
                         Precision: {result['precision']:.3f}<br>
                         Recall: {result['recall']:.3f}<br>
-                        CV Score: {cv_mean:.3f} ± {cv_std:.3f}
+                        CV Score: {cv_mean:.3f} ± {cv_std:.3f}<br>
+                        SMOTE: {smote_status}
                     </div>
                     <div class="progress-container">
                         <div class="progress-fill" style="width: {accuracy*100}%"></div>
@@ -1265,6 +1323,7 @@ def perform_advanced_analysis(df, config):
         # Best Model Recommendation with Enhanced Analysis
         best_model = max(successful_models.items(), key=lambda x: x[1]['accuracy'])
         best_result = best_model[1]
+        smote_used = best_result.get('smote_applied', False)
         
         st.markdown(f"""
         <div class="result-card success-card">
@@ -1279,7 +1338,7 @@ def perform_advanced_analysis(df, config):
             <p style="color: var(--primary-subtle); margin: 0; line-height: 1.6;">
                 This model demonstrates superior performance in analyzing your data patterns 
                 and provides reliable classification across all {best_result['n_classes']} categories 
-                with {best_result['test_size']} test samples.
+                with {best_result['test_size']} test samples. SMOTE balancing: <strong>{'Applied' if smote_used else 'Not Applied'}</strong>.
             </p>
         </div>
         """, unsafe_allow_html=True)
