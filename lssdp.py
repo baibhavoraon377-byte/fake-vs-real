@@ -610,9 +610,11 @@ class AdvancedFeatureExtractor:
         
         return hybrid_features_reduced
 
-# ============================
-# Enhanced Model Trainer
-# ============================
+# ============================================
+# Enhanced Model Trainer (with SMOTE)
+# ============================================
+from imblearn.over_sampling import SMOTE  # <-- ADD THIS IMPORT AT THE TOP
+
 class AdvancedModelTrainer:
     def __init__(self):
         self.models = {
@@ -648,7 +650,7 @@ class AdvancedModelTrainer:
             ),
             "Naive Bayes": MultinomialNB(alpha=0.1)
         }
-        
+
         self.param_grids = {
             "Logistic Regression": {
                 'C': [0.1, 1.0, 10.0],
@@ -668,7 +670,7 @@ class AdvancedModelTrainer:
         return cv_scores.mean(), cv_scores.std()
 
     def train_and_evaluate(self, X, y):
-        """Enhanced model training with comprehensive evaluation"""
+        """Enhanced model training with SMOTE and comprehensive evaluation"""
         results = {}
 
         le = LabelEncoder()
@@ -691,6 +693,17 @@ class AdvancedModelTrainer:
             stratify=y_encoded
         )
 
+        # =============================
+        # ✅ Apply SMOTE (Oversampling)
+        # =============================
+        st.info("Applying SMOTE to balance training data...")
+        try:
+            smote = SMOTE(random_state=42, k_neighbors=min(5, len(np.unique(y_train)) - 1))
+            X_train, y_train = smote.fit_resample(X_train, y_train)
+            st.success(f"SMOTE applied successfully! Balanced samples per class: {np.bincount(y_train)}")
+        except Exception as e:
+            st.warning(f"SMOTE could not be applied: {e}")
+
         progress_container = st.empty()
 
         for i, (name, model) in enumerate(self.models.items()):
@@ -699,7 +712,6 @@ class AdvancedModelTrainer:
                 progress_bar = st.progress(0)
 
             try:
-                # Enhanced model training with optional hyperparameter tuning
                 if name in self.param_grids and len(y_encoded) > 100:
                     with st.spinner(f"Optimizing {name} hyperparameters..."):
                         grid_search = GridSearchCV(
@@ -716,20 +728,15 @@ class AdvancedModelTrainer:
                     best_model = model
                     best_model.fit(X_train, y_train)
 
-                # Cross-validation
                 cv_mean, cv_std = self.enhanced_cross_validation(X_train, y_train, best_model)
-                
-                # Final evaluation
                 y_pred = best_model.predict(X_test)
                 y_proba = best_model.predict_proba(X_test) if hasattr(best_model, 'predict_proba') else None
 
-                # Comprehensive metrics
                 accuracy = accuracy_score(y_test, y_pred)
                 precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
                 recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
                 f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
 
-                # Cross-validation scores
                 results[name] = {
                     'accuracy': accuracy,
                     'precision': precision,
