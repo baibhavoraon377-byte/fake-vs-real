@@ -8,6 +8,7 @@ import numpy as np
 import spacy
 from spacy.lang.en.stop_words import STOP_WORDS
 from textblob import TextBlob
+from imblearn.over_sampling import SMOTE 
 
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
@@ -613,7 +614,7 @@ class AdvancedFeatureExtractor:
 # ============================================
 # Enhanced Model Trainer (with SMOTE)
 # ============================================
-from imblearn.over_sampling import SMOTE  # <-- ADD THIS IMPORT AT THE TOP
+
 
 class AdvancedModelTrainer:
     def __init__(self):
