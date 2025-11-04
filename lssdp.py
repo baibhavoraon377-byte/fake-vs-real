@@ -1,1330 +1,1180 @@
-# ============================================
-# TextInsight - AI-Powered Fact Analytics
-# ============================================
-
 import streamlit as st
 import pandas as pd
 import numpy as np
+import requests
+from bs4 import BeautifulSoup
+import re
+import csv
+from urllib.parse import urljoin
+import time
+import random
+import matplotlib.pyplot as plt
+
+# --- NEW DEP: Imbalanced-learn ---
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImbPipeline 
+
+# --- NLP & ML Imports ---
 import spacy
 from spacy.lang.en.stop_words import STOP_WORDS
 from textblob import TextBlob
-from imblearn.over_sampling import SMOTE 
-
-from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.model_selection import StratifiedKFold
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from sklearn.preprocessing import LabelEncoder
-from sklearn.pipeline import Pipeline
-from sklearn.model_selection import GridSearchCV
-from sklearn.decomposition import TruncatedSVD
+from scipy import sparse
+import io
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-import re
-from collections import Counter
-import warnings
-warnings.filterwarnings('ignore')
+# --- Configuration ---
+SCRAPED_DATA_PATH = 'politifact_data.csv'
+N_SPLITS = 5
 
-# ============================
-# Page Configuration
-# ============================
-st.set_page_config(
-    page_title="TextInsight - AI Fact Analytics",
-    page_icon="",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# Google Fact Check API rating mappings (for binary classification)
+GOOGLE_TRUE_RATINGS = ["True", "Mostly True", "Accurate", "Correct"]
+GOOGLE_FALSE_RATINGS = ["False", "Mostly False", "Pants on Fire", "Pants on Fire!", "Fake", "Incorrect", "Baseless", "Misleading"] 
 
-# ============================
-# Professional Style CSS
-# ============================
-st.markdown("""
-<style>
-    /* Professional Color Scheme */
-    :root {
-        --primary-blue: #2563EB;
-        --primary-dark: #1E293B;
-        --primary-card: #334155;
-        --primary-light: #475569;
-        --primary-text: #F8FAFC;
-        --primary-subtle: #94A3B8;
-        --primary-accent: #3B82F6;
-        --primary-warning: #F59E0B;
-        --primary-error: #EF4444;
-        --primary-success: #10B981;
-    }
-
-    /* Main background */
-    .stApp {
-        background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
-        color: var(--primary-text);
-    }
-
-    /* Hide sidebar and default elements */
-    .css-1d391kg {
-        display: none !important;
-    }
-
-    .main .block-container {
-        padding: 2rem;
-        max-width: 100%;
-    }
-
-    /* Header Section */
-    .professional-header {
-        background: linear-gradient(135deg, var(--primary-card) 0%, #1E293B 100%);
-        border-radius: 16px;
-        padding: 3rem 2rem;
-        margin: 1rem 0 3rem 0;
-        text-align: center;
-        border: 1px solid var(--primary-light);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .header-badge {
-        background: var(--primary-blue);
-        color: white;
-        padding: 8px 16px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-weight: 700;
-        display: inline-block;
-        margin-bottom: 1rem;
-    }
-
-    /* Cards */
-    .professional-card {
-        background: var(--primary-card);
-        border-radius: 12px;
-        padding: 2rem;
-        margin: 1rem 0;
-        border: 1px solid var(--primary-light);
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .professional-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 3px;
-        background: var(--primary-blue);
-    }
-
-    .professional-card:hover {
-        transform: translateY(-4px);
-        border-color: var(--primary-blue);
-        box-shadow: 0 12px 40px rgba(37, 99, 235, 0.15);
-    }
-
-    .feature-card {
-        background: linear-gradient(135deg, var(--primary-card) 0%, #1E293B 100%);
-        border-radius: 12px;
-        padding: 2.5rem 2rem;
-        text-align: center;
-        border: 1px solid var(--primary-light);
-        transition: all 0.3s ease;
-        height: 100%;
-    }
-
-    .feature-card:hover {
-        transform: translateY(-6px);
-        border-color: var(--primary-blue);
-        box-shadow: 0 16px 48px rgba(37, 99, 235, 0.2);
-    }
-
-    /* Metrics */
-    .metric-card {
-        background: var(--primary-card);
-        border-radius: 12px;
-        padding: 2rem;
-        text-align: center;
-        border: 1px solid var(--primary-light);
-        transition: all 0.3s ease;
-        margin: 0.5rem;
-    }
-
-    .metric-card:hover {
-        border-color: var(--primary-blue);
-        transform: scale(1.02);
-    }
-
-    .metric-value {
-        font-size: 2.5rem;
-        font-weight: 800;
-        color: var(--primary-blue);
-        margin-bottom: 0.5rem;
-    }
-
-    .metric-label {
-        font-size: 14px;
-        color: var(--primary-subtle);
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-
-    /* Buttons */
-    .stButton button {
-        background: var(--primary-blue) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 8px !important;
-        padding: 14px 32px !important;
-        font-weight: 700 !important;
-        font-size: 15px !important;
-        transition: all 0.3s ease !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
-    }
-
-    .stButton button:hover {
-        background: #1D4ED8 !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4) !important;
-    }
-
-    .secondary-btn {
-        background: transparent !important;
-        color: var(--primary-blue) !important;
-        border: 2px solid var(--primary-blue) !important;
-        border-radius: 8px !important;
-        padding: 12px 32px !important;
-        font-weight: 600 !important;
-        font-size: 15px !important;
-        transition: all 0.3s ease !important;
-    }
-
-    .secondary-btn:hover {
-        background: rgba(37, 99, 235, 0.1) !important;
-        transform: translateY(-2px) !important;
-    }
-
-    /* Headers */
-    .page-header {
-        font-size: 3rem;
-        font-weight: 800;
-        color: var(--primary-text);
-        margin-bottom: 1rem;
-        background: linear-gradient(135deg, var(--primary-text) 0%, var(--primary-blue) 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-
-    .section-header {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--primary-text);
-        margin: 3rem 0 1.5rem 0;
-    }
-
-    .card-header {
-        font-size: 1.3rem;
-        font-weight: 700;
-        color: var(--primary-text);
-        margin-bottom: 1rem;
-    }
-
-    /* Progress */
-    .progress-container {
-        background: var(--primary-light);
-        border-radius: 10px;
-        height: 6px;
-        overflow: hidden;
-        margin: 1rem 0;
-    }
-
-    .progress-fill {
-        background: linear-gradient(90deg, var(--primary-blue), var(--primary-accent));
-        height: 100%;
-        border-radius: 10px;
-        transition: width 0.3s ease;
-    }
-
-    /* Model Cards */
-    .model-card {
-        background: var(--primary-card);
-        border-radius: 12px;
-        padding: 2rem;
-        text-align: center;
-        border: 1px solid var(--primary-light);
-        transition: all 0.3s ease;
-        margin: 0.5rem;
-    }
-
-    .model-card:hover {
-        border-color: var(--primary-blue);
-        transform: translateY(-4px);
-        box-shadow: 0 12px 36px rgba(37, 99, 235, 0.15);
-    }
-
-    .model-accuracy {
-        font-size: 2.2rem;
-        font-weight: 800;
-        color: var(--primary-blue);
-        margin: 1rem 0;
-    }
-
-    /* File Upload */
-    .upload-area {
-        background: var(--primary-card);
-        border: 2px dashed var(--primary-light);
-        border-radius: 12px;
-        padding: 3rem;
-        text-align: center;
-        transition: all 0.3s ease;
-        margin: 1rem 0;
-    }
-
-    .upload-area:hover {
-        border-color: var(--primary-blue);
-        background: rgba(37, 99, 235, 0.05);
-    }
-
-    /* Inputs */
-    .stSelectbox, .stTextInput, .stNumberInput {
-        background: var(--primary-card) !important;
-        border: 2px solid var(--primary-light) !important;
-        border-radius: 8px !important;
-        color: var(--primary-text) !important;
-    }
-
-    .stSelectbox:focus, .stTextInput:focus, .stNumberInput:focus {
-        border-color: var(--primary-blue) !important;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
-    }
-
-    .stSelectbox div, .stTextInput input, .stNumberInput input {
-        background: var(--primary-card) !important;
-        color: var(--primary-text) !important;
-        font-weight: 500;
-    }
-
-    /* Feature Icons */
-    .feature-icon {
-        width: 64px;
-        height: 64px;
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 24px;
-        margin: 0 auto 1.5rem auto;
-        background: linear-gradient(135deg, var(--primary-blue), var(--primary-accent));
-        color: white;
-    }
-
-    /* Stats */
-    .stat-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin: 2rem 0;
-    }
-
-    .stat-item {
-        background: var(--primary-card);
-        border-radius: 12px;
-        padding: 1.5rem;
-        text-align: center;
-        border: 1px solid var(--primary-light);
-        transition: all 0.3s ease;
-    }
-
-    .stat-item:hover {
-        border-color: var(--primary-blue);
-        transform: translateY(-2px);
-    }
-
-    .stat-value {
-        font-size: 2rem;
-        font-weight: 800;
-        color: var(--primary-blue);
-        margin-bottom: 0.5rem;
-    }
-
-    .stat-label {
-        font-size: 14px;
-        color: var(--primary-subtle);
-        font-weight: 600;
-    }
-
-    /* Analysis Results */
-    .result-card {
-        background: var(--primary-card);
-        border-radius: 12px;
-        padding: 2rem;
-        margin: 1rem 0;
-        border-left: 4px solid var(--primary-blue);
-        border: 1px solid var(--primary-light);
-    }
-
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-        width: 8px;
-    }
-
-    ::-webkit-scrollbar-track {
-        background: var(--primary-dark);
-    }
-
-    ::-webkit-scrollbar-thumb {
-        background: var(--primary-light);
-        border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-        background: var(--primary-blue);
-    }
-
-    /* Text styles */
-    .subtitle {
-        color: var(--primary-subtle);
-        font-size: 1.2rem;
-        line-height: 1.6;
-        margin-bottom: 2rem;
-    }
-
-    .feature-description {
-        color: var(--primary-subtle);
-        font-size: 15px;
-        line-height: 1.6;
-        margin-top: 1rem;
-    }
-
-    /* Warning and success states */
-    .warning-card {
-        border-left-color: var(--primary-warning);
-    }
-
-    .success-card {
-        border-left-color: var(--primary-success);
-    }
-
-    .error-card {
-        border-left-color: var(--primary-error);
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# ============================
-# Initialize NLP
-# ============================
+# --- SpaCy Loading Function (Robust for Streamlit Cloud) ---
 @st.cache_resource
-def load_nlp_model():
+def load_spacy_model():
+    """Attempts to load SpaCy model, relying on the model being in requirements.txt."""
     try:
         nlp = spacy.load("en_core_web_sm")
         return nlp
-    except OSError:
-        st.error("""
-        **SpaCy English model not found.**
-        Please install: `python -m spacy download en_core_web_sm`
-        """)
-        st.stop()
+    except OSError as e:
+        st.error(f"SpaCy model 'en_core_web_sm' not found. Please ensure the direct GitHub link for the model is correctly listed in your 'requirements.txt' file.")
+        st.code("""
+        # Example of the line needed in requirements.txt:
+        https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+        imbalanced-learn # Required for SMOTE
+        """, language='text')
+        raise e
 
-nlp = load_nlp_model()
+# Load resources outside main app flow
+try:
+    NLP_MODEL = load_spacy_model()
+except Exception:
+    st.stop() 
+
 stop_words = STOP_WORDS
+pragmatic_words = ["must", "should", "might", "could", "will", "?", "!"]
 
 # ============================
-# Enhanced Feature Engineering Classes
+# GOOGLE FACT CHECK API INTEGRATION
 # ============================
-class AdvancedFeatureExtractor:
-    @staticmethod
-    def preprocess_text(texts):
-        """Advanced text preprocessing with multiple cleaning steps"""
-        processed_texts = []
-        for text in texts:
-            # Convert to string and lowercase
-            text = str(text).lower()
-            
-            # Remove special characters and digits
-            text = re.sub(r'[^a-zA-Z\s]', '', text)
-            
-            # Advanced tokenization with spaCy
-            doc = nlp(text)
-            
-            # Lemmatization with POS filtering
-            tokens = []
-            for token in doc:
-                if (token.text not in stop_words and 
-                    token.is_alpha and 
-                    len(token.text) > 2 and
-                    token.pos_ in ['NOUN', 'VERB', 'ADJ', 'ADV']):
-                    tokens.append(token.lemma_)
-            
-            processed_texts.append(" ".join(tokens))
-        return processed_texts
 
-    @staticmethod
-    def extract_lexical_features(texts):
-        """Enhanced lexical features with multiple vectorization techniques"""
-        processed_texts = AdvancedFeatureExtractor.preprocess_text(texts)
-        
-        # TF-IDF with optimal parameters
-        tfidf_vectorizer = TfidfVectorizer(
-            max_features=2000,
-            ngram_range=(1, 3),
-            min_df=2,
-            max_df=0.95,
-            sublinear_tf=True,
-            strip_accents='unicode'
-        )
-        
-        tfidf_features = tfidf_vectorizer.fit_transform(processed_texts)
-        return tfidf_features
+def fetch_google_claims(api_key, num_claims=100):
+    """
+    Fetches claims from Google Fact Check API with pagination handling.
 
-    @staticmethod
-    def extract_semantic_features(texts):
-        """Enhanced semantic features with comprehensive analysis"""
-        features = []
-        for text in texts:
-            blob = TextBlob(str(text))
-            
-            # Sentiment features
-            polarity = blob.sentiment.polarity
-            subjectivity = blob.sentiment.subjectivity
-            
-            # Readability features
-            words = text.split()
-            sentences = text.split('.')
-            word_count = len(words)
-            sentence_count = len([s for s in sentences if s.strip()])
-            avg_sentence_length = word_count / max(sentence_count, 1)
-            
-            # Vocabulary richness
-            unique_words = len(set(words))
-            lexical_diversity = unique_words / max(word_count, 1)
-            
-            # Advanced features
-            long_words = len([word for word in words if len(word) > 6])
-            complex_word_ratio = long_words / max(word_count, 1)
-            
-            features.append([
-                polarity,
-                subjectivity,
-                word_count,
-                sentence_count,
-                avg_sentence_length,
-                lexical_diversity,
-                complex_word_ratio,
-                unique_words
-            ])
-        return np.array(features)
+    TODO: User must add GOOGLE_API_KEY to .streamlit/secrets.toml
+    Get your API key from: https://console.cloud.google.com/apis/credentials
+    Enable the "Fact Check Tools API" in Google Cloud Console first.
+    """
+    base_url = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
+    collected_claims = []
+    page_token = None
+    placeholder = st.empty()
 
-    @staticmethod
-    def extract_syntactic_features(texts):
-        """Enhanced syntactic features with POS patterns"""
-        processed_texts = []
-        for text in texts:
-            doc = nlp(str(text))
-            
-            # POS pattern features
-            pos_patterns = []
-            pos_counts = Counter()
-            
-            for token in doc:
-                if token.is_alpha and not token.is_stop:
-                    pos_tag = f"{token.pos_}"
-                    pos_counts[pos_tag] += 1
-                    pos_patterns.append(pos_tag)
-            
-            # Convert to feature string
-            pos_feature_string = " ".join(pos_patterns)
-            processed_texts.append(pos_feature_string)
-        
-        # Vectorize POS patterns
-        pos_vectorizer = CountVectorizer(
-            max_features=1000,
-            ngram_range=(1, 4),
-            analyzer='word'
-        )
-        return pos_vectorizer.fit_transform(processed_texts)
-
-    @staticmethod
-    def extract_pragmatic_features(texts):
-        """Enhanced pragmatic features for fact analysis"""
-        pragmatic_features = []
-        
-        # Fact-oriented indicators
-        fact_indicators = {
-            'evidence': ['study', 'research', 'data', 'evidence', 'statistics', 'survey', 'report'],
-            'certainty': ['proven', 'confirmed', 'verified', 'established', 'demonstrated'],
-            'quantification': ['percent', 'percentage', 'majority', 'minority', 'average', 'median'],
-            'temporal': ['recent', 'current', 'latest', 'annual', 'quarterly', 'monthly'],
-            'source': ['according', 'source', 'reference', 'cited', 'journal', 'university']
-        }
-
-        for text in texts:
-            text_lower = str(text).lower()
-            features = []
-
-            # Indicator counts
-            for category, words in fact_indicators.items():
-                count = sum(text_lower.count(word) for word in words)
-                features.append(count)
-
-            # Structural features
-            features.extend([
-                text.count('!'),  # Emphasis
-                text.count('?'),  # Questions
-                len([s for s in text.split('.') if s.strip()]),  # Sentences
-                len([w for w in text.split() if w.istitle()]),  # Proper nouns
-                text.count('%'),  # Percentages
-                text.count('$'),  # Currency
-                len(re.findall(r'\d+', text)),  # Numbers
-            ])
-
-            pragmatic_features.append(features)
-
-        return np.array(pragmatic_features)
-
-    @staticmethod
-    def extract_hybrid_features(texts):
-        """Combine all feature types for maximum performance"""
-        lexical = AdvancedFeatureExtractor.extract_lexical_features(texts)
-        semantic = AdvancedFeatureExtractor.extract_semantic_features(texts)
-        syntactic = AdvancedFeatureExtractor.extract_syntactic_features(texts)
-        pragmatic = AdvancedFeatureExtractor.extract_pragmatic_features(texts)
-        
-        # Convert all to dense arrays if needed and combine
-        from scipy.sparse import hstack
-        
-        # Handle sparse matrices
-        if hasattr(lexical, 'toarray'):
-            lexical = lexical.toarray()
-        if hasattr(syntactic, 'toarray'):
-            syntactic = syntactic.toarray()
-            
-        # Combine features
-        hybrid_features = np.hstack([lexical, semantic, syntactic, pragmatic])
-        
-        # Dimensionality reduction for better performance
-        svd = TruncatedSVD(n_components=min(500, hybrid_features.shape[1]), random_state=42)
-        hybrid_features_reduced = svd.fit_transform(hybrid_features)
-        
-        return hybrid_features_reduced
-
-# ============================================
-# Enhanced Model Trainer (with SMOTE)
-# ============================================
-
-
-class AdvancedModelTrainer:
-    def __init__(self):
-        self.models = {
-            "Logistic Regression": LogisticRegression(
-                max_iter=2000, 
-                random_state=42, 
-                class_weight='balanced',
-                C=1.0,
-                solver='liblinear'
-            ),
-            "Random Forest": RandomForestClassifier(
-                n_estimators=200,
-                random_state=42,
-                class_weight='balanced',
-                max_depth=10,
-                min_samples_split=5,
-                min_samples_leaf=2
-            ),
-            "Support Vector Machine": SVC(
-                random_state=42, 
-                probability=True, 
-                class_weight='balanced',
-                C=1.0,
-                kernel='rbf',
-                gamma='scale'
-            ),
-            "Gradient Boosting": GradientBoostingClassifier(
-                n_estimators=150,
-                random_state=42,
-                max_depth=6,
-                learning_rate=0.1,
-                min_samples_split=5
-            ),
-            "Naive Bayes": MultinomialNB(alpha=0.1)
-        }
-
-        self.param_grids = {
-            "Logistic Regression": {
-                'C': [0.1, 1.0, 10.0],
-                'solver': ['liblinear', 'lbfgs']
-            },
-            "Random Forest": {
-                'n_estimators': [100, 200],
-                'max_depth': [5, 10, None],
-                'min_samples_split': [2, 5]
+    try:
+        while len(collected_claims) < num_claims:
+            # Build request parameters
+            params = {
+                'key': api_key,
+                'languageCode': 'en',
+                'pageSize': min(100, num_claims - len(collected_claims))
             }
-        }
 
-    def enhanced_cross_validation(self, X, y, model, cv_folds=5):
-        """Perform enhanced cross-validation"""
-        skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=42)
-        cv_scores = cross_val_score(model, X, y, cv=skf, scoring='accuracy')
-        return cv_scores.mean(), cv_scores.std()
+            if page_token:
+                params['pageToken'] = page_token
 
-    def train_and_evaluate(self, X, y):
-        """Enhanced model training with SMOTE and comprehensive evaluation"""
-        results = {}
+            # Update progress
+            placeholder.text(f"Fetching Google claims... {len(collected_claims)} collected so far")
 
-        le = LabelEncoder()
-        y_encoded = le.fit_transform(y)
-        n_classes = len(le.classes_)
+            # Make API request
+            response = requests.get(base_url, params=params, timeout=15)
 
-        # Dynamic test size based on dataset characteristics
-        if len(y_encoded) < 1000:
-            test_size = 0.2
-        elif len(y_encoded) < 5000:
-            test_size = 0.15
+            # Check for HTTP errors
+            if response.status_code == 401:
+                st.error("Invalid API key. Please check your GOOGLE_API_KEY in .streamlit/secrets.toml")
+                return []
+            elif response.status_code == 403:
+                st.error("API access forbidden. Ensure 'Fact Check Tools API' is enabled in Google Cloud Console.")
+                return []
+            elif response.status_code == 429:
+                st.error("API rate limit exceeded. Please try again later with fewer claims.")
+                return []
+
+            response.raise_for_status()
+            data = response.json()
+
+            # Check if response has claims
+            if 'claims' not in data or not data['claims']:
+                placeholder.success(f"Fetched {len(collected_claims)} claims (no more available)")
+                break
+
+            # Process each claim
+            for claim_obj in data['claims']:
+                if len(collected_claims) >= num_claims:
+                    break
+
+                # Extract claim text
+                claim_text = claim_obj.get('text', '')
+
+                # Extract rating from first claimReview
+                claim_reviews = claim_obj.get('claimReview', [])
+                if not claim_reviews or len(claim_reviews) == 0:
+                    continue  # Skip claims without reviews
+
+                textual_rating = claim_reviews[0].get('textualRating', '')
+
+                # Skip if missing required fields
+                if not claim_text or not textual_rating:
+                    continue
+
+                collected_claims.append({
+                    'claim_text': claim_text,
+                    'rating': textual_rating
+                })
+
+            # Check for next page
+            page_token = data.get('nextPageToken')
+            if not page_token:
+                placeholder.success(f"Fetched {len(collected_claims)} claims (all pages processed)")
+                break
+
+        placeholder.success(f"Successfully fetched {len(collected_claims)} claims from Google Fact Check API")
+        return collected_claims
+
+    except requests.exceptions.RequestException as e:
+        placeholder.error(f"Network error while fetching Google claims: {e}")
+        return collected_claims if collected_claims else []
+    except Exception as e:
+        placeholder.error(f"Error processing Google API response: {e}")
+        return collected_claims if collected_claims else []
+
+
+def process_and_map_google_claims(api_results):
+    """
+    Converts Google's granular ratings into binary format (1=True, 0=False) and creates DataFrame.
+    Discards ambiguous ratings like 'Half True', 'Mixed', etc.
+    """
+    if not api_results:
+        return pd.DataFrame(columns=['claim_text', 'ground_truth'])
+
+    processed_claims = []
+    true_count = 0
+    false_count = 0
+    discarded_count = 0
+
+    for claim_data in api_results:
+        claim_text = claim_data.get('claim_text', '').strip()
+        rating = claim_data.get('rating', '').strip()
+
+        # Data quality checks
+        if not claim_text or len(claim_text) < 10:
+            discarded_count += 1
+            continue
+
+        if not rating:
+            discarded_count += 1
+            continue
+
+        # Normalize rating for comparison (remove punctuation, lowercase)
+        rating_normalized = rating.lower().strip().rstrip('!').rstrip('?')
+
+        # Map to binary
+        is_true = any(rating_normalized == r.lower() for r in GOOGLE_TRUE_RATINGS)
+        is_false = any(rating_normalized == r.lower() for r in GOOGLE_FALSE_RATINGS)
+
+        if is_true:
+            processed_claims.append({
+                'claim_text': claim_text,
+                'ground_truth': 1
+            })
+            true_count += 1
+        elif is_false:
+            processed_claims.append({
+                'claim_text': claim_text,
+                'ground_truth': 0
+            })
+            false_count += 1
         else:
-            test_size = 0.1
+            # Ambiguous rating - discard
+            discarded_count += 1
 
-        # Enhanced stratified split
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y_encoded, 
-            test_size=test_size, 
-            random_state=42, 
-            stratify=y_encoded
-        )
+    # Create DataFrame
+    google_df = pd.DataFrame(processed_claims)
 
-        # =============================
-        # ✅ Apply SMOTE (Oversampling)
-        # =============================
-        st.info("Applying SMOTE to balance training data...")
+    if not google_df.empty:
+        # Remove duplicates (keep first occurrence)
+        google_df = google_df.drop_duplicates(subset=['claim_text'], keep='first')
+
+    # Display statistics
+    total_processed = len(api_results)
+    st.info(f"Processed {total_processed} claims: {true_count} True, {false_count} False, {discarded_count} ambiguous (discarded)")
+
+    # Warn if only one class
+    if not google_df.empty and len(google_df['ground_truth'].unique()) < 2:
+        st.warning("Only one class found in processed claims. Results may not be meaningful.")
+
+    return google_df
+
+
+def run_google_benchmark(google_df, trained_models, vectorizer, selected_phase):
+    """
+    Tests trained models on Google claims and calculates performance metrics.
+    """
+    if google_df.empty:
+        st.error("No Google claims available for benchmarking.")
+        return pd.DataFrame()
+
+    # Extract claim texts and ground truth labels
+    X_raw = google_df['claim_text']
+    y_true = google_df['ground_truth'].values
+
+    # Apply same feature extraction as training
+    try:
+        if selected_phase == "Lexical & Morphological":
+            X_processed = X_raw.apply(lexical_features)
+            if vectorizer is None:
+                st.error("Vectorizer not found for Lexical phase. Please retrain models.")
+                return pd.DataFrame()
+            X_features = vectorizer.transform(X_processed)
+
+        elif selected_phase == "Syntactic":
+            X_processed = X_raw.apply(syntactic_features)
+            if vectorizer is None:
+                st.error("Vectorizer not found for Syntactic phase. Please retrain models.")
+                return pd.DataFrame()
+            X_features = vectorizer.transform(X_processed)
+
+        elif selected_phase == "Discourse":
+            X_processed = X_raw.apply(discourse_features)
+            if vectorizer is None:
+                st.error("Vectorizer not found for Discourse phase. Please retrain models.")
+                return pd.DataFrame()
+            X_features = vectorizer.transform(X_processed)
+
+        elif selected_phase == "Semantic":
+            # Dense features - no vectorizer needed
+            X_features = pd.DataFrame(X_raw.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"]).values
+
+        elif selected_phase == "Pragmatic":
+            # Dense features - no vectorizer needed
+            X_features = pd.DataFrame(X_raw.apply(pragmatic_features).tolist(), columns=pragmatic_words).values
+
+        else:
+            st.error(f"Unknown feature phase: {selected_phase}")
+            return pd.DataFrame()
+
+    except Exception as e:
+        st.error(f"Feature extraction failed for Google claims: {e}")
+        return pd.DataFrame()
+
+    # Test each trained model
+    results_list = []
+
+    for model_name, model in trained_models.items():
         try:
-            smote = SMOTE(random_state=42, k_neighbors=min(5, len(np.unique(y_train)) - 1))
-            X_train, y_train = smote.fit_resample(X_train, y_train)
-            st.success(f"SMOTE applied successfully! Balanced samples per class: {np.bincount(y_train)}")
+            # Handle Naive Bayes with negative values (same as training)
+            if model_name == "Naive Bayes":
+                X_features_model = np.abs(X_features).astype(float)
+            else:
+                X_features_model = X_features
+
+            # Measure inference time
+            start_inference = time.time()
+            y_pred = model.predict(X_features_model)
+            inference_time = (time.time() - start_inference) * 1000  # Convert to ms
+
+            # Calculate metrics
+            accuracy = accuracy_score(y_true, y_pred) * 100
+            f1 = f1_score(y_true, y_pred, average='weighted', zero_division=0)
+            precision = precision_score(y_true, y_pred, average='weighted', zero_division=0)
+            recall = recall_score(y_true, y_pred, average='weighted', zero_division=0)
+
+            results_list.append({
+                'Model': model_name,
+                'Accuracy': accuracy,
+                'F1-Score': f1,
+                'Precision': precision,
+                'Recall': recall,
+                'Inference Latency (ms)': round(inference_time, 2)
+            })
+
         except Exception as e:
-            st.warning(f"SMOTE could not be applied: {e}")
+            st.error(f"Prediction failed for {model_name}: {e}")
+            results_list.append({
+                'Model': model_name,
+                'Accuracy': 0,
+                'F1-Score': 0,
+                'Precision': 0,
+                'Recall': 0,
+                'Inference Latency (ms)': 9999
+            })
 
-        progress_container = st.empty()
+    return pd.DataFrame(results_list)
 
-        for i, (name, model) in enumerate(self.models.items()):
-            with progress_container.container():
-                st.markdown(f"**Training {name}**")
-                progress_bar = st.progress(0)
+# ============================
+# 1. WEB SCRAPING FUNCTION (Remains identical to previous successful version)
+# ============================
 
+def scrape_data_by_date_range(start_date: pd.Timestamp, end_date: pd.Timestamp):
+    base_url = "https://www.politifact.com/factchecks/list/"
+    current_url = base_url
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["author", "statement", "source", "date", "label"])
+    scraped_rows_count = 0
+    page_count = 0
+    st.caption(f"Starting scrape from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+    placeholder = st.empty()
+
+    while current_url and page_count < 100: 
+        page_count += 1
+        placeholder.text(f"Fetching page {page_count}... Scraped {scraped_rows_count} claims so far.")
+
+        try:
+            response = requests.get(current_url, timeout=15)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
+        except requests.exceptions.RequestException as e:
+            placeholder.error(f"Network Error during request: {e}. Stopping scrape.")
+            break
+
+        rows_to_add = []
+
+        for card in soup.find_all("li", class_="o-listicle__item"):
+            date_div = card.find("div", class_="m-statement__desc")
+            date_text = date_div.get_text(strip=True) if date_div else None
+            claim_date = None
+            
+            if date_text:
+                match = re.search(r"stated on ([A-Za-z]+\s+\d{1,2},\s+\d{4})", date_text)
+                if match:
+                    try:
+                        claim_date = pd.to_datetime(match.group(1), format='%B %d, %Y')
+                    except ValueError:
+                        continue
+            
+            if claim_date:
+                if start_date <= claim_date <= end_date:
+                    statement_block = card.find("div", class_="m-statement__quote")
+                    statement = statement_block.find("a", href=True).get_text(strip=True) if statement_block and statement_block.find("a", href=True) else None
+                    source_a = card.find("a", class_="m-statement__name")
+                    source = source_a.get_text(strip=True) if source_a else None
+                    footer = card.find("footer", class_="m-statement__footer")
+                    author = None
+                    if footer:
+                        author_match = re.search(r"By\s+([^•]+)", footer.get_text(strip=True))
+                        if author_match:
+                            author = author_match.group(1).strip()
+                            
+                    label_img = card.find("img", alt=True)
+                    label = label_img['alt'].replace('-', ' ').title() if label_img and 'alt' in label_img.attrs else None
+
+                    rows_to_add.append([author, statement, source, claim_date.strftime('%Y-%m-%d'), label])
+
+                elif claim_date < start_date:
+                    placeholder.warning(f"Encountered claim older than start date ({start_date.strftime('%Y-%m-%d')}). Stopping scrape.")
+                    current_url = None
+                    break 
+
+        if current_url is None:
+            break
+
+        writer.writerows(rows_to_add)
+        scraped_rows_count += len(rows_to_add)
+
+        next_link = soup.find("a", class_="c-button c-button--hollow", string=re.compile(r"Next", re.I))
+        if next_link and 'href' in next_link.attrs:
+            next_href = next_link['href'].rstrip('&').rstrip('?')
+            current_url = urljoin(base_url, next_href)
+        else:
+            placeholder.success("No more pages found or last page reached.")
+            current_url = None
+
+    placeholder.success(f"Scraping finished! Total claims processed: {scraped_rows_count}")
+    
+    output.seek(0)
+    df = pd.read_csv(output, header=0, keep_default_na=False)
+    df = df.dropna(subset=['statement', 'label'])
+    
+    df.to_csv(SCRAPED_DATA_PATH, index=False)
+    return df
+
+# ============================
+# 2. FEATURE EXTRACTION (SPA/TEXTBLOB)
+# ============================
+
+def lexical_features(text):
+    doc = NLP_MODEL(text.lower())
+    tokens = [token.lemma_ for token in doc if token.text not in stop_words and token.is_alpha]
+    return " ".join(tokens)
+
+def syntactic_features(text):
+    doc = NLP_MODEL(text)
+    pos_tags = " ".join([token.pos_ for token in doc])
+    return pos_tags
+
+def semantic_features(text):
+    blob = TextBlob(text)
+    return [blob.sentiment.polarity, blob.sentiment.subjectivity]
+
+def discourse_features(text):
+    doc = NLP_MODEL(text)
+    sentences = [sent.text.strip() for sent in doc.sents]
+    return f"{len(sentences)} {' '.join([s.split()[0].lower() for s in sentences if len(s.split()) > 0])}"
+
+def pragmatic_features(text):
+    text = text.lower()
+    return [text.count(w) for w in pragmatic_words]
+
+# ============================
+# 3. MODEL TRAINING AND EVALUATION (K-FOLD & SMOTE)
+# ============================
+
+def get_classifier(name):
+    """Initializes a classifier instance with hyperparameter tuning for imbalance."""
+    if name == "Naive Bayes":
+        return MultinomialNB()
+    elif name == "Decision Tree":
+        return DecisionTreeClassifier(random_state=42, class_weight='balanced') 
+    elif name == "Logistic Regression":
+        return LogisticRegression(max_iter=1000, solver='liblinear', random_state=42, class_weight='balanced')
+    elif name == "SVM":
+        return SVC(kernel='linear', C=0.5, random_state=42, class_weight='balanced')
+    return None
+
+def apply_feature_extraction(X, phase, vectorizer=None):
+    """Applies the chosen feature extraction technique and optimization (e.g., N-Grams)."""
+    if phase == "Lexical & Morphological":
+        X_processed = X.apply(lexical_features)
+        vectorizer = vectorizer if vectorizer else CountVectorizer(binary=True, ngram_range=(1,2))
+        X_features = vectorizer.fit_transform(X_processed)
+        return X_features, vectorizer
+    
+    elif phase == "Syntactic":
+        X_processed = X.apply(syntactic_features)
+        vectorizer = vectorizer if vectorizer else TfidfVectorizer(max_features=5000)
+        X_features = vectorizer.fit_transform(X_processed)
+        return X_features, vectorizer
+
+    elif phase == "Semantic":
+        X_features = pd.DataFrame(X.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"])
+        return X_features, None
+
+    elif phase == "Discourse":
+        X_processed = X.apply(discourse_features)
+        vectorizer = vectorizer if vectorizer else CountVectorizer(ngram_range=(1,2), max_features=5000)
+        X_features = vectorizer.fit_transform(X_processed)
+        return X_features, vectorizer
+
+    elif phase == "Pragmatic":
+        X_features = pd.DataFrame(X.apply(pragmatic_features).tolist(), columns=pragmatic_words)
+        return X_features, None
+    
+    return None, None
+
+
+def evaluate_models(df: pd.DataFrame, selected_phase: str):
+    """Trains and evaluates models using Stratified K-Fold Cross-Validation and SMOTE."""
+    
+    # 1. FEATURE ENGINEERING: BINARY TARGET MAPPING
+    
+    # Define mapping groups
+    REAL_LABELS = ["True", "No Flip", "Mostly True", "Half Flip", "Half True"]
+    FAKE_LABELS = ["False", "Barely True", "Pants On Fire", "Full Flop"]
+    
+    # Create the new binary target column
+    def create_binary_target(label):
+        if label in REAL_LABELS:
+            return 1 # Real/True
+        elif label in FAKE_LABELS:
+            return 0 # Fake/False
+        else:
+            return np.nan # Mark unmappable/error labels
+
+    df['target_label'] = df['label'].apply(create_binary_target)
+    
+    # 2. DATA CLEANING AND FILTERING
+    
+    # Drop rows where mapping failed
+    df = df.dropna(subset=['target_label'])
+    
+    # Remove rows with short statements (noise/lack of context)
+    df = df[df['statement'].astype(str).str.len() > 10]
+    
+    X_raw = df['statement'].astype(str)
+    y_raw = df['target_label'].astype(int) # Target is now explicitly 0 or 1
+    
+    if len(np.unique(y_raw)) < 2:
+        st.error("After binary mapping, only one class remains (all Real or all Fake). Cannot train classifier.")
+        return pd.DataFrame() 
+    
+    # 3. Feature Extraction (Apply to all data once per phase)
+    X_features_full, vectorizer = apply_feature_extraction(X_raw, selected_phase)
+    
+    if X_features_full is None:
+        st.error("Feature extraction failed.")
+        return pd.DataFrame()
+        
+    # Prepare data for K-Fold
+    if isinstance(X_features_full, pd.DataFrame):
+        X_features_full = X_features_full.values
+    
+    y = y_raw.values
+    
+    # 4. K-Fold Setup
+    skf = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=42)
+    models_to_run = {
+        "Naive Bayes": MultinomialNB(),
+        "Decision Tree": DecisionTreeClassifier(random_state=42, class_weight='balanced'),
+        "Logistic Regression": LogisticRegression(max_iter=1000, solver='liblinear', random_state=42, class_weight='balanced'),
+        "SVM": SVC(kernel='linear', C=0.5, random_state=42, class_weight='balanced')
+    }
+
+    model_metrics = {name: [] for name in models_to_run.keys()}
+    X_raw_list = X_raw.tolist()
+
+    for name, model in models_to_run.items():
+        st.caption(f"🚀 Training {name} with {N_SPLITS}-Fold CV & SMOTE...")
+        
+        fold_metrics = {
+            'accuracy': [], 'f1': [], 'precision': [], 'recall': [], 'train_time': [], 'inference_time': []
+        }
+        
+        for fold, (train_index, test_index) in enumerate(skf.split(X_features_full, y)):
+            
+            # 4a. Get data indices for this fold
+            X_train_raw = pd.Series([X_raw_list[i] for i in train_index])
+            X_test_raw = pd.Series([X_raw_list[i] for i in test_index])
+            y_train = y[train_index]
+            y_test = y[test_index]
+            
+            # 4b. Transform the features using the fitted vectorizer (if applicable)
+            if vectorizer is not None:
+                # Need to run the phase's preprocessing (lexical_features or syntactic_features) on the raw text first
+                X_train = vectorizer.transform(X_train_raw.apply(lexical_features if 'Lexical' in selected_phase else syntactic_features))
+                X_test = vectorizer.transform(X_test_raw.apply(lexical_features if 'Lexical' in selected_phase else syntactic_features))
+            else:
+                # Dense feature sets (Semantic/Pragmatic)
+                X_train, _ = apply_feature_extraction(X_train_raw, selected_phase)
+                X_test, _ = apply_feature_extraction(X_test_raw, selected_phase)
+            
+            
+            start_time = time.time()
             try:
-                if name in self.param_grids and len(y_encoded) > 100:
-                    with st.spinner(f"Optimizing {name} hyperparameters..."):
-                        grid_search = GridSearchCV(
-                            model, 
-                            self.param_grids[name], 
-                            cv=5, 
-                            scoring='accuracy',
-                            n_jobs=-1
-                        )
-                        grid_search.fit(X_train, y_train)
-                        best_model = grid_search.best_estimator_
-                        st.info(f"Best parameters for {name}: {grid_search.best_params_}")
+                # --- SMOTE PIPELINE & Naive Bayes Fix ---
+                if name == "Naive Bayes":
+                    # FIX: Use np.abs on sparse matrix to get positive counts, then convert to int/float as needed.
+                    X_train_final = np.abs(X_train).astype(float) 
+                    clf = model
+                    model.fit(X_train_final, y_train)
                 else:
-                    best_model = model
-                    best_model.fit(X_train, y_train)
-
-                cv_mean, cv_std = self.enhanced_cross_validation(X_train, y_train, best_model)
-                y_pred = best_model.predict(X_test)
-                y_proba = best_model.predict_proba(X_test) if hasattr(best_model, 'predict_proba') else None
-
-                accuracy = accuracy_score(y_test, y_pred)
-                precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
-                recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
-                f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
-
-                results[name] = {
-                    'accuracy': accuracy,
-                    'precision': precision,
-                    'recall': recall,
-                    'f1_score': f1,
-                    'cv_mean': cv_mean,
-                    'cv_std': cv_std,
-                    'model': best_model,
-                    'predictions': y_pred,
-                    'true_labels': y_test,
-                    'probabilities': y_proba,
-                    'n_classes': n_classes,
-                    'test_size': len(y_test),
-                    'feature_importance': getattr(best_model, 'feature_importances_', None)
-                }
-
-                progress_bar.progress((i + 1) / len(self.models))
+                    # Apply SMOTE to training data for other models
+                    smote_pipeline = ImbPipeline([
+                        ('sampler', SMOTE(random_state=42, k_neighbors=3)),
+                        ('classifier', model)
+                    ])
+                    smote_pipeline.fit(X_train, y_train)
+                    clf = smote_pipeline
+                
+                train_time = time.time() - start_time
+                
+                start_inference = time.time()
+                y_pred = clf.predict(X_test)
+                inference_time = (time.time() - start_inference) * 1000 
+                
+                # Metrics
+                fold_metrics['accuracy'].append(accuracy_score(y_test, y_pred))
+                fold_metrics['f1'].append(f1_score(y_test, y_pred, average='weighted', zero_division=0))
+                fold_metrics['precision'].append(precision_score(y_test, y_pred, average='weighted', zero_division=0))
+                fold_metrics['recall'].append(recall_score(y_test, y_pred, average='weighted', zero_division=0))
+                fold_metrics['train_time'].append(train_time)
+                fold_metrics['inference_time'].append(inference_time)
 
             except Exception as e:
-                st.warning(f"Model {name} failed: {str(e)}")
-                results[name] = {'error': str(e)}
+                st.warning(f"Fold {fold+1} failed for {name}: {e}")
+                for key in fold_metrics: fold_metrics[key].append(0)
+                continue
 
-        progress_container.empty()
-        return results, le
+        # Calculate means across all folds
+        if fold_metrics['accuracy']:
+            model_metrics[name] = {
+                "Model": name,
+                "Accuracy": np.mean(fold_metrics['accuracy']) * 100,
+                "F1-Score": np.mean(fold_metrics['f1']),
+                "Precision": np.mean(fold_metrics['precision']),
+                "Recall": np.mean(fold_metrics['recall']),
+                "Training Time (s)": round(np.mean(fold_metrics['train_time']), 2),
+                "Inference Latency (ms)": round(np.mean(fold_metrics['inference_time']), 2),
+            }
+        else:
+             st.error(f"⚠️ {name} failed across all folds.")
+             model_metrics[name] = {
+                "Model": name, "Accuracy": 0, "F1-Score": 0, "Precision": 0, "Recall": 0,
+                "Training Time (s)": 0, "Inference Latency (ms)": 9999,
+            }
 
-# ============================
-# Enhanced Visualizations
-# ============================
-class AdvancedVisualizer:
-    @staticmethod
-    def create_performance_dashboard(results):
-        """Create professional performance dashboard"""
-        plt.style.use('dark_background')
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
-        fig.patch.set_facecolor('#0F172A')
+    # 5. TRAIN FINAL MODELS ON FULL DATASET (for Google benchmark)
+    st.caption("Training final models on complete dataset for benchmarking...")
+    trained_models_final = {}
 
-        models = []
-        metrics_data = {
-            'Accuracy': [], 'Precision': [], 'Recall': [], 'F1-Score': []
-        }
+    for name in models_to_run.keys():
+        try:
+            # Get fresh model instance
+            final_model = get_classifier(name)
 
-        for model_name, result in results.items():
-            if 'error' not in result:
-                models.append(model_name)
-                metrics_data['Accuracy'].append(result['accuracy'])
-                metrics_data['Precision'].append(result['precision'])
-                metrics_data['Recall'].append(result['recall'])
-                metrics_data['F1-Score'].append(result['f1_score'])
+            # Prepare features for final training
+            if vectorizer is not None:
+                # Transform using the fitted vectorizer
+                if 'Lexical' in selected_phase:
+                    X_final_processed = X_raw.apply(lexical_features)
+                elif 'Syntactic' in selected_phase:
+                    X_final_processed = X_raw.apply(syntactic_features)
+                elif 'Discourse' in selected_phase:
+                    X_final_processed = X_raw.apply(discourse_features)
+                else:
+                    X_final_processed = X_raw
+                X_final = vectorizer.transform(X_final_processed)
+            else:
+                # Dense features (Semantic/Pragmatic)
+                X_final = X_features_full
 
-        colors = ['#2563EB', '#3B82F6', '#1D4ED8', '#60A5FA']
+            # Apply SMOTE and train (same pattern as K-Fold)
+            if name == "Naive Bayes":
+                X_final_train = np.abs(X_final).astype(float)
+                final_model.fit(X_final_train, y)
+                trained_models_final[name] = final_model
+            else:
+                # Apply SMOTE to full dataset for other models
+                smote_pipeline_final = ImbPipeline([
+                    ('sampler', SMOTE(random_state=42, k_neighbors=3)),
+                    ('classifier', final_model)
+                ])
+                smote_pipeline_final.fit(X_final, y)
+                trained_models_final[name] = smote_pipeline_final
 
-        # Accuracy
-        bars1 = ax1.bar(models, metrics_data['Accuracy'], color=colors, alpha=0.9)
-        ax1.set_facecolor('#1E293B')
-        ax1.set_title('Model Accuracy', fontweight='bold', color='white', fontsize=14, pad=20)
-        ax1.set_ylabel('Score', fontweight='bold', color='#94A3B8')
-        ax1.tick_params(axis='x', rotation=45, colors='#94A3B8')
-        ax1.tick_params(axis='y', colors='#94A3B8')
-        ax1.grid(True, alpha=0.1, axis='y', color='#334155')
-        ax1.set_ylim(0, 1.0)
+        except Exception as e:
+            st.warning(f"Failed to train final {name} model: {e}")
+            trained_models_final[name] = None
 
-        for bar in bars1:
-            height = bar.get_height()
-            ax1.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='white')
-
-        # Precision
-        bars2 = ax2.bar(models, metrics_data['Precision'], color=colors, alpha=0.9)
-        ax2.set_facecolor('#1E293B')
-        ax2.set_title('Model Precision', fontweight='bold', color='white', fontsize=14, pad=20)
-        ax2.set_ylabel('Score', fontweight='bold', color='#94A3B8')
-        ax2.tick_params(axis='x', rotation=45, colors='#94A3B8')
-        ax2.tick_params(axis='y', colors='#94A3B8')
-        ax2.grid(True, alpha=0.1, axis='y', color='#334155')
-        ax2.set_ylim(0, 1.0)
-
-        for bar in bars2:
-            height = bar.get_height()
-            ax2.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='white')
-
-        # Recall
-        bars3 = ax3.bar(models, metrics_data['Recall'], color=colors, alpha=0.9)
-        ax3.set_facecolor('#1E293B')
-        ax3.set_title('Model Recall', fontweight='bold', color='white', fontsize=14, pad=20)
-        ax3.set_ylabel('Score', fontweight='bold', color='#94A3B8')
-        ax3.tick_params(axis='x', rotation=45, colors='#94A3B8')
-        ax3.tick_params(axis='y', colors='#94A3B8')
-        ax3.grid(True, alpha=0.1, axis='y', color='#334155')
-        ax3.set_ylim(0, 1.0)
-
-        for bar in bars3:
-            height = bar.get_height()
-            ax3.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='white')
-
-        # F1-Score
-        bars4 = ax4.bar(models, metrics_data['F1-Score'], color=colors, alpha=0.9)
-        ax4.set_facecolor('#1E293B')
-        ax4.set_title('Model F1-Score', fontweight='bold', color='white', fontsize=14, pad=20)
-        ax4.set_ylabel('Score', fontweight='bold', color='#94A3B8')
-        ax4.tick_params(axis='x', rotation=45, colors='#94A3B8')
-        ax4.tick_params(axis='y', colors='#94A3B8')
-        ax4.grid(True, alpha=0.1, axis='y', color='#334155')
-        ax4.set_ylim(0, 1.0)
-
-        for bar in bars4:
-            height = bar.get_height()
-            ax4.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.3f}', ha='center', va='bottom', fontweight='bold', color='white')
-
-        plt.tight_layout()
-        return fig
-
-    @staticmethod
-    def create_confusion_matrix(results, best_model_name, label_encoder):
-        """Create confusion matrix for the best model"""
-        if best_model_name in results and 'error' not in results[best_model_name]:
-            result = results[best_model_name]
-            cm = confusion_matrix(result['true_labels'], result['predictions'])
-            
-            plt.figure(figsize=(8, 6))
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                       xticklabels=label_encoder.classes_,
-                       yticklabels=label_encoder.classes_)
-            plt.title(f'Confusion Matrix - {best_model_name}', fontweight='bold')
-            plt.ylabel('True Label')
-            plt.xlabel('Predicted Label')
-            plt.tight_layout()
-            return plt.gcf()
-        return None
+    results_list = list(model_metrics.values())
+    return pd.DataFrame(results_list), trained_models_final, vectorizer
 
 # ============================
-# Main Application
+# 4. HUMOR & CRITIQUE FUNCTIONS (REMAINS UNCHANGED)
 # ============================
-def main():
-    # Initialize session state
-    if 'file_uploaded' not in st.session_state:
-        st.session_state.file_uploaded = False
-    if 'analyze_clicked' not in st.session_state:
-        st.session_state.analyze_clicked = False
-    if 'config' not in st.session_state:
-        st.session_state.config = {}
 
-    # Header Section
-    st.markdown("""
-    <div class="professional-header">
-        <div class="header-badge">AI-Powered Fact Analytics Platform</div>
-        <h1 class="page-header">Advanced Fact Analysis & Verification</h1>
-        <p class="subtitle">
-            Leverage cutting-edge AI to analyze, verify, and extract insights from textual data. 
-            Identify patterns, validate claims, and make data-driven decisions with confidence.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+def get_phase_critique(best_phase: str) -> str:
+    critiques = {
+        "Lexical & Morphological": ["Ah, the Lexical phase. Proving that sometimes, all you need is raw vocabulary and minimal effort. It's the high-school dropout that won the Nobel Prize.", "Just words, nothing fancy. This phase decided to ditch the deep thought and focus on counting. Turns out, quantity has a quality all its own.", "The Lexical approach: when in doubt, just scream the words louder. It lacks elegance but gets the job done."],
+        "Syntactic": ["Syntactic features won? So grammar actually matters! We must immediately inform Congress. This phase is the meticulous editor who corrects everyone's texts.", "The grammar police have prevailed. This model focused purely on structure, proving that sentence construction is more important than meaning... wait, is that how politics works?", "It passed the grammar check! This phase is the sensible adult in the room, refusing to process any nonsense until the parts of speech align."],
+        "Semantic": ["The Semantic phase won by feeling its feelings. It's highly emotional, heavily relying on vibes and tone. Surprisingly effective, just like a good political ad.", "It turns out sentiment polarity is the secret sauce! This model just needed to know if the statement felt 'good' or 'bad.' Zero complex reasoning required.", "Semantic victory! The model simply asked, 'Are they being optimistic or negative?' and apparently that was enough to crush the competition."],
+        "Discourse": ["Discourse features won! This phase is the over-analyzer, counting sentences and focusing on the rhythm of the argument. It knows the debate structure better than the content.", "The long-winded champion! This model cared about how the argument was *structured*—the thesis, the body, the conclusion. It's basically the high school debate team captain.", "Discourse is the winner! It successfully mapped the argument's flow, proving that presentation beats facts."],
+        "Pragmatic": ["The Pragmatic phase won by focusing on keywords like 'must' and '?'. It just needed to know the speaker's intent. It's the Sherlock Holmes of NLP.", "It's all about intent! This model ignored the noise and hunted for specific linguistic tells. It's concise, ruthless, and apparently correct.", "Pragmatic features for the win! The model knows that if someone uses three exclamation marks, they're either lying or selling crypto. Either way, it's a clue."],
+    }
+    return random.choice(critiques.get(best_phase, ["The results are in, and the system is speechless. It seems we need to hire a better comedian."]))
 
-    # Platform Stats
-    st.markdown("""
-    <div class="stat-grid">
-        <div class="stat-item">
-            <div class="stat-value">99.2%</div>
-            <div class="stat-label">Accuracy Rate</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value">65+</div>
-            <div class="stat-label">Analytical Metrics</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value">0.3s</div>
-            <div class="stat-label">Processing Speed</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value">5x</div>
-            <div class="stat-label">Faster Analysis</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+def get_model_critique(best_model: str) -> str:
+    critiques = {
+        "Naive Bayes": ["Naive Bayes: It's fast, it's simple, and it assumes every feature is independent. The model is either brilliant or blissfully unaware, but hey, it works!", "The Simpleton Savant has won! Naive Bayes brings zero drama and just counts things. It's the least complicated tool in the box, which is often the best.", "NB pulled off a victory. It's the 'less-is-more' philosopher who manages to outperform all the complex math majors."],
+        "Decision Tree": ["The Decision Tree won by asking a series of simple yes/no questions until it got tired. It's transparent, slightly judgmental, and surprisingly effective.", "The Hierarchical Champion! It built a beautiful, intricate set of if/then statements. It's the most organized person in the office, and the accuracy shows it.", "Decision Tree victory! It achieved success by splitting the data until it couldn't be split anymore. A classic strategy in science and divorce."],
+        "Logistic Regression": ["Logistic Regression: The veteran politician of ML. It draws a clean, straight line to victory. Boring, reliable, and hard to beat.", "The Straight-Line Stunner. It uses simple math to predict complex reality. It's predictable, efficient, and definitely got tenure.", "LogReg prevails! The model's philosophy is: 'Probability is all you need.' It's the safest bet, and the accuracy score agrees."],
+        "SVM": ["SVM: It found the biggest, widest gap between the truth and the lies, and parked its hyperplane right there. Aggressive but effective boundary enforcement.", "The Maximizing Margin Master! SVM doesn't just separate classes; it builds a fortress between them. It's the most dramatic and highly paid algorithm here.", "SVM crushed it! It's the model that believes in extreme boundaries. No fuzzy logic, just a hard, clean, dividing line."],
+    }
+    return random.choice(critiques.get(best_model, ["This model broke the simulation, so we have nothing funny to say."]))
 
-    # File Upload Section
-    st.markdown('<div class="section-header">Start Your Fact Analysis</div>', unsafe_allow_html=True)
+
+def generate_humorous_critique(df_results: pd.DataFrame, selected_phase: str) -> str:
+    if df_results.empty:
+        return "The system failed to train anything. We apologize; our ML models are currently on strike demanding better data and less existential dread."
+
+    df_results['F1-Score'] = pd.to_numeric(df_results['F1-Score'], errors='coerce').fillna(0)
+    best_model_row = df_results.loc[df_results['F1-Score'].idxmax()]
+    best_model = best_model_row['Model']
+    max_f1 = best_model_row['F1-Score']
+    max_acc = best_model_row['Accuracy']
     
-    col1, col2 = st.columns([2, 1])
+    phase_critique = get_phase_critique(selected_phase)
+    model_critique = get_model_critique(best_model)
+    
+    headline = f"👑 The Golden Snitch Award goes to the {best_model}!"
+    
+    summary = (
+        f"**Accuracy Report Card:** {headline}\n\n"
+        f"This absolute unit achieved a **{max_acc:.2f}% Accuracy** (and {max_f1:.2f} F1-Score) on the `{selected_phase}` feature set. "
+        f"It beat its rivals, proving that when faced with political statements, the winning strategy was to rely on: **{selected_phase} features!**\n\n"
+    )
+    
+    roast = (
+        f"### The AI Roast (Certified by a Data Scientist):\n"
+        f"**Phase Performance:** {phase_critique}\n\n"
+        f"**Model Personality:** {model_critique}\n\n"
+        f"*(Disclaimer: All models were equally confused by the 'Mostly True' label, which they collectively deemed an existential threat.)*"
+    )
+    
+    return summary + roast
+
+# ============================
+# 5. STREAMLIT APP FUNCTION
+# ============================
+
+def app():
+    # --- Modern Theme Configuration ---
+    st.set_page_config(
+        page_title='TruthGuard: AI Fact-Checking Platform',
+        layout='wide',
+        initial_sidebar_state='expanded'
+    )
+
+    # Custom CSS for modern theme
+    st.markdown("""
+    <style>
+    /* Main theme colors */
+    :root {
+        --primary: #2563eb;
+        --secondary: #7c3aed;
+        --accent: #06d6a0;
+        --background: #0f172a;
+        --surface: #1e293b;
+        --text: #f8fafc;
+        --text-secondary: #cbd5e1;
+    }
+    
+    .main-header {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        padding: 2rem;
+        border-radius: 15px;
+        margin-bottom: 2rem;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    
+    .main-header h1 {
+        color: white;
+        font-size: 3rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+        text-align: center;
+    }
+    
+    .main-header h3 {
+        color: rgba(255,255,255,0.9);
+        font-size: 1.3rem;
+        text-align: center;
+        font-weight: 300;
+    }
+    
+    .card {
+        background: var(--surface);
+        padding: 1.5rem;
+        border-radius: 12px;
+        border-left: 4px solid var(--accent);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        margin-bottom: 1rem;
+    }
+    
+    .metric-card {
+        background: linear-gradient(135deg, var(--surface) 0%, #2d3748 100%);
+        padding: 1rem;
+        border-radius: 10px;
+        text-align: center;
+        border: 1px solid #374151;
+    }
+    
+    .stButton>button {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        color: white;
+        border: none;
+        padding: 0.7rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+    
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+    }
+    
+    .feature-pill {
+        background: var(--primary);
+        color: white;
+        padding: 0.3rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        margin: 0.2rem;
+        display: inline-block;
+    }
+    
+    .success-box {
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+    }
+    
+    .warning-box {
+        background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+    }
+    
+    .info-box {
+        background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # --- Modern Header ---
+    st.markdown("""
+    <div class="main-header">
+        <h1>🔍 TruthGuard</h1>
+        <h3>AI-Powered Fact-Checking & Misanalysis Detection</h3>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # --- State Management ---
+    if 'scraped_df' not in st.session_state:
+        st.session_state['scraped_df'] = pd.DataFrame()
+    if 'df_results' not in st.session_state:
+        st.session_state['df_results'] = pd.DataFrame()
+    if 'trained_models' not in st.session_state:
+        st.session_state['trained_models'] = {}
+    if 'trained_vectorizer' not in st.session_state:
+        st.session_state['trained_vectorizer'] = None
+    if 'google_benchmark_results' not in st.session_state:
+        st.session_state['google_benchmark_results'] = pd.DataFrame()
+    if 'google_df' not in st.session_state:
+        st.session_state['google_df'] = pd.DataFrame()
+
+    # ============================
+    # MAIN LAYOUT - MODERN CARDS
+    # ============================
+    
+    # Row 1: Data Collection Cards
+    col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("""
-        <div class="upload-area">
-            <div style="font-size: 64px; margin-bottom: 24px;"></div>
-            <h3 style="color: var(--primary-text); margin-bottom: 16px;">Upload Your Data for Analysis</h3>
-            <p style="color: var(--primary-subtle); margin-bottom: 32px;">
-                Upload a CSV file containing your textual data. Our advanced AI will perform comprehensive 
-                fact analysis, pattern recognition, and provide actionable insights for decision-making.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("📊 Data Collection")
+        st.markdown("**Politifact Archive Scraper**")
         
-        uploaded_file = st.file_uploader(
-            "Choose CSV File",
-            type=["csv"],
-            label_visibility="collapsed"
+        min_date = pd.to_datetime('2007-01-01')
+        max_date = pd.to_datetime('today').normalize()
+
+        date_col1, date_col2 = st.columns(2)
+        with date_col1:
+            start_date = st.date_input("Start Date", min_value=min_date, max_value=max_date, value=pd.to_datetime('2023-01-01'))
+        with date_col2:
+            end_date = st.date_input("End Date", min_value=min_date, max_value=max_date, value=max_date)
+
+        if st.button("🚀 Scrape Politifact Data", key="scrape_btn"):
+            if start_date > end_date:
+                st.error("❌ Start date must be before end date")
+            else:
+                with st.spinner("🕸️ Scraping political claims..."):
+                    scraped_df = scrape_data_by_date_range(pd.to_datetime(start_date), pd.to_datetime(end_date))
+                
+                if not scraped_df.empty:
+                    st.session_state['scraped_df'] = scraped_df
+                    st.markdown(f'<div class="success-box">✅ Successfully scraped {len(scraped_df)} claims!</div>', unsafe_allow_html=True)
+                else:
+                    st.warning("⚠️ No data found. Try adjusting date range.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("⚙️ Analysis Setup")
+        st.markdown("**NLP Feature Configuration**")
+        
+        phases = [
+            "Lexical & Morphological",
+            "Syntactic", 
+            "Semantic",
+            "Discourse",
+            "Pragmatic"
+        ]
+        selected_phase = st.selectbox("Feature Extraction Method:", phases, key='selected_phase')
+        
+        # Feature descriptions
+        feature_descriptions = {
+            "Lexical & Morphological": "Word-level analysis: lemmatization, stopword removal, n-grams",
+            "Syntactic": "Grammar structure: part-of-speech tags, sentence patterns", 
+            "Semantic": "Meaning analysis: sentiment polarity, subjectivity scoring",
+            "Discourse": "Text structure: sentence count, discourse markers",
+            "Pragmatic": "Intent analysis: modal verbs, question marks, emphasis markers"
+        }
+        
+        st.caption(f"*{feature_descriptions[selected_phase]}*")
+        
+        if st.button("🔬 Run Model Analysis", key="analyze_btn"):
+            if st.session_state['scraped_df'].empty:
+                st.error("❌ Please scrape data first!")
+            else:
+                with st.spinner(f"🤖 Training 4 models with {N_SPLITS}-Fold CV..."):
+                    df_results, trained_models, trained_vectorizer = evaluate_models(st.session_state['scraped_df'], selected_phase)
+                    st.session_state['df_results'] = df_results
+                    st.session_state['trained_models'] = trained_models
+                    st.session_state['trained_vectorizer'] = trained_vectorizer
+                    st.session_state['selected_phase_run'] = selected_phase
+                    st.markdown('<div class="success-box">✅ Analysis complete! Results ready below.</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Row 2: Real-time Benchmarking
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("🌐 Real-Time Benchmark")
+    st.markdown("**Google Fact Check API Integration**")
+    
+    bench_col1, bench_col2, bench_col3 = st.columns([2,2,1])
+    
+    with bench_col1:
+        num_google_claims = st.slider(
+            "Number of test claims:",
+            min_value=10,
+            max_value=500,
+            value=100,
+            step=10,
+            key='num_google_claims'
         )
     
-    with col2:
-        st.markdown("""
-        <div class="professional-card">
-            <h4 style="color: var(--primary-text); margin-bottom: 16px;">Data Requirements</h4>
-            <ul style="color: var(--primary-subtle); padding-left: 20px;">
-                <li>Include text columns for analysis</li>
-                <li>Ensure UTF-8 encoding</li>
-                <li>Label target categories clearly</li>
-                <li>Clean, structured data preferred</li>
-                <li>Minimum 50 samples per category</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+    with bench_col2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("📊 Run Google Benchmark", key="benchmark_btn"):
+            # Pre-flight checks
+            if not st.session_state.get('trained_models'):
+                st.error("❌ Please train models first!")
+            elif 'GOOGLE_API_KEY' not in st.secrets:
+                st.error("🔑 Google API key not found in secrets.toml")
+            else:
+                with st.spinner('🌍 Fetching live fact-check data...'):
+                    api_key = st.secrets["GOOGLE_API_KEY"]
+                    api_results = fetch_google_claims(api_key, num_google_claims)
+                    google_df = process_and_map_google_claims(api_results)
 
-    if uploaded_file is not None:
-        try:
-            df = pd.read_csv(uploaded_file)
-            st.session_state.df = df
-            st.session_state.file_uploaded = True
-            
-            st.success("Dataset successfully loaded! Ready for advanced AI analysis.")
-            
-            # Configuration Section
-            st.markdown('<div class="section-header">Analysis Configuration</div>', unsafe_allow_html=True)
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                text_col = st.selectbox(
-                    "Text Column",
-                    df.columns,
-                    help="Select the column containing your text content for analysis"
-                )
-            
-            with col2:
-                target_col = st.selectbox(
-                    "Target Column", 
-                    df.columns,
-                    index=min(1, len(df.columns)-1) if len(df.columns) > 1 else 0,
-                    help="Select the column containing your categories or labels"
-                )
-            
-            with col3:
-                feature_type = st.selectbox(
-                    "Analysis Depth",
-                    ["Lexical", "Semantic", "Syntactic", "Pragmatic", "Hybrid"],
-                    help="Choose the depth of text analysis. Hybrid combines all features for best performance."
-                )
-            
-            st.session_state.config = {
-                'text_col': text_col,
-                'target_col': target_col,
-                'feature_type': feature_type
-            }
-            
-            # Advanced Options
-            with st.expander("Advanced Configuration"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    enable_cross_validation = st.checkbox("Enable Cross-Validation", value=True)
-                    enable_hyperparameter_tuning = st.checkbox("Enable Hyperparameter Tuning", value=True)
-                with col2:
-                    min_samples_per_class = st.number_input("Minimum Samples per Class", 
-                                                           min_value=10, value=50, 
-                                                           help="Ensure sufficient data for reliable analysis")
-            
-            # Start Analysis Button
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                if st.button("Launch Advanced AI Analysis", use_container_width=True):
-                    st.session_state.analyze_clicked = True
-
-            # Dataset Overview
-            st.markdown('<div class="section-header">Dataset Overview</div>', unsafe_allow_html=True)
-            
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-value">{df.shape[0]}</div>
-                    <div class="metric-label">Documents</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with col2:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-value">{df.shape[1]}</div>
-                    <div class="metric-label">Features</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with col3:
-                missing_vals = df.isnull().sum().sum()
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-value">{missing_vals}</div>
-                    <div class="metric-label">Missing Values</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with col4:
-                unique_classes = df[target_col].nunique() if target_col in df.columns else 0
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-value">{unique_classes}</div>
-                    <div class="metric-label">Categories</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-            # Data Preview and Statistics
-            col1, col2 = st.columns(2)
-            with col1:
-                with st.expander("Data Preview", expanded=True):
-                    st.dataframe(df.head(10), use_container_width=True)
-            with col2:
-                with st.expander("Data Statistics"):
-                    if text_col in df.columns:
-                        text_stats = df[text_col].astype(str).apply(len)
-                        st.write(f"Average text length: {text_stats.mean():.1f} characters")
-                        st.write(f"Shortest text: {text_stats.min()} characters")
-                        st.write(f"Longest text: {text_stats.max()} characters")
-                        
-                    if target_col in df.columns:
-                        st.write("Class Distribution:")
-                        class_dist = df[target_col].value_counts()
-                        st.dataframe(class_dist, use_container_width=True)
-                
-        except Exception as e:
-            st.error(f"Error reading file: {str(e)}")
-    else:
-        # Features Section
-        st.markdown('<div class="section-header">Advanced Analytical Capabilities</div>', unsafe_allow_html=True)
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.markdown("""
-            <div class="feature-card">
-                <div class="feature-icon">A</div>
-                <div class="card-header">Lexical Analysis</div>
-                <p class="feature-description">
-                    Advanced word-level analysis with sophisticated preprocessing, lemmatization, 
-                    and vocabulary pattern recognition for comprehensive text understanding.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown("""
-            <div class="feature-card">
-                <div class="feature-icon">B</div>
-                <div class="card-header">Semantic Analysis</div>
-                <p class="feature-description">
-                    Deep semantic understanding with sentiment analysis, readability scoring, 
-                    and contextual meaning extraction for nuanced fact interpretation.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col3:
-            st.markdown("""
-            <div class="feature-card">
-                <div class="feature-icon">C</div>
-                <div class="card-header">Syntactic Analysis</div>
-                <p class="feature-description">
-                    Structural pattern recognition with POS tagging, grammar analysis, 
-                    and syntactic feature extraction for comprehensive text deconstruction.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col4:
-            st.markdown("""
-            <div class="feature-card">
-                <div class="feature-icon">D</div>
-                <div class="card-header">Pragmatic Analysis</div>
-                <p class="feature-description">
-                    Contextual and intent analysis with fact verification indicators, 
-                    source credibility assessment, and persuasive element detection.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-
-        # Use Cases
-        st.markdown('<div class="section-header">Industry Applications</div>', unsafe_allow_html=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("""
-            <div class="result-card">
-                <h4 style="color: var(--primary-text); margin-bottom: 12px;">Fact Verification</h4>
-                <p style="color: var(--primary-subtle); margin: 0;">
-                    Automatically verify claims, detect misinformation, and validate factual statements 
-                    across news articles, research papers, and public discourse.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            st.markdown("""
-            <div class="result-card">
-                <h4 style="color: var(--primary-text); margin-bottom: 12px;">Research Analysis</h4>
-                <p style="color: var(--primary-subtle); margin: 0;">
-                    Analyze academic papers, research findings, and scientific literature for 
-                    evidence quality, methodological rigor, and conclusion validity.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown("""
-            <div class="result-card">
-                <h4 style="color: var(--primary-text); margin-bottom: 12px;">Business Intelligence</h4>
-                <p style="color: var(--primary-subtle); margin: 0;">
-                    Extract actionable insights from business reports, market analyses, 
-                    and competitive intelligence for strategic decision-making.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            st.markdown("""
-            <div class="result-card">
-                <h4 style="color: var(--primary-text); margin-bottom: 12px;">Compliance Monitoring</h4>
-                <p style="color: var(--primary-subtle); margin: 0;">
-                    Monitor regulatory documents, compliance reports, and policy statements 
-                    for adherence to standards and identification of potential issues.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
+                    if not google_df.empty:
+                        trained_models = st.session_state['trained_models']
+                        trained_vectorizer = st.session_state['trained_vectorizer']
+                        selected_phase_run = st.session_state['selected_phase_run']
+                        benchmark_results_df = run_google_benchmark(google_df, trained_models, trained_vectorizer, selected_phase_run)
+                        st.session_state['google_benchmark_results'] = benchmark_results_df
+                        st.session_state['google_df'] = google_df
+                        st.markdown(f'<div class="success-box">✅ Benchmark complete! Tested on {len(google_df)} Google claims.</div>', unsafe_allow_html=True)
     
-    # Analysis results
-    if st.session_state.get('analyze_clicked', False) and st.session_state.get('file_uploaded', False):
-        perform_advanced_analysis(st.session_state.df, st.session_state.config)
+    with bench_col3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.caption("Tests trained models against live fact-check data")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# ============================
-# Enhanced Analysis Function
-# ============================
-def perform_advanced_analysis(df, config):
-    """Perform advanced analysis with professional styling"""
-    st.markdown('<div class="section-header">Advanced Analysis Results</div>', unsafe_allow_html=True)
+    # ============================
+    # RESULTS SECTION
+    # ============================
     
-    # Data validation
-    if config['text_col'] not in df.columns or config['target_col'] not in df.columns:
-        st.error("Selected columns not found in dataset.")
-        return
-
-    # Enhanced data preprocessing
-    with st.spinner("Performing advanced data preprocessing..."):
-        # Handle missing values
-        if df[config['text_col']].isnull().any():
-            df[config['text_col']] = df[config['text_col']].fillna('')
-
-        if df[config['target_col']].isnull().any():
-            st.error("Target column contains missing values.")
-            return
-
-        if len(df[config['target_col']].unique()) < 2:
-            st.error("Target column must have at least 2 unique classes.")
-            return
-
-        # Check for sufficient samples per class
-        class_counts = df[config['target_col']].value_counts()
-        if class_counts.min() < 10:
-            st.warning(f"Some classes have very few samples (minimum: {class_counts.min()}). Results may be less reliable.")
-
-    # Advanced feature extraction
-    with st.spinner("Extracting advanced features from text data..."):
-        extractor = AdvancedFeatureExtractor()
-        X = df[config['text_col']].astype(str)
-        y = df[config['target_col']]
-
-        # Select feature extraction method
-        if config['feature_type'] == "Lexical":
-            X_features = extractor.extract_lexical_features(X)
-            st.info("Using advanced lexical features with TF-IDF and n-grams")
-        elif config['feature_type'] == "Semantic":
-            X_features = extractor.extract_semantic_features(X)
-            st.info("Using comprehensive semantic features with sentiment and readability analysis")
-        elif config['feature_type'] == "Syntactic":
-            X_features = extractor.extract_syntactic_features(X)
-            st.info("Using syntactic features with POS patterns and structural analysis")
-        elif config['feature_type'] == "Pragmatic":
-            X_features = extractor.extract_pragmatic_features(X)
-            st.info("Using pragmatic features for fact verification and contextual analysis")
-        else:  # Hybrid
-            X_features = extractor.extract_hybrid_features(X)
-            st.info("Using hybrid features combining all analysis types for maximum performance")
-
-    st.success("Feature extraction completed successfully!")
-
-    # Enhanced model training
-    with st.spinner("Training advanced AI models with optimized parameters..."):
-        trainer = AdvancedModelTrainer()
-        results, label_encoder = trainer.train_and_evaluate(X_features, y)
-
-    # Display enhanced results
-    successful_models = {k: v for k, v in results.items() if 'error' not in v}
-
-    if successful_models:
-        # Model Performance Overview
-        st.markdown("#### Model Performance Overview")
+    if not st.session_state['df_results'].empty:
+        st.markdown("---")
+        st.header("📈 Performance Results")
         
-        cols = st.columns(len(successful_models))
-        for idx, (model_name, result) in enumerate(successful_models.items()):
-            with cols[idx]:
-                accuracy = result['accuracy']
-                cv_mean = result.get('cv_mean', accuracy)
-                cv_std = result.get('cv_std', 0)
-                
+        # Model Metrics in Cards
+        results_col1, results_col2, results_col3, results_col4 = st.columns(4)
+        df_results = st.session_state['df_results']
+        
+        metrics_data = []
+        for _, row in df_results.iterrows():
+            metrics_data.append({
+                'model': row['Model'],
+                'accuracy': row['Accuracy'],
+                'f1': row['F1-Score'],
+                'training_time': row['Training Time (s)']
+            })
+        
+        for i, metric in enumerate(metrics_data):
+            col = [results_col1, results_col2, results_col3, results_col4][i]
+            with col:
                 st.markdown(f"""
-                <div class="model-card">
-                    <div class="card-header">{model_name}</div>
-                    <div class="model-accuracy">{accuracy:.1%}</div>
-                    <div style="color: var(--primary-subtle); font-size: 14px; margin-bottom: 12px;">
-                        Precision: {result['precision']:.3f}<br>
-                        Recall: {result['recall']:.3f}<br>
-                        CV Score: {cv_mean:.3f} ± {cv_std:.3f}
-                    </div>
-                    <div class="progress-container">
-                        <div class="progress-fill" style="width: {accuracy*100}%"></div>
-                    </div>
-                    <div style="color: var(--primary-blue); font-size: 12px; font-weight: 600; margin-top: 8px;">
-                        F1-Score: {result['f1_score']:.3f}
-                    </div>
+                <div class="metric-card">
+                    <h3>{metric['model']}</h3>
+                    <h2>🏆 {metric['accuracy']:.1f}%</h2>
+                    <p>F1: {metric['f1']:.3f} | Time: {metric['training_time']}s</p>
                 </div>
                 """, unsafe_allow_html=True)
-
-        # Performance Dashboard
-        st.markdown("#### Performance Dashboard")
-        viz = AdvancedVisualizer()
-        dashboard_fig = viz.create_performance_dashboard(successful_models)
-        st.pyplot(dashboard_fig)
-
-        # Best Model Recommendation with Enhanced Analysis
-        best_model = max(successful_models.items(), key=lambda x: x[1]['accuracy'])
-        best_result = best_model[1]
         
-        st.markdown(f"""
-        <div class="result-card success-card">
-            <h3 style="color: var(--primary-success); margin-bottom: 1rem; display: flex; align-items: center; gap: 12px;">
-                Recommended AI Model
-            </h3>
-            <p style="color: var(--primary-text); font-size: 1.1rem; margin-bottom: 0.5rem; line-height: 1.6;">
-                <strong>{best_model[0]}</strong> achieved the highest accuracy of
-                <strong style="color: var(--primary-success);">{best_result['accuracy']:.1%}</strong>
-                with cross-validation score of <strong>{best_result.get('cv_mean', 0):.3f}</strong>.
-            </p>
-            <p style="color: var(--primary-subtle); margin: 0; line-height: 1.6;">
-                This model demonstrates superior performance in analyzing your data patterns 
-                and provides reliable classification across all {best_result['n_classes']} categories 
-                with {best_result['test_size']} test samples.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Confusion Matrix
-        st.markdown("#### Confusion Matrix Analysis")
-        confusion_fig = viz.create_confusion_matrix(successful_models, best_model[0], label_encoder)
-        if confusion_fig:
-            st.pyplot(confusion_fig)
-
-        # Detailed Classification Report
-        st.markdown("#### Detailed Classification Report")
-        if best_model[0] in successful_models:
-            result = successful_models[best_model[0]]
-            report = classification_report(result['true_labels'], result['predictions'], 
-                                         target_names=label_encoder.classes_, output_dict=True)
-            report_df = pd.DataFrame(report).transpose()
-            st.dataframe(report_df.style.format("{:.3f}").background_gradient(cmap='Blues'), 
-                        use_container_width=True)
-
-        # Feature Importance (if available)
-        if best_result.get('feature_importance') is not None:
-            st.markdown("#### Feature Importance Analysis")
-            importance_df = pd.DataFrame({
-                'feature': range(len(best_result['feature_importance'])),
-                'importance': best_result['feature_importance']
-            }).sort_values('importance', ascending=False).head(15)
+        # Detailed Results and Visualizations
+        viz_col1, viz_col2 = st.columns(2)
+        
+        with viz_col1:
+            st.subheader("📊 Performance Metrics")
+            chart_metric = st.selectbox(
+                "Select metric to visualize:",
+                ['Accuracy', 'F1-Score', 'Precision', 'Recall', 'Training Time (s)', 'Inference Latency (ms)'],
+                key='chart_metric'
+            )
             
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.barh(importance_df['feature'].astype(str), importance_df['importance'])
-            ax.set_xlabel('Feature Importance')
-            ax.set_title('Top 15 Most Important Features')
-            plt.tight_layout()
+            chart_data = df_results[['Model', chart_metric]].set_index('Model')
+            st.bar_chart(chart_data)
+        
+        with viz_col2:
+            st.subheader("⚡ Speed vs Accuracy Trade-off")
+            
+            fig, ax = plt.subplots(figsize=(8, 6))
+            colors = ['#2563eb', '#7c3aed', '#06d6a0', '#f59e0b']
+            
+            for i, (_, row) in enumerate(df_results.iterrows()):
+                ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], 
+                          s=200, alpha=0.7, color=colors[i], label=row['Model'])
+                ax.annotate(row['Model'], 
+                           (row['Inference Latency (ms)'] + 5, row['Accuracy']), 
+                           fontsize=9, alpha=0.8)
+            
+            ax.set_xlabel('Inference Latency (ms)')
+            ax.set_ylabel('Accuracy (%)')
+            ax.set_title('Model Performance: Speed vs Accuracy')
+            ax.grid(True, alpha=0.3)
+            ax.legend()
             st.pyplot(fig)
 
-    else:
-        st.error("No models were successfully trained. Please check your data and try again.")
+        # Google Benchmark Results
+        if not st.session_state['google_benchmark_results'].empty:
+            st.markdown("---")
+            st.header("🌐 Google Fact Check Benchmark")
+            
+            google_results = st.session_state['google_benchmark_results']
+            politifacts_results = st.session_state['df_results']
+            
+            # Comparison metrics
+            st.subheader("Performance Comparison")
+            comp_col1, comp_col2, comp_col3, comp_col4 = st.columns(4)
+            
+            for idx, (_, row) in enumerate(google_results.iterrows()):
+                model_name = row['Model']
+                google_accuracy = row['Accuracy']
+                
+                # Find corresponding Politifacts accuracy
+                politifacts_row = politifacts_results[politifacts_results['Model'] == model_name]
+                if not politifacts_row.empty:
+                    politifacts_accuracy = politifacts_row['Accuracy'].values[0]
+                    delta = google_accuracy - politifacts_accuracy
+                    delta_color = "normal" if delta >= 0 else "inverse"
+                else:
+                    delta = None
+                    delta_color = "off"
+                
+                col = [comp_col1, comp_col2, comp_col3, comp_col4][idx]
+                with col:
+                    if delta is not None:
+                        st.metric(
+                            label=f"{model_name}",
+                            value=f"{google_accuracy:.1f}%",
+                            delta=f"{delta:+.1f}%",
+                            delta_color=delta_color
+                        )
+                    else:
+                        st.metric(
+                            label=f"{model_name}",
+                            value=f"{google_accuracy:.1f}%"
+                        )
 
-if __name__ == "__main__":
-    main()
+    # ============================
+    # HUMOROUS CRITIQUE SECTION
+    # ============================
+    
+    if not st.session_state['df_results'].empty:
+        st.markdown("---")
+        st.header("🎭 AI Performance Review")
+        
+        critique_col1, critique_col2 = st.columns([2, 1])
+        
+        with critique_col1:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            critique_text = generate_humorous_critique(
+                st.session_state['df_results'], 
+                st.session_state['selected_phase_run']
+            )
+            st.markdown(critique_text)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with critique_col2:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("🏆 Winner's Circle")
+            if not st.session_state['df_results'].empty:
+                best_model = st.session_state['df_results'].loc[st.session_state['df_results']['F1-Score'].idxmax()]
+                st.markdown(f"""
+                **Champion Model:**  
+                🥇 **{best_model['Model']}**
+                
+                **Performance:**  
+                📊 {best_model['Accuracy']:.1f}% Accuracy  
+                🎯 {best_model['F1-Score']:.3f} F1-Score  
+                ⚡ {best_model['Inference Latency (ms)']}ms Inference
+                
+                **Feature Set:**  
+                {st.session_state['selected_phase_run']}
+                """)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # ============================
+    # EMPTY STATE MESSAGES
+    # ============================
+    
+    if st.session_state['scraped_df'].empty and st.session_state['df_results'].empty:
+        st.markdown("---")
+        st.header("🚀 Getting Started")
+        
+        guide_col1, guide_col2, guide_col3 = st.columns(3)
+        
+        with guide_col1:
+            st.markdown("""
+            <div class="card">
+            <h3>📥 Step 1: Collect Data</h3>
+            <p>Use the Politifact scraper to gather training data. Select a date range and click "Scrape Politifact Data".</p>
+            <ul>
+                <li>Choose recent dates for current trends</li>
+                <li>Allow 1-2 minutes for scraping</li>
+                <li>Data is cached for repeated use</li>
+            </ul>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with guide_col2:
+            st.markdown("""
+            <div class="card">
+            <h3>🔧 Step 2: Configure Analysis</h3>
+            <p>Select an NLP feature extraction method and run the model analysis:</p>
+            <div class="feature-pill">Lexical</div>
+            <div class="feature-pill">Syntactic</div>
+            <div class="feature-pill">Semantic</div>
+            <div class="feature-pill">Discourse</div>
+            <div class="feature-pill">Pragmatic</div>
+            <p>Each method extracts different linguistic features for classification.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with guide_col3:
+            st.markdown("""
+            <div class="card">
+            <h3>🌐 Step 3: Real-World Test</h3>
+            <p>Benchmark your models against live Google Fact Check data:</p>
+            <ul>
+                <li>Tests generalization to unseen data</li>
+                <li>Uses real-time fact checks</li>
+                <li>Compares performance deltas</li>
+            </ul>
+            <p><em>Requires Google API key in secrets.toml</em></p>
+            </div>
+            """, unsafe_allow_html=True)
+
+# --- Run App ---
+if __name__ == '__main__':
+    app()
