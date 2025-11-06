@@ -733,193 +733,247 @@ def app():
         initial_sidebar_state='expanded'
     )
 
-    # Custom CSS for modern theme with improved visibility
+    # Custom CSS for ultra light theme with maximum visibility
     st.markdown("""
     <style>
-    /* Main theme colors - Light theme for better visibility */
+    /* Ultra Light Theme - Maximum Visibility */
     :root {
-        --primary: #1f77b4;
-        --secondary: #ff7f0e;
-        --accent: #2ca02c;
+        --primary: #0066cc;
+        --secondary: #009933;
+        --accent: #cc0000;
         --background: #ffffff;
-        --surface: #f8f9fa;
+        --surface: #fafafa;
         --text: #000000;
-        --text-secondary: #495057;
-        --border: #dee2e6;
+        --text-secondary: #333333;
+        --border: #dddddd;
+        --success: #28a745;
+        --warning: #ffc107;
+        --info: #17a2b8;
     }
     
-    /* Main content background */
+    /* Main content background - Pure White */
     .main .block-container {
-        background-color: var(--background);
-        color: var(--text);
+        background-color: #ffffff !important;
+        color: #000000 !important;
     }
     
-    /* Headers with better contrast */
+    /* Headers with maximum contrast */
     h1, h2, h3, h4, h5, h6 {
-        color: var(--text) !important;
-        font-weight: 600;
+        color: #000000 !important;
+        font-weight: 700;
+        text-shadow: none !important;
     }
     
-    /* Text elements */
-    p, div, span, li {
-        color: var(--text) !important;
+    /* All text elements - Pure Black */
+    p, div, span, li, td, th, label, .stMarkdown, .stCaption, .stText {
+        color: #000000 !important;
     }
     
-    /* Sidebar styling */
-    .css-1d391kg, .css-1lcbmhc {
-        background-color: var(--surface) !important;
-        color: var(--text) !important;
+    /* Sidebar styling - Light Gray */
+    .css-1d391kg, .css-1lcbmhc, .sidebar .sidebar-content {
+        background-color: #f8f9fa !important;
+        color: #000000 !important;
     }
     
-    .sidebar .sidebar-content {
-        background-color: var(--surface) !important;
-        color: var(--text) !important;
+    /* Sidebar text */
+    .sidebar .sidebar-content * {
+        color: #000000 !important;
     }
     
-    /* Cards with better contrast */
+    /* Cards with light background and dark text */
     .main-header {
-        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
         padding: 2rem;
-        border-radius: 15px;
+        border-radius: 10px;
         margin-bottom: 2rem;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-        border: 1px solid var(--border);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border: 2px solid #0066cc;
     }
     
     .main-header h1 {
-        color: white !important;
+        color: #000000 !important;
         font-size: 2.5rem;
         font-weight: 800;
         margin-bottom: 0.5rem;
         text-align: center;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
     }
     
     .main-header h3 {
-        color: rgba(255,255,255,0.95) !important;
+        color: #000000 !important;
         font-size: 1.1rem;
         text-align: center;
-        font-weight: 400;
+        font-weight: 500;
     }
     
     .card {
-        background: var(--surface);
+        background: #ffffff;
         padding: 1.5rem;
-        border-radius: 12px;
-        border-left: 4px solid var(--accent);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        border-radius: 8px;
+        border-left: 4px solid #0066cc;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
         margin-bottom: 1rem;
-        border: 1px solid var(--border);
-        color: var(--text) !important;
+        border: 1px solid #dddddd;
+        color: #000000 !important;
     }
     
-    .card h3, .card h4, .card p, .card li {
-        color: var(--text) !important;
+    .card h3, .card h4, .card p, .card li, .card span, .card div {
+        color: #000000 !important;
     }
     
     .metric-card {
-        background: linear-gradient(135deg, var(--surface) 0%, #e9ecef 100%);
+        background: #ffffff;
         padding: 1rem;
-        border-radius: 10px;
+        border-radius: 8px;
         text-align: center;
-        border: 1px solid var(--border);
-        color: var(--text) !important;
+        border: 2px solid #0066cc;
+        color: #000000 !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
     
     .metric-card h3, .metric-card h2, .metric-card p {
-        color: var(--text) !important;
+        color: #000000 !important;
+        margin: 0.5rem 0;
     }
     
-    /* Buttons with better contrast */
+    /* Buttons with good contrast */
     .stButton>button {
-        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-        color: white !important;
+        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+        color: #ffffff !important;
         border: none;
         padding: 0.7rem 1.5rem;
-        border-radius: 8px;
+        border-radius: 6px;
         font-weight: 600;
         transition: all 0.3s ease;
         width: 100%;
-        border: 1px solid rgba(0,0,0,0.1);
+        border: 1px solid #004499;
     }
     
     .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(31, 119, 180, 0.3);
-        color: white !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,102,204,0.3);
+        color: #ffffff !important;
     }
     
     /* Feature pills */
     .feature-pill {
-        background: var(--primary);
-        color: white !important;
+        background: #0066cc;
+        color: #ffffff !important;
         padding: 0.3rem 0.8rem;
-        border-radius: 20px;
+        border-radius: 16px;
         font-size: 0.8rem;
         margin: 0.2rem;
         display: inline-block;
-        border: 1px solid rgba(0,0,0,0.1);
+        border: 1px solid #004499;
     }
     
     /* Status boxes */
     .success-box {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        color: white !important;
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+        color: #000000 !important;
         padding: 1rem;
-        border-radius: 10px;
+        border-radius: 8px;
         margin: 1rem 0;
-        border: 1px solid rgba(0,0,0,0.1);
+        border: 2px solid #28a745;
     }
     
     .warning-box {
-        background: linear-gradient(135deg, #fd7e14 0%, #ffc107 100%);
-        color: black !important;
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+        color: #000000 !important;
         padding: 1rem;
-        border-radius: 10px;
+        border-radius: 8px;
         margin: 1rem 0;
-        border: 1px solid rgba(0,0,0,0.1);
+        border: 2px solid #ffc107;
     }
     
     .info-box {
-        background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);
-        color: white !important;
+        background: linear-gradient(135deg, #d1ecf1 0%, #b8e2eb 100%);
+        color: #000000 !important;
         padding: 1rem;
-        border-radius: 10px;
+        border-radius: 8px;
         margin: 1rem 0;
-        border: 1px solid rgba(0,0,0,0.1);
+        border: 2px solid #17a2b8;
     }
     
     /* Dataframes and tables */
     .dataframe {
-        color: var(--text) !important;
+        color: #000000 !important;
+        background-color: #ffffff !important;
+    }
+    
+    .dataframe th {
+        background-color: #f8f9fa !important;
+        color: #000000 !important;
+        font-weight: 700;
+    }
+    
+    .dataframe td {
+        background-color: #ffffff !important;
+        color: #000000 !important;
     }
     
     /* Streamlit native elements */
     .stSelectbox, .stSlider, .stDateInput, .stRadio {
-        color: var(--text) !important;
+        color: #000000 !important;
     }
     
     .stSelectbox label, .stSlider label, .stDateInput label, .stRadio label {
-        color: var(--text) !important;
-        font-weight: 500;
+        color: #000000 !important;
+        font-weight: 600;
     }
     
-    /* Make all text clearly visible */
+    /* Make ALL text clearly visible */
     .stMarkdown, .stCaption, .stText, .stCode {
-        color: var(--text) !important;
+        color: #000000 !important;
     }
     
     /* Ensure metric components are visible */
     [data-testid="metric-container"] {
-        color: var(--text) !important;
+        color: #000000 !important;
+        background-color: #ffffff !important;
     }
     
     [data-testid="metric-container"] label {
-        color: var(--text-secondary) !important;
+        color: #000000 !important;
+        font-weight: 600;
     }
     
     [data-testid="metric-container"] div {
-        color: var(--text) !important;
+        color: #000000 !important;
+        font-weight: 700;
+    }
+    
+    /* Input fields */
+    .stTextInput input, .stNumberInput input, .stTextArea textarea {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        border: 1px solid #cccccc !important;
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background-color: #f8f9fa !important;
+        color: #000000 !important;
+        font-weight: 600;
+    }
+    
+    /* Radio buttons */
+    .stRadio label {
+        color: #000000 !important;
+    }
+    
+    /* Checkboxes */
+    .stCheckbox label {
+        color: #000000 !important;
+    }
+    
+    /* Progress bars */
+    .stProgress > div > div {
+        background-color: #0066cc !important;
+    }
+    
+    /* Force all text to be black */
+    * {
+        color: #000000 !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -943,9 +997,9 @@ def app():
     # ============================
     
     st.sidebar.markdown("""
-    <div style='text-align: center; padding: 1rem 0; border-bottom: 1px solid #dee2e6; margin-bottom: 1rem;'>
-        <h2 style='color: #000000; margin-bottom: 0.5rem;'>FactChecker</h2>
-        <p style='color: #495057; font-size: 0.9rem; margin: 0;'>AI-Powered Fact-Checking Platform</p>
+    <div style='text-align: center; padding: 1rem 0; border-bottom: 2px solid #0066cc; margin-bottom: 1rem;'>
+        <h2 style='color: #000000; margin-bottom: 0.5rem; font-weight: 800;'>FactChecker</h2>
+        <p style='color: #000000; font-size: 0.9rem; margin: 0; font-weight: 500;'>AI-Powered Fact-Checking Platform</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1354,7 +1408,7 @@ def app():
                 st.subheader("Speed vs Accuracy Trade-off")
                 
                 fig, ax = plt.subplots(figsize=(8, 6))
-                colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
+                colors = ['#0066cc', '#009933', '#cc0000', '#ff9900']
                 
                 for i, (_, row) in enumerate(df_results.iterrows()):
                     ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], 
