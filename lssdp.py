@@ -722,7 +722,7 @@ def generate_humorous_critique(df_results: pd.DataFrame, selected_phase: str) ->
     return summary + roast
 
 # ============================
-# 5. STREAMLIT APP FUNCTION
+# 5. STREAMLIT APP FUNCTION WITH SIDEBAR
 # ============================
 
 def app():
@@ -733,41 +733,73 @@ def app():
         initial_sidebar_state='expanded'
     )
 
-    # Custom CSS for modern theme
+    # Custom CSS for modern theme with improved visibility
     st.markdown("""
     <style>
-    /* Main theme colors */
+    /* Main theme colors - Light theme for better visibility */
     :root {
-        --primary: #2563eb;
-        --secondary: #7c3aed;
-        --accent: #06d6a0;
-        --background: #0f172a;
-        --surface: #1e293b;
-        --text: #f8fafc;
-        --text-secondary: #cbd5e1;
+        --primary: #1f77b4;
+        --secondary: #ff7f0e;
+        --accent: #2ca02c;
+        --background: #ffffff;
+        --surface: #f8f9fa;
+        --text: #000000;
+        --text-secondary: #495057;
+        --border: #dee2e6;
     }
     
+    /* Main content background */
+    .main .block-container {
+        background-color: var(--background);
+        color: var(--text);
+    }
+    
+    /* Headers with better contrast */
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--text) !important;
+        font-weight: 600;
+    }
+    
+    /* Text elements */
+    p, div, span, li {
+        color: var(--text) !important;
+    }
+    
+    /* Sidebar styling */
+    .css-1d391kg, .css-1lcbmhc {
+        background-color: var(--surface) !important;
+        color: var(--text) !important;
+    }
+    
+    .sidebar .sidebar-content {
+        background-color: var(--surface) !important;
+        color: var(--text) !important;
+    }
+    
+    /* Cards with better contrast */
     .main-header {
         background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
         padding: 2rem;
         border-radius: 15px;
         margin-bottom: 2rem;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        border: 1px solid var(--border);
     }
     
     .main-header h1 {
-        color: white;
-        font-size: 3rem;
+        color: white !important;
+        font-size: 2.5rem;
         font-weight: 800;
         margin-bottom: 0.5rem;
         text-align: center;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
     }
     
     .main-header h3 {
-        color: rgba(255,255,255,0.9);
-        font-size: 1.3rem;
+        color: rgba(255,255,255,0.95) !important;
+        font-size: 1.1rem;
         text-align: center;
-        font-weight: 300;
+        font-weight: 400;
     }
     
     .card {
@@ -775,76 +807,121 @@ def app():
         padding: 1.5rem;
         border-radius: 12px;
         border-left: 4px solid var(--accent);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
         margin-bottom: 1rem;
+        border: 1px solid var(--border);
+        color: var(--text) !important;
+    }
+    
+    .card h3, .card h4, .card p, .card li {
+        color: var(--text) !important;
     }
     
     .metric-card {
-        background: linear-gradient(135deg, var(--surface) 0%, #2d3748 100%);
+        background: linear-gradient(135deg, var(--surface) 0%, #e9ecef 100%);
         padding: 1rem;
         border-radius: 10px;
         text-align: center;
-        border: 1px solid #374151;
+        border: 1px solid var(--border);
+        color: var(--text) !important;
     }
     
+    .metric-card h3, .metric-card h2, .metric-card p {
+        color: var(--text) !important;
+    }
+    
+    /* Buttons with better contrast */
     .stButton>button {
         background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-        color: white;
+        color: white !important;
         border: none;
         padding: 0.7rem 1.5rem;
         border-radius: 8px;
         font-weight: 600;
         transition: all 0.3s ease;
         width: 100%;
+        border: 1px solid rgba(0,0,0,0.1);
     }
     
     .stButton>button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        box-shadow: 0 6px 20px rgba(31, 119, 180, 0.3);
+        color: white !important;
     }
     
+    /* Feature pills */
     .feature-pill {
         background: var(--primary);
-        color: white;
+        color: white !important;
         padding: 0.3rem 0.8rem;
         border-radius: 20px;
         font-size: 0.8rem;
         margin: 0.2rem;
         display: inline-block;
+        border: 1px solid rgba(0,0,0,0.1);
     }
     
+    /* Status boxes */
     .success-box {
-        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-        color: white;
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white !important;
         padding: 1rem;
         border-radius: 10px;
         margin: 1rem 0;
+        border: 1px solid rgba(0,0,0,0.1);
     }
     
     .warning-box {
-        background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
-        color: white;
+        background: linear-gradient(135deg, #fd7e14 0%, #ffc107 100%);
+        color: black !important;
         padding: 1rem;
         border-radius: 10px;
         margin: 1rem 0;
+        border: 1px solid rgba(0,0,0,0.1);
     }
     
     .info-box {
-        background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%);
-        color: white;
+        background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);
+        color: white !important;
         padding: 1rem;
         border-radius: 10px;
         margin: 1rem 0;
+        border: 1px solid rgba(0,0,0,0.1);
+    }
+    
+    /* Dataframes and tables */
+    .dataframe {
+        color: var(--text) !important;
+    }
+    
+    /* Streamlit native elements */
+    .stSelectbox, .stSlider, .stDateInput, .stRadio {
+        color: var(--text) !important;
+    }
+    
+    .stSelectbox label, .stSlider label, .stDateInput label, .stRadio label {
+        color: var(--text) !important;
+        font-weight: 500;
+    }
+    
+    /* Make all text clearly visible */
+    .stMarkdown, .stCaption, .stText, .stCode {
+        color: var(--text) !important;
+    }
+    
+    /* Ensure metric components are visible */
+    [data-testid="metric-container"] {
+        color: var(--text) !important;
+    }
+    
+    [data-testid="metric-container"] label {
+        color: var(--text-secondary) !important;
+    }
+    
+    [data-testid="metric-container"] div {
+        color: var(--text) !important;
     }
     </style>
-    """, unsafe_allow_html=True)
-
-    # --- Modern Header ---
-    st.markdown("""
-    <div class="main-header">
-        <h1>FactChecker</h1>
-        <h3>AI-Powered Fact-Checking & Misinformation Detection</h3>
-    </div>
     """, unsafe_allow_html=True)
 
     # --- State Management ---
@@ -862,318 +939,511 @@ def app():
         st.session_state['google_df'] = pd.DataFrame()
 
     # ============================
-    # MAIN LAYOUT - MODERN CARDS
+    # SIDEBAR NAVIGATION
     # ============================
     
-    # Row 1: Data Collection Cards
-    col1, col2 = st.columns(2)
+    st.sidebar.markdown("""
+    <div style='text-align: center; padding: 1rem 0; border-bottom: 1px solid #dee2e6; margin-bottom: 1rem;'>
+        <h2 style='color: #000000; margin-bottom: 0.5rem;'>FactChecker</h2>
+        <p style='color: #495057; font-size: 0.9rem; margin: 0;'>AI-Powered Fact-Checking Platform</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    with col1:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("Data Collection")
-        st.markdown("**Politifact Archive Scraper**")
-        
-        min_date = pd.to_datetime('2007-01-01')
-        max_date = pd.to_datetime('today').normalize()
-
-        date_col1, date_col2 = st.columns(2)
-        with date_col1:
-            start_date = st.date_input("Start Date", min_value=min_date, max_value=max_date, value=pd.to_datetime('2023-01-01'))
-        with date_col2:
-            end_date = st.date_input("End Date", min_value=min_date, max_value=max_date, value=max_date)
-
-        if st.button("Scrape Politifact Data", key="scrape_btn"):
-            if start_date > end_date:
-                st.error("Start date must be before end date")
-            else:
-                with st.spinner("Scraping political claims..."):
-                    scraped_df = scrape_data_by_date_range(pd.to_datetime(start_date), pd.to_datetime(end_date))
-                
-                if not scraped_df.empty:
-                    st.session_state['scraped_df'] = scraped_df
-                    st.markdown(f'<div class="success-box">Successfully scraped {len(scraped_df)} claims!</div>', unsafe_allow_html=True)
-                else:
-                    st.warning("No data found. Try adjusting date range.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with col2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("Analysis Setup")
-        st.markdown("**NLP Feature Configuration**")
-        
-        phases = [
-            "Lexical & Morphological",
-            "Syntactic", 
-            "Semantic",
-            "Discourse",
-            "Pragmatic"
-        ]
-        selected_phase = st.selectbox("Feature Extraction Method:", phases, key='selected_phase')
-        
-        # Feature descriptions
-        feature_descriptions = {
-            "Lexical & Morphological": "Word-level analysis: lemmatization, stopword removal, n-grams",
-            "Syntactic": "Grammar structure: part-of-speech tags, sentence patterns", 
-            "Semantic": "Meaning analysis: sentiment polarity, subjectivity scoring",
-            "Discourse": "Text structure: sentence count, discourse markers",
-            "Pragmatic": "Intent analysis: modal verbs, question marks, emphasis markers"
-        }
-        
-        st.caption(f"*{feature_descriptions[selected_phase]}*")
-        
-        if st.button("Run Model Analysis", key="analyze_btn"):
-            if st.session_state['scraped_df'].empty:
-                st.error("Please scrape data first!")
-            else:
-                with st.spinner(f"Training 4 models with {N_SPLITS}-Fold CV..."):
-                    df_results, trained_models, trained_vectorizer = evaluate_models(st.session_state['scraped_df'], selected_phase)
-                    st.session_state['df_results'] = df_results
-                    st.session_state['trained_models'] = trained_models
-                    st.session_state['trained_vectorizer'] = trained_vectorizer
-                    st.session_state['selected_phase_run'] = selected_phase
-                    st.markdown('<div class="success-box">Analysis complete! Results ready below.</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # Row 2: Real-time Benchmarking
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("Real-Time Benchmark")
-    st.markdown("**Google Fact Check API Integration**")
+    # Navigation
+    page = st.sidebar.radio(
+        "Navigation",
+        ["Dashboard", "Data Collection", "Model Training", "Benchmark Testing", "Results & Analysis"],
+        key='navigation'
+    )
     
-    bench_col1, bench_col2, bench_col3 = st.columns([2,2,1])
+    # Sidebar info panel
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### System Status")
     
-    with bench_col1:
-        num_google_claims = st.slider(
-            "Number of test claims:",
-            min_value=10,
-            max_value=500,
-            value=100,
-            step=10,
-            key='num_google_claims'
-        )
+    # Status indicators
+    data_status = "Ready" if not st.session_state['scraped_df'].empty else "No Data"
+    models_status = "Trained" if st.session_state['trained_models'] else "Not Trained"
+    benchmark_status = "Complete" if not st.session_state['google_benchmark_results'].empty else "Pending"
     
-    with bench_col2:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Run Google Benchmark", key="benchmark_btn"):
-            # Pre-flight checks
-            if not st.session_state.get('trained_models'):
-                st.error("Please train models first!")
-            elif 'GOOGLE_API_KEY' not in st.secrets:
-                st.error("Google API key not found in secrets.toml")
-            else:
-                with st.spinner('Fetching live fact-check data...'):
-                    api_key = st.secrets["GOOGLE_API_KEY"]
-                    api_results = fetch_google_claims(api_key, num_google_claims)
-                    google_df = process_and_map_google_claims(api_results)
-
-                    if not google_df.empty:
-                        trained_models = st.session_state['trained_models']
-                        trained_vectorizer = st.session_state['trained_vectorizer']
-                        selected_phase_run = st.session_state['selected_phase_run']
-                        benchmark_results_df = run_google_benchmark(google_df, trained_models, trained_vectorizer, selected_phase_run)
-                        st.session_state['google_benchmark_results'] = benchmark_results_df
-                        st.session_state['google_df'] = google_df
-                        st.markdown(f'<div class="success-box">Benchmark complete! Tested on {len(google_df)} Google claims.</div>', unsafe_allow_html=True)
+    st.sidebar.markdown(f"""
+    - **Data**: {data_status}
+    - **Models**: {models_status}
+    - **Benchmark**: {benchmark_status}
+    """)
     
-    with bench_col3:
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.caption("Tests trained models against live fact-check data")
-    st.markdown('</div>', unsafe_allow_html=True)
-
+    # Quick actions in sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Quick Actions")
+    
+    if st.sidebar.button("Clear All Data", key="sidebar_clear"):
+        st.session_state.clear()
+        st.rerun()
+    
+    # Feature descriptions expander
+    with st.sidebar.expander("Feature Descriptions"):
+        st.markdown("""
+        **Lexical & Morphological**
+        - Word-level analysis
+        - Lemmatization & stopwords
+        - N-gram features
+        
+        **Syntactic**
+        - Grammar structure
+        - Part-of-speech tags
+        - Sentence patterns
+        
+        **Semantic**
+        - Sentiment analysis
+        - Polarity & subjectivity
+        - Meaning extraction
+        
+        **Discourse**
+        - Text structure
+        - Sentence count
+        - Discourse markers
+        
+        **Pragmatic**
+        - Intent analysis
+        - Modal verbs
+        - Emphasis markers
+        """)
+    
     # ============================
-    # RESULTS SECTION
+    # PAGE CONTENT BASED ON NAVIGATION
     # ============================
     
-    if not st.session_state['df_results'].empty:
+    # DASHBOARD PAGE
+    if page == "Dashboard":
+        st.markdown("""
+        <div class="main-header">
+            <h1>FactChecker Dashboard</h1>
+            <h3>Comprehensive AI-Powered Fact-Checking & Misinformation Detection</h3>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Dashboard overview
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("""
+            <div class="card">
+                <h3>Data Overview</h3>
+                <p>Collect and manage training data from Politifact archives</p>
+                <ul>
+                    <li>Web scraping capabilities</li>
+                    <li>Date range selection</li>
+                    <li>Real-time data validation</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("""
+            <div class="card">
+                <h3>Model Training</h3>
+                <p>Advanced NLP feature extraction and ML training</p>
+                <ul>
+                    <li>5 feature extraction methods</li>
+                    <li>4 machine learning models</li>
+                    <li>Cross-validation & SMOTE</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown("""
+            <div class="card">
+                <h3>Benchmark Testing</h3>
+                <p>Real-world performance validation</p>
+                <ul>
+                    <li>Google Fact Check API</li>
+                    <li>Live fact-check data</li>
+                    <li>Performance comparison</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Quick start guide
         st.markdown("---")
-        st.header("Performance Results")
+        st.header("Getting Started Guide")
         
-        # Model Metrics in Cards
-        results_col1, results_col2, results_col3, results_col4 = st.columns(4)
-        df_results = st.session_state['df_results']
-        
-        metrics_data = []
-        for _, row in df_results.iterrows():
-            metrics_data.append({
-                'model': row['Model'],
-                'accuracy': row['Accuracy'],
-                'f1': row['F1-Score'],
-                'training_time': row['Training Time (s)']
-            })
-        
-        for i, metric in enumerate(metrics_data):
-            col = [results_col1, results_col2, results_col3, results_col4][i]
-            with col:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h3>{metric['model']}</h3>
-                    <h2>{metric['accuracy']:.1f}%</h2>
-                    <p>F1: {metric['f1']:.3f} | Time: {metric['training_time']}s</p>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        # Detailed Results and Visualizations
-        viz_col1, viz_col2 = st.columns(2)
-        
-        with viz_col1:
-            st.subheader("Performance Metrics")
-            chart_metric = st.selectbox(
-                "Select metric to visualize:",
-                ['Accuracy', 'F1-Score', 'Precision', 'Recall', 'Training Time (s)', 'Inference Latency (ms)'],
-                key='chart_metric'
-            )
-            
-            chart_data = df_results[['Model', chart_metric]].set_index('Model')
-            st.bar_chart(chart_data)
-        
-        with viz_col2:
-            st.subheader("Speed vs Accuracy Trade-off")
-            
-            fig, ax = plt.subplots(figsize=(8, 6))
-            colors = ['#2563eb', '#7c3aed', '#06d6a0', '#f59e0b']
-            
-            for i, (_, row) in enumerate(df_results.iterrows()):
-                ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], 
-                          s=200, alpha=0.7, color=colors[i], label=row['Model'])
-                ax.annotate(row['Model'], 
-                           (row['Inference Latency (ms)'] + 5, row['Accuracy']), 
-                           fontsize=9, alpha=0.8)
-            
-            ax.set_xlabel('Inference Latency (ms)')
-            ax.set_ylabel('Accuracy (%)')
-            ax.set_title('Model Performance: Speed vs Accuracy')
-            ax.grid(True, alpha=0.3)
-            ax.legend()
-            st.pyplot(fig)
-
-        # Google Benchmark Results
-        if not st.session_state['google_benchmark_results'].empty:
-            st.markdown("---")
-            st.header("Google Fact Check Benchmark")
-            
-            google_results = st.session_state['google_benchmark_results']
-            politifacts_results = st.session_state['df_results']
-            
-            # Comparison metrics
-            st.subheader("Performance Comparison")
-            comp_col1, comp_col2, comp_col3, comp_col4 = st.columns(4)
-            
-            for idx, (_, row) in enumerate(google_results.iterrows()):
-                model_name = row['Model']
-                google_accuracy = row['Accuracy']
-                
-                # Find corresponding Politifacts accuracy
-                politifacts_row = politifacts_results[politifacts_results['Model'] == model_name]
-                if not politifacts_row.empty:
-                    politifacts_accuracy = politifacts_row['Accuracy'].values[0]
-                    delta = google_accuracy - politifacts_accuracy
-                    delta_color = "normal" if delta >= 0 else "inverse"
-                else:
-                    delta = None
-                    delta_color = "off"
-                
-                col = [comp_col1, comp_col2, comp_col3, comp_col4][idx]
-                with col:
-                    if delta is not None:
-                        st.metric(
-                            label=f"{model_name}",
-                            value=f"{google_accuracy:.1f}%",
-                            delta=f"{delta:+.1f}%",
-                            delta_color=delta_color
-                        )
-                    else:
-                        st.metric(
-                            label=f"{model_name}",
-                            value=f"{google_accuracy:.1f}%"
-                        )
-
-    # ============================
-    # HUMOROUS CRITIQUE SECTION
-    # ============================
-    
-    if not st.session_state['df_results'].empty:
-        st.markdown("---")
-        st.header("AI Performance Review")
-        
-        critique_col1, critique_col2 = st.columns([2, 1])
-        
-        with critique_col1:
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            critique_text = generate_humorous_critique(
-                st.session_state['df_results'], 
-                st.session_state['selected_phase_run']
-            )
-            st.markdown(critique_text)
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with critique_col2:
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.subheader("Winner's Circle")
-            if not st.session_state['df_results'].empty:
-                best_model = st.session_state['df_results'].loc[st.session_state['df_results']['F1-Score'].idxmax()]
-                st.markdown(f"""
-                **Champion Model:**  
-                **{best_model['Model']}**
-                
-                **Performance:**  
-                {best_model['Accuracy']:.1f}% Accuracy  
-                {best_model['F1-Score']:.3f} F1-Score  
-                {best_model['Inference Latency (ms)']}ms Inference
-                
-                **Feature Set:**  
-                {st.session_state['selected_phase_run']}
-                """)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    # ============================
-    # EMPTY STATE MESSAGES
-    # ============================
-    
-    if st.session_state['scraped_df'].empty and st.session_state['df_results'].empty:
-        st.markdown("---")
-        st.header("Getting Started")
-        
-        guide_col1, guide_col2, guide_col3 = st.columns(3)
+        guide_col1, guide_col2 = st.columns(2)
         
         with guide_col1:
             st.markdown("""
             <div class="card">
-            <h3>Step 1: Collect Data</h3>
-            <p>Use the Politifact scraper to gather training data. Select a date range and click "Scrape Politifact Data".</p>
-            <ul>
-                <li>Choose recent dates for current trends</li>
-                <li>Allow 1-2 minutes for scraping</li>
-                <li>Data is cached for repeated use</li>
-            </ul>
+            <h3>Quick Start</h3>
+            <ol>
+                <li><strong>Data Collection</strong>: Navigate to Data Collection tab and scrape Politifact data</li>
+                <li><strong>Model Training</strong>: Go to Model Training and configure your analysis</li>
+                <li><strong>Benchmark Testing</strong>: Validate models with real-world data</li>
+                <li><strong>Results Analysis</strong>: Review performance metrics and insights</li>
+            </ol>
             </div>
             """, unsafe_allow_html=True)
         
         with guide_col2:
             st.markdown("""
             <div class="card">
-            <h3>Step 2: Configure Analysis</h3>
-            <p>Select an NLP feature extraction method and run the model analysis:</p>
-            <div class="feature-pill">Lexical</div>
-            <div class="feature-pill">Syntactic</div>
-            <div class="feature-pill">Semantic</div>
-            <div class="feature-pill">Discourse</div>
-            <div class="feature-pill">Pragmatic</div>
-            <p>Each method extracts different linguistic features for classification.</p>
-            </div>
+            <h3>Current Status</h3>
             """, unsafe_allow_html=True)
+            
+            # Dynamic status display
+            if not st.session_state['scraped_df'].empty:
+                st.success(f"Data: {len(st.session_state['scraped_df'])} claims loaded")
+            else:
+                st.warning("Data: No data collected yet")
+                
+            if st.session_state['trained_models']:
+                st.success(f"Models: {len(st.session_state['trained_models'])} models trained")
+            else:
+                st.warning("Models: No models trained yet")
+                
+            if not st.session_state['google_benchmark_results'].empty:
+                st.success("Benchmark: Testing complete")
+            else:
+                st.info("Benchmark: Ready for testing")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+    
+    # DATA COLLECTION PAGE
+    elif page == "Data Collection":
+        st.markdown("""
+        <div class="main-header">
+            <h1>Data Collection</h1>
+            <h3>Gather Training Data from Politifact Archives</h3>
+        </div>
+        """, unsafe_allow_html=True)
         
-        with guide_col3:
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("Politifact Archive Scraper")
+            
+            min_date = pd.to_datetime('2007-01-01')
+            max_date = pd.to_datetime('today').normalize()
+
+            date_col1, date_col2 = st.columns(2)
+            with date_col1:
+                start_date = st.date_input("Start Date", min_value=min_date, max_value=max_date, value=pd.to_datetime('2023-01-01'))
+            with date_col2:
+                end_date = st.date_input("End Date", min_value=min_date, max_value=max_date, value=max_date)
+
+            if st.button("Scrape Politifact Data", key="scrape_btn", use_container_width=True):
+                if start_date > end_date:
+                    st.error("Start date must be before end date")
+                else:
+                    with st.spinner("Scraping political claims..."):
+                        scraped_df = scrape_data_by_date_range(pd.to_datetime(start_date), pd.to_datetime(end_date))
+                    
+                    if not scraped_df.empty:
+                        st.session_state['scraped_df'] = scraped_df
+                        st.markdown(f'<div class="success-box">Successfully scraped {len(scraped_df)} claims!</div>', unsafe_allow_html=True)
+                    else:
+                        st.warning("No data found. Try adjusting date range.")
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Data preview
+            if not st.session_state['scraped_df'].empty:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.subheader("Data Preview")
+                st.dataframe(st.session_state['scraped_df'].head(10), use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("Data Statistics")
+            
+            if not st.session_state['scraped_df'].empty:
+                df = st.session_state['scraped_df']
+                st.metric("Total Claims", len(df))
+                
+                # Label distribution
+                st.subheader("Label Distribution")
+                label_counts = df['label'].value_counts()
+                for label, count in label_counts.items():
+                    st.write(f"**{label}**: {count}")
+            else:
+                st.info("No data available. Scrape some data first!")
+            st.markdown('</div>', unsafe_allow_html=True)
+    
+    # MODEL TRAINING PAGE
+    elif page == "Model Training":
+        st.markdown("""
+        <div class="main-header">
+            <h1>Model Training</h1>
+            <h3>Configure and Train Machine Learning Models</h3>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("Training Configuration")
+            
+            if st.session_state['scraped_df'].empty:
+                st.warning("Please collect data first from the Data Collection page!")
+            else:
+                phases = [
+                    "Lexical & Morphological",
+                    "Syntactic", 
+                    "Semantic",
+                    "Discourse",
+                    "Pragmatic"
+                ]
+                selected_phase = st.selectbox("Feature Extraction Method:", phases, key='selected_phase')
+                
+                # Feature descriptions
+                feature_descriptions = {
+                    "Lexical & Morphological": "Word-level analysis: lemmatization, stopword removal, n-grams",
+                    "Syntactic": "Grammar structure: part-of-speech tags, sentence patterns", 
+                    "Semantic": "Meaning analysis: sentiment polarity, subjectivity scoring",
+                    "Discourse": "Text structure: sentence count, discourse markers",
+                    "Pragmatic": "Intent analysis: modal verbs, question marks, emphasis markers"
+                }
+                
+                st.caption(f"*{feature_descriptions[selected_phase]}*")
+                
+                if st.button("Run Model Analysis", key="analyze_btn", use_container_width=True):
+                    with st.spinner(f"Training 4 models with {N_SPLITS}-Fold CV..."):
+                        df_results, trained_models, trained_vectorizer = evaluate_models(st.session_state['scraped_df'], selected_phase)
+                        st.session_state['df_results'] = df_results
+                        st.session_state['trained_models'] = trained_models
+                        st.session_state['trained_vectorizer'] = trained_vectorizer
+                        st.session_state['selected_phase_run'] = selected_phase
+                        st.markdown('<div class="success-box">Analysis complete! Results ready in Results & Analysis page.</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("Model Information")
             st.markdown("""
-            <div class="card">
-            <h3>Step 3: Real-World Test</h3>
-            <p>Benchmark your models against live Google Fact Check data:</p>
-            <ul>
-                <li>Tests generalization to unseen data</li>
-                <li>Uses real-time fact checks</li>
-                <li>Compares performance deltas</li>
-            </ul>
-            <p><em>Requires Google API key in secrets.toml</em></p>
-            </div>
-            """, unsafe_allow_html=True)
+            **Available Models:**
+            - Naive Bayes
+            - Decision Tree  
+            - Logistic Regression
+            - SVM
+            
+            **Training Features:**
+            - 5-Fold Cross Validation
+            - SMOTE for imbalance
+            - Multiple NLP phases
+            - Performance metrics
+            """)
+            
+            if st.session_state['trained_models']:
+                st.success(f"{len(st.session_state['trained_models'])} models trained")
+                st.info(f"Last phase: {st.session_state.get('selected_phase_run', 'N/A')}")
+            st.markdown('</div>', unsafe_allow_html=True)
+    
+    # BENCHMARK TESTING PAGE
+    elif page == "Benchmark Testing":
+        st.markdown("""
+        <div class="main-header">
+            <h1>Benchmark Testing</h1>
+            <h3>Validate Models with Real-World Fact Check Data</h3>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("Google Fact Check API Integration")
+        
+        bench_col1, bench_col2, bench_col3 = st.columns([2,2,1])
+        
+        with bench_col1:
+            num_google_claims = st.slider(
+                "Number of test claims:",
+                min_value=10,
+                max_value=500,
+                value=100,
+                step=10,
+                key='num_google_claims'
+            )
+        
+        with bench_col2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("Run Google Benchmark", key="benchmark_btn", use_container_width=True):
+                # Pre-flight checks
+                if not st.session_state.get('trained_models'):
+                    st.error("Please train models first in the Model Training page!")
+                elif 'GOOGLE_API_KEY' not in st.secrets:
+                    st.error("Google API key not found in secrets.toml")
+                else:
+                    with st.spinner('Fetching live fact-check data...'):
+                        api_key = st.secrets["GOOGLE_API_KEY"]
+                        api_results = fetch_google_claims(api_key, num_google_claims)
+                        google_df = process_and_map_google_claims(api_results)
+
+                        if not google_df.empty:
+                            trained_models = st.session_state['trained_models']
+                            trained_vectorizer = st.session_state['trained_vectorizer']
+                            selected_phase_run = st.session_state['selected_phase_run']
+                            benchmark_results_df = run_google_benchmark(google_df, trained_models, trained_vectorizer, selected_phase_run)
+                            st.session_state['google_benchmark_results'] = benchmark_results_df
+                            st.session_state['google_df'] = google_df
+                            st.markdown(f'<div class="success-box">Benchmark complete! Tested on {len(google_df)} Google claims.</div>', unsafe_allow_html=True)
+        
+        with bench_col3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.caption("Tests trained models against live fact-check data")
+        
+        # Benchmark results preview
+        if not st.session_state['google_benchmark_results'].empty:
+            st.subheader("Benchmark Results Preview")
+            st.dataframe(st.session_state['google_benchmark_results'], use_container_width=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # RESULTS & ANALYSIS PAGE
+    elif page == "Results & Analysis":
+        st.markdown("""
+        <div class="main-header">
+            <h1>Results & Analysis</h1>
+            <h3>Comprehensive Performance Metrics and Insights</h3>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.session_state['df_results'].empty:
+            st.warning("No results available. Please train models first in the Model Training page!")
+        else:
+            # Main results section
+            st.header("Model Performance Results")
+            
+            # Model Metrics in Cards
+            results_col1, results_col2, results_col3, results_col4 = st.columns(4)
+            df_results = st.session_state['df_results']
+            
+            metrics_data = []
+            for _, row in df_results.iterrows():
+                metrics_data.append({
+                    'model': row['Model'],
+                    'accuracy': row['Accuracy'],
+                    'f1': row['F1-Score'],
+                    'training_time': row['Training Time (s)']
+                })
+            
+            for i, metric in enumerate(metrics_data):
+                col = [results_col1, results_col2, results_col3, results_col4][i]
+                with col:
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <h3>{metric['model']}</h3>
+                        <h2>{metric['accuracy']:.1f}%</h2>
+                        <p>F1: {metric['f1']:.3f} | Time: {metric['training_time']}s</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            # Detailed Results and Visualizations
+            st.markdown("---")
+            viz_col1, viz_col2 = st.columns(2)
+            
+            with viz_col1:
+                st.subheader("Performance Metrics")
+                chart_metric = st.selectbox(
+                    "Select metric to visualize:",
+                    ['Accuracy', 'F1-Score', 'Precision', 'Recall', 'Training Time (s)', 'Inference Latency (ms)'],
+                    key='chart_metric'
+                )
+                
+                chart_data = df_results[['Model', chart_metric]].set_index('Model')
+                st.bar_chart(chart_data)
+            
+            with viz_col2:
+                st.subheader("Speed vs Accuracy Trade-off")
+                
+                fig, ax = plt.subplots(figsize=(8, 6))
+                colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
+                
+                for i, (_, row) in enumerate(df_results.iterrows()):
+                    ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], 
+                              s=200, alpha=0.7, color=colors[i], label=row['Model'])
+                    ax.annotate(row['Model'], 
+                               (row['Inference Latency (ms)'] + 5, row['Accuracy']), 
+                               fontsize=9, alpha=0.8)
+                
+                ax.set_xlabel('Inference Latency (ms)')
+                ax.set_ylabel('Accuracy (%)')
+                ax.set_title('Model Performance: Speed vs Accuracy')
+                ax.grid(True, alpha=0.3)
+                ax.legend()
+                st.pyplot(fig)
+
+            # Google Benchmark Results
+            if not st.session_state['google_benchmark_results'].empty:
+                st.markdown("---")
+                st.header("Google Fact Check Benchmark")
+                
+                google_results = st.session_state['google_benchmark_results']
+                politifacts_results = st.session_state['df_results']
+                
+                # Comparison metrics
+                st.subheader("Performance Comparison")
+                comp_col1, comp_col2, comp_col3, comp_col4 = st.columns(4)
+                
+                for idx, (_, row) in enumerate(google_results.iterrows()):
+                    model_name = row['Model']
+                    google_accuracy = row['Accuracy']
+                    
+                    # Find corresponding Politifacts accuracy
+                    politifacts_row = politifacts_results[politifacts_results['Model'] == model_name]
+                    if not politifacts_row.empty:
+                        politifacts_accuracy = politifacts_row['Accuracy'].values[0]
+                        delta = google_accuracy - politifacts_accuracy
+                        delta_color = "normal" if delta >= 0 else "inverse"
+                    else:
+                        delta = None
+                        delta_color = "off"
+                    
+                    col = [comp_col1, comp_col2, comp_col3, comp_col4][idx]
+                    with col:
+                        if delta is not None:
+                            st.metric(
+                                label=f"{model_name}",
+                                value=f"{google_accuracy:.1f}%",
+                                delta=f"{delta:+.1f}%",
+                                delta_color=delta_color
+                            )
+                        else:
+                            st.metric(
+                                label=f"{model_name}",
+                                value=f"{google_accuracy:.1f}%"
+                            )
+
+            # HUMOROUS CRITIQUE SECTION
+            st.markdown("---")
+            st.header("AI Performance Review")
+            
+            critique_col1, critique_col2 = st.columns([2, 1])
+            
+            with critique_col1:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                critique_text = generate_humorous_critique(
+                    st.session_state['df_results'], 
+                    st.session_state['selected_phase_run']
+                )
+                st.markdown(critique_text)
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with critique_col2:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.subheader("Winner's Circle")
+                if not st.session_state['df_results'].empty:
+                    best_model = st.session_state['df_results'].loc[st.session_state['df_results']['F1-Score'].idxmax()]
+                    st.markdown(f"""
+                    **Champion Model:**  
+                    **{best_model['Model']}**
+                    
+                    **Performance:**  
+                    {best_model['Accuracy']:.1f}% Accuracy  
+                    {best_model['F1-Score']:.3f} F1-Score  
+                    {best_model['Inference Latency (ms)']}ms Inference
+                    
+                    **Feature Set:**  
+                    {st.session_state['selected_phase_run']}
+                    """)
+                st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Run App ---
 if __name__ == '__main__':
