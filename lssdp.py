@@ -733,247 +733,252 @@ def app():
         initial_sidebar_state='expanded'
     )
 
-    # Custom CSS for ultra light theme with maximum visibility
+    # Custom CSS for Blue Theme with White/Black Fonts
     st.markdown("""
     <style>
-    /* Ultra Light Theme - Maximum Visibility */
+    /* Blue Theme with Maximum Contrast */
     :root {
-        --primary: #0066cc;
-        --secondary: #009933;
-        --accent: #cc0000;
-        --background: #ffffff;
-        --surface: #fafafa;
-        --text: #000000;
-        --text-secondary: #333333;
-        --border: #dddddd;
-        --success: #28a745;
-        --warning: #ffc107;
-        --info: #17a2b8;
+        --primary-blue: #1e3a8a;
+        --dark-blue: #1e40af;
+        --medium-blue: #3b82f6;
+        --light-blue: #dbeafe;
+        --white: #ffffff;
+        --black: #000000;
+        --gray: #f8fafc;
+        --dark-gray: #374151;
     }
     
-    /* Main content background - Pure White */
+    /* Main content background - Light Blue */
     .main .block-container {
-        background-color: #ffffff !important;
-        color: #000000 !important;
+        background-color: var(--light-blue) !important;
+        color: var(--black) !important;
     }
     
     /* Headers with maximum contrast */
     h1, h2, h3, h4, h5, h6 {
-        color: #000000 !important;
+        color: var(--black) !important;
         font-weight: 700;
-        text-shadow: none !important;
     }
     
-    /* All text elements - Pure Black */
+    /* All text elements - Black for maximum visibility */
     p, div, span, li, td, th, label, .stMarkdown, .stCaption, .stText {
-        color: #000000 !important;
+        color: var(--black) !important;
     }
     
-    /* Sidebar styling - Light Gray */
+    /* Sidebar styling - Dark Blue */
     .css-1d391kg, .css-1lcbmhc, .sidebar .sidebar-content {
-        background-color: #f8f9fa !important;
-        color: #000000 !important;
+        background-color: var(--primary-blue) !important;
+        color: var(--white) !important;
     }
     
-    /* Sidebar text */
+    /* Sidebar text - White for contrast against blue */
     .sidebar .sidebar-content * {
-        color: #000000 !important;
+        color: var(--white) !important;
     }
     
-    /* Cards with light background and dark text */
+    /* Main header - Dark Blue with White text */
     .main-header {
-        background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+        background: linear-gradient(135deg, var(--primary-blue) 0%, var(--dark-blue) 100%);
         padding: 2rem;
         border-radius: 10px;
         margin-bottom: 2rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        border: 2px solid #0066cc;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        border: 2px solid var(--medium-blue);
     }
     
     .main-header h1 {
-        color: #000000 !important;
+        color: var(--white) !important;
         font-size: 2.5rem;
         font-weight: 800;
         margin-bottom: 0.5rem;
         text-align: center;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
     }
     
     .main-header h3 {
-        color: #000000 !important;
+        color: var(--white) !important;
         font-size: 1.1rem;
         text-align: center;
-        font-weight: 500;
+        font-weight: 400;
     }
     
+    /* Cards - White background with Black text */
     .card {
-        background: #ffffff;
+        background: var(--white);
         padding: 1.5rem;
         border-radius: 8px;
-        border-left: 4px solid #0066cc;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        border-left: 4px solid var(--medium-blue);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         margin-bottom: 1rem;
-        border: 1px solid #dddddd;
-        color: #000000 !important;
+        border: 1px solid var(--medium-blue);
+        color: var(--black) !important;
     }
     
     .card h3, .card h4, .card p, .card li, .card span, .card div {
-        color: #000000 !important;
+        color: var(--black) !important;
     }
     
+    /* Metric cards - White with Blue border */
     .metric-card {
-        background: #ffffff;
+        background: var(--white);
         padding: 1rem;
         border-radius: 8px;
         text-align: center;
-        border: 2px solid #0066cc;
-        color: #000000 !important;
+        border: 2px solid var(--primary-blue);
+        color: var(--black) !important;
         box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
     
     .metric-card h3, .metric-card h2, .metric-card p {
-        color: #000000 !important;
+        color: var(--black) !important;
         margin: 0.5rem 0;
     }
     
-    /* Buttons with good contrast */
+    /* Buttons - Blue background with White text */
     .stButton>button {
-        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
-        color: #ffffff !important;
+        background: linear-gradient(135deg, var(--primary-blue) 0%, var(--dark-blue) 100%);
+        color: var(--white) !important;
         border: none;
         padding: 0.7rem 1.5rem;
         border-radius: 6px;
         font-weight: 600;
         transition: all 0.3s ease;
         width: 100%;
-        border: 1px solid #004499;
+        border: 1px solid var(--dark-blue);
     }
     
     .stButton>button:hover {
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0,102,204,0.3);
-        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(30, 58, 138, 0.4);
+        color: var(--white) !important;
     }
     
-    /* Feature pills */
+    /* Feature pills - Blue with White text */
     .feature-pill {
-        background: #0066cc;
-        color: #ffffff !important;
+        background: var(--primary-blue);
+        color: var(--white) !important;
         padding: 0.3rem 0.8rem;
         border-radius: 16px;
         font-size: 0.8rem;
         margin: 0.2rem;
         display: inline-block;
-        border: 1px solid #004499;
+        border: 1px solid var(--dark-blue);
     }
     
-    /* Status boxes */
+    /* Status boxes - Colored backgrounds with Black text */
     .success-box {
-        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-        color: #000000 !important;
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        color: var(--black) !important;
         padding: 1rem;
         border-radius: 8px;
         margin: 1rem 0;
-        border: 2px solid #28a745;
+        border: 2px solid #16a34a;
     }
     
     .warning-box {
-        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-        color: #000000 !important;
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        color: var(--black) !important;
         padding: 1rem;
         border-radius: 8px;
         margin: 1rem 0;
-        border: 2px solid #ffc107;
+        border: 2px solid #d97706;
     }
     
     .info-box {
-        background: linear-gradient(135deg, #d1ecf1 0%, #b8e2eb 100%);
-        color: #000000 !important;
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+        color: var(--black) !important;
         padding: 1rem;
         border-radius: 8px;
         margin: 1rem 0;
-        border: 2px solid #17a2b8;
+        border: 2px solid var(--medium-blue);
     }
     
-    /* Dataframes and tables */
+    /* Dataframes and tables - White background with Black text */
     .dataframe {
-        color: #000000 !important;
-        background-color: #ffffff !important;
+        color: var(--black) !important;
+        background-color: var(--white) !important;
     }
     
     .dataframe th {
-        background-color: #f8f9fa !important;
-        color: #000000 !important;
+        background-color: var(--primary-blue) !important;
+        color: var(--white) !important;
         font-weight: 700;
     }
     
     .dataframe td {
-        background-color: #ffffff !important;
-        color: #000000 !important;
+        background-color: var(--white) !important;
+        color: var(--black) !important;
     }
     
     /* Streamlit native elements */
     .stSelectbox, .stSlider, .stDateInput, .stRadio {
-        color: #000000 !important;
+        color: var(--black) !important;
     }
     
     .stSelectbox label, .stSlider label, .stDateInput label, .stRadio label {
-        color: #000000 !important;
+        color: var(--black) !important;
         font-weight: 600;
     }
     
     /* Make ALL text clearly visible */
     .stMarkdown, .stCaption, .stText, .stCode {
-        color: #000000 !important;
+        color: var(--black) !important;
     }
     
     /* Ensure metric components are visible */
     [data-testid="metric-container"] {
-        color: #000000 !important;
-        background-color: #ffffff !important;
+        color: var(--black) !important;
+        background-color: var(--white) !important;
     }
     
     [data-testid="metric-container"] label {
-        color: #000000 !important;
+        color: var(--black) !important;
         font-weight: 600;
     }
     
     [data-testid="metric-container"] div {
-        color: #000000 !important;
+        color: var(--black) !important;
         font-weight: 700;
     }
     
     /* Input fields */
     .stTextInput input, .stNumberInput input, .stTextArea textarea {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        border: 1px solid #cccccc !important;
+        background-color: var(--white) !important;
+        color: var(--black) !important;
+        border: 1px solid var(--medium-blue) !important;
     }
     
     /* Expander */
     .streamlit-expanderHeader {
-        background-color: #f8f9fa !important;
-        color: #000000 !important;
+        background-color: var(--white) !important;
+        color: var(--black) !important;
         font-weight: 600;
+        border: 1px solid var(--medium-blue);
     }
     
     /* Radio buttons */
     .stRadio label {
-        color: #000000 !important;
+        color: var(--black) !important;
     }
     
     /* Checkboxes */
     .stCheckbox label {
-        color: #000000 !important;
+        color: var(--black) !important;
     }
     
     /* Progress bars */
     .stProgress > div > div {
-        background-color: #0066cc !important;
+        background-color: var(--primary-blue) !important;
     }
     
-    /* Force all text to be black */
-    * {
-        color: #000000 !important;
+    /* Force all main content text to be black */
+    .main * {
+        color: var(--black) !important;
+    }
+    
+    /* Specific sidebar text to be white */
+    .sidebar * {
+        color: var(--white) !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -997,9 +1002,9 @@ def app():
     # ============================
     
     st.sidebar.markdown("""
-    <div style='text-align: center; padding: 1rem 0; border-bottom: 2px solid #0066cc; margin-bottom: 1rem;'>
-        <h2 style='color: #000000; margin-bottom: 0.5rem; font-weight: 800;'>FactChecker</h2>
-        <p style='color: #000000; font-size: 0.9rem; margin: 0; font-weight: 500;'>AI-Powered Fact-Checking Platform</p>
+    <div style='text-align: center; padding: 1rem 0; border-bottom: 2px solid #3b82f6; margin-bottom: 1rem;'>
+        <h2 style='color: #ffffff; margin-bottom: 0.5rem; font-weight: 800;'>FactChecker</h2>
+        <p style='color: #ffffff; font-size: 0.9rem; margin: 0; font-weight: 500;'>AI-Powered Fact-Checking Platform</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1408,7 +1413,7 @@ def app():
                 st.subheader("Speed vs Accuracy Trade-off")
                 
                 fig, ax = plt.subplots(figsize=(8, 6))
-                colors = ['#0066cc', '#009933', '#cc0000', '#ff9900']
+                colors = ['#1e3a8a', '#3b82f6', '#1e40af', '#60a5fa']
                 
                 for i, (_, row) in enumerate(df_results.iterrows()):
                     ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], 
