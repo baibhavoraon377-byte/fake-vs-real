@@ -733,252 +733,269 @@ def app():
         initial_sidebar_state='expanded'
     )
 
-    # Custom CSS for Blue Theme with White/Black Fonts
+    # Custom CSS for Amazon Prime Inspired Dark Theme
     st.markdown("""
     <style>
-    /* Blue Theme with Maximum Contrast */
+    /* Amazon Prime Inspired Dark Theme */
     :root {
-        --primary-blue: #1e3a8a;
-        --dark-blue: #1e40af;
-        --medium-blue: #3b82f6;
-        --light-blue: #dbeafe;
-        --white: #ffffff;
-        --black: #000000;
-        --gray: #f8fafc;
-        --dark-gray: #374151;
+        --prime-dark: #0f171e;
+        --prime-darker: #1a242f;
+        --prime-blue: #00a8e1;
+        --prime-light-blue: #00c8ff;
+        --prime-gray: #2a3f5f;
+        --prime-light-gray: #7a8ca0;
+        --prime-white: #ffffff;
+        --prime-text: #e6e6e6;
     }
     
-    /* Main content background - Light Blue */
+    /* Main content background - Prime Dark */
     .main .block-container {
-        background-color: var(--light-blue) !important;
-        color: var(--black) !important;
+        background-color: var(--prime-dark) !important;
+        color: var(--prime-text) !important;
     }
     
-    /* Headers with maximum contrast */
+    /* Headers with Prime Blue accent */
     h1, h2, h3, h4, h5, h6 {
-        color: var(--black) !important;
-        font-weight: 700;
+        color: var(--prime-white) !important;
+        font-weight: 600;
     }
     
-    /* All text elements - Black for maximum visibility */
+    /* All text elements - Light Gray */
     p, div, span, li, td, th, label, .stMarkdown, .stCaption, .stText {
-        color: var(--black) !important;
+        color: var(--prime-text) !important;
     }
     
-    /* Sidebar styling - Dark Blue */
+    /* Sidebar styling - Darker Prime */
     .css-1d391kg, .css-1lcbmhc, .sidebar .sidebar-content {
-        background-color: var(--primary-blue) !important;
-        color: var(--white) !important;
+        background-color: var(--prime-darker) !important;
+        color: var(--prime-text) !important;
+        border-right: 1px solid var(--prime-gray);
     }
     
-    /* Sidebar text - White for contrast against blue */
+    /* Sidebar text */
     .sidebar .sidebar-content * {
-        color: var(--white) !important;
+        color: var(--prime-text) !important;
     }
     
-    /* Main header - Dark Blue with White text */
+    /* Main header - Prime Blue Gradient */
     .main-header {
-        background: linear-gradient(135deg, var(--primary-blue) 0%, var(--dark-blue) 100%);
+        background: linear-gradient(135deg, var(--prime-blue) 0%, var(--prime-light-blue) 100%);
         padding: 2rem;
-        border-radius: 10px;
+        border-radius: 8px;
         margin-bottom: 2rem;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        border: 2px solid var(--medium-blue);
+        box-shadow: 0 4px 12px rgba(0, 168, 225, 0.3);
+        border: none;
     }
     
     .main-header h1 {
-        color: var(--white) !important;
+        color: var(--prime-white) !important;
         font-size: 2.5rem;
-        font-weight: 800;
+        font-weight: 700;
         margin-bottom: 0.5rem;
         text-align: center;
         text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
     }
     
     .main-header h3 {
-        color: var(--white) !important;
+        color: var(--prime-white) !important;
         font-size: 1.1rem;
         text-align: center;
         font-weight: 400;
+        opacity: 0.9;
     }
     
-    /* Cards - White background with Black text */
+    /* Cards - Dark Gray with subtle borders */
     .card {
-        background: var(--white);
+        background: var(--prime-darker);
         padding: 1.5rem;
         border-radius: 8px;
-        border-left: 4px solid var(--medium-blue);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border: 1px solid var(--prime-gray);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         margin-bottom: 1rem;
-        border: 1px solid var(--medium-blue);
-        color: var(--black) !important;
+        color: var(--prime-text) !important;
+        transition: all 0.3s ease;
+    }
+    
+    .card:hover {
+        border-color: var(--prime-blue);
+        box-shadow: 0 4px 16px rgba(0, 168, 225, 0.2);
     }
     
     .card h3, .card h4, .card p, .card li, .card span, .card div {
-        color: var(--black) !important;
+        color: var(--prime-text) !important;
     }
     
-    /* Metric cards - White with Blue border */
+    /* Metric cards - Prime Dark with Blue accent */
     .metric-card {
-        background: var(--white);
+        background: var(--prime-darker);
         padding: 1rem;
         border-radius: 8px;
         text-align: center;
-        border: 2px solid var(--primary-blue);
-        color: var(--black) !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        border: 2px solid var(--prime-blue);
+        color: var(--prime-text) !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0, 168, 225, 0.3);
     }
     
     .metric-card h3, .metric-card h2, .metric-card p {
-        color: var(--black) !important;
+        color: var(--prime-text) !important;
         margin: 0.5rem 0;
     }
     
-    /* Buttons - Blue background with White text */
+    .metric-card h2 {
+        color: var(--prime-blue) !important;
+        font-size: 1.8rem;
+        font-weight: 700;
+    }
+    
+    /* Buttons - Prime Blue Gradient */
     .stButton>button {
-        background: linear-gradient(135deg, var(--primary-blue) 0%, var(--dark-blue) 100%);
-        color: var(--white) !important;
+        background: linear-gradient(135deg, var(--prime-blue) 0%, var(--prime-light-blue) 100%);
+        color: var(--prime-white) !important;
         border: none;
         padding: 0.7rem 1.5rem;
         border-radius: 6px;
         font-weight: 600;
         transition: all 0.3s ease;
         width: 100%;
-        border: 1px solid var(--dark-blue);
+        box-shadow: 0 2px 6px rgba(0, 168, 225, 0.3);
     }
     
     .stButton>button:hover {
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(30, 58, 138, 0.4);
-        color: var(--white) !important;
+        box-shadow: 0 4px 12px rgba(0, 168, 225, 0.4);
+        color: var(--prime-white) !important;
     }
     
-    /* Feature pills - Blue with White text */
+    /* Feature pills - Prime Blue */
     .feature-pill {
-        background: var(--primary-blue);
-        color: var(--white) !important;
+        background: var(--prime-blue);
+        color: var(--prime-white) !important;
         padding: 0.3rem 0.8rem;
         border-radius: 16px;
         font-size: 0.8rem;
         margin: 0.2rem;
         display: inline-block;
-        border: 1px solid var(--dark-blue);
+        border: 1px solid var(--prime-light-blue);
     }
     
-    /* Status boxes - Colored backgrounds with Black text */
+    /* Status boxes - Dark with colored borders */
     .success-box {
-        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-        color: var(--black) !important;
+        background: rgba(34, 197, 94, 0.1);
+        color: var(--prime-text) !important;
         padding: 1rem;
-        border-radius: 8px;
+        border-radius: 6px;
         margin: 1rem 0;
-        border: 2px solid #16a34a;
+        border: 1px solid #22c55e;
     }
     
     .warning-box {
-        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-        color: var(--black) !important;
+        background: rgba(245, 158, 11, 0.1);
+        color: var(--prime-text) !important;
         padding: 1rem;
-        border-radius: 8px;
+        border-radius: 6px;
         margin: 1rem 0;
-        border: 2px solid #d97706;
+        border: 1px solid #f59e0b;
     }
     
     .info-box {
-        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-        color: var(--black) !important;
+        background: rgba(59, 130, 246, 0.1);
+        color: var(--prime-text) !important;
         padding: 1rem;
-        border-radius: 8px;
+        border-radius: 6px;
         margin: 1rem 0;
-        border: 2px solid var(--medium-blue);
+        border: 1px solid var(--prime-blue);
     }
     
-    /* Dataframes and tables - White background with Black text */
+    /* Dataframes and tables - Dark theme */
     .dataframe {
-        color: var(--black) !important;
-        background-color: var(--white) !important;
+        color: var(--prime-text) !important;
+        background-color: var(--prime-darker) !important;
+        border: 1px solid var(--prime-gray);
     }
     
     .dataframe th {
-        background-color: var(--primary-blue) !important;
-        color: var(--white) !important;
-        font-weight: 700;
+        background-color: var(--prime-blue) !important;
+        color: var(--prime-white) !important;
+        font-weight: 600;
+        border: 1px solid var(--prime-gray);
     }
     
     .dataframe td {
-        background-color: var(--white) !important;
-        color: var(--black) !important;
+        background-color: var(--prime-darker) !important;
+        color: var(--prime-text) !important;
+        border: 1px solid var(--prime-gray);
     }
     
     /* Streamlit native elements */
     .stSelectbox, .stSlider, .stDateInput, .stRadio {
-        color: var(--black) !important;
+        color: var(--prime-text) !important;
     }
     
     .stSelectbox label, .stSlider label, .stDateInput label, .stRadio label {
-        color: var(--black) !important;
-        font-weight: 600;
-    }
-    
-    /* Make ALL text clearly visible */
-    .stMarkdown, .stCaption, .stText, .stCode {
-        color: var(--black) !important;
-    }
-    
-    /* Ensure metric components are visible */
-    [data-testid="metric-container"] {
-        color: var(--black) !important;
-        background-color: var(--white) !important;
-    }
-    
-    [data-testid="metric-container"] label {
-        color: var(--black) !important;
-        font-weight: 600;
-    }
-    
-    [data-testid="metric-container"] div {
-        color: var(--black) !important;
-        font-weight: 700;
+        color: var(--prime-text) !important;
+        font-weight: 500;
     }
     
     /* Input fields */
     .stTextInput input, .stNumberInput input, .stTextArea textarea {
-        background-color: var(--white) !important;
-        color: var(--black) !important;
-        border: 1px solid var(--medium-blue) !important;
+        background-color: var(--prime-darker) !important;
+        color: var(--prime-text) !important;
+        border: 1px solid var(--prime-gray) !important;
     }
     
     /* Expander */
     .streamlit-expanderHeader {
-        background-color: var(--white) !important;
-        color: var(--black) !important;
+        background-color: var(--prime-darker) !important;
+        color: var(--prime-text) !important;
         font-weight: 600;
-        border: 1px solid var(--medium-blue);
-    }
-    
-    /* Radio buttons */
-    .stRadio label {
-        color: var(--black) !important;
-    }
-    
-    /* Checkboxes */
-    .stCheckbox label {
-        color: var(--black) !important;
+        border: 1px solid var(--prime-gray);
     }
     
     /* Progress bars */
     .stProgress > div > div {
-        background-color: var(--primary-blue) !important;
+        background-color: var(--prime-blue) !important;
     }
     
-    /* Force all main content text to be black */
+    /* Radio and checkbox labels */
+    .stRadio label, .stCheckbox label {
+        color: var(--prime-text) !important;
+    }
+    
+    /* Metric containers */
+    [data-testid="metric-container"] {
+        color: var(--prime-text) !important;
+        background-color: var(--prime-darker) !important;
+    }
+    
+    [data-testid="metric-container"] label {
+        color: var(--prime-text) !important;
+        font-weight: 500;
+    }
+    
+    [data-testid="metric-container"] div {
+        color: var(--prime-blue) !important;
+        font-weight: 700;
+    }
+    
+    /* Make ALL text consistent in main content */
     .main * {
-        color: var(--black) !important;
+        color: var(--prime-text) !important;
     }
     
-    /* Specific sidebar text to be white */
-    .sidebar * {
-        color: var(--white) !important;
+    /* Specific styling for charts */
+    .stChart {
+        background-color: var(--prime-darker) !important;
+    }
+    
+    /* Divider lines */
+    hr {
+        border-color: var(--prime-gray) !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1002,9 +1019,9 @@ def app():
     # ============================
     
     st.sidebar.markdown("""
-    <div style='text-align: center; padding: 1rem 0; border-bottom: 2px solid #3b82f6; margin-bottom: 1rem;'>
-        <h2 style='color: #ffffff; margin-bottom: 0.5rem; font-weight: 800;'>FactChecker</h2>
-        <p style='color: #ffffff; font-size: 0.9rem; margin: 0; font-weight: 500;'>AI-Powered Fact-Checking Platform</p>
+    <div style='text-align: center; padding: 1rem 0; border-bottom: 1px solid #2a3f5f; margin-bottom: 1rem;'>
+        <h2 style='color: #00a8e1; margin-bottom: 0.5rem; font-weight: 700;'>FactChecker</h2>
+        <p style='color: #7a8ca0; font-size: 0.9rem; margin: 0; font-weight: 400;'>AI-Powered Fact-Checking Platform</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1413,7 +1430,7 @@ def app():
                 st.subheader("Speed vs Accuracy Trade-off")
                 
                 fig, ax = plt.subplots(figsize=(8, 6))
-                colors = ['#1e3a8a', '#3b82f6', '#1e40af', '#60a5fa']
+                colors = ['#00a8e1', '#00c8ff', '#1a8cd8', '#2d9cdb']
                 
                 for i, (_, row) in enumerate(df_results.iterrows()):
                     ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], 
