@@ -74,76 +74,6 @@ stop_words = STOP_WORDS
 pragmatic_words = ["must", "should", "might", "could", "will", "?", "!"]
 
 # ============================
-# DEMO DATA FUNCTION
-# ============================
-
-def get_demo_google_claims():
-    """Provides demo fact-check data for testing without API key"""
-    demo_claims = [
-        {
-            'claim_text': 'The earth is flat and NASA is hiding the truth from us.',
-            'rating': 'False'
-        },
-        {
-            'claim_text': 'Vaccines are completely safe and effective for 95% of the population.',
-            'rating': 'Mostly True'
-        },
-        {
-            'claim_text': 'The moon landing was filmed in a Hollywood studio in 1969.',
-            'rating': 'False'
-        },
-        {
-            'claim_text': 'Climate change is primarily caused by human activities and carbon emissions.',
-            'rating': 'True'
-        },
-        {
-            'claim_text': 'You can cure COVID-19 by drinking bleach and taking horse medication.',
-            'rating': 'False'
-        },
-        {
-            'claim_text': 'Regular exercise and balanced diet improve overall health and longevity.',
-            'rating': 'True'
-        },
-        {
-            'claim_text': '5G towers spread coronavirus and should be taken down immediately.',
-            'rating': 'False'
-        },
-        {
-            'claim_text': 'The Great Wall of China is visible from space with the naked eye.',
-            'rating': 'Mostly False'
-        },
-        {
-            'claim_text': 'Solar energy has become more affordable and efficient in the last decade.',
-            'rating': 'True'
-        },
-        {
-            'claim_text': 'Bill Gates is using vaccines to implant microchips in people.',
-            'rating': 'Pants on Fire'
-        },
-        {
-            'claim_text': 'Drinking 8 glasses of water daily is essential for human health.',
-            'rating': 'Mostly True'
-        },
-        {
-            'claim_text': 'Sharks don\'t get cancer and their cartilage can cure it in humans.',
-            'rating': 'False'
-        },
-        {
-            'claim_text': 'Electric vehicles produce zero emissions and are completely eco-friendly.',
-            'rating': 'Mostly True'
-        },
-        {
-            'claim_text': 'Humans only use 10% of their brain capacity.',
-            'rating': 'False'
-        },
-        {
-            'claim_text': 'Antibiotics are effective against viral infections like flu and colds.',
-            'rating': 'False'
-        }
-    ]
-    return demo_claims
-
-# ============================
 # GOOGLE FACT CHECK API INTEGRATION
 # ============================
 
@@ -1132,6 +1062,15 @@ def app():
         st.session_state.clear()
         st.rerun()
     
+    # API Status section
+    with st.sidebar.expander("🔧 API Status"):
+        if 'GOOGLE_API_KEY' in st.secrets:
+            st.success("✅ Google API Key: Configured")
+            st.caption("Ready to fetch live data")
+        else:
+            st.error("❌ Google API Key: Missing")
+            st.info("Add GOOGLE_API_KEY to .streamlit/secrets.toml")
+    
     # Feature descriptions expander
     with st.sidebar.expander("Feature Descriptions"):
         st.markdown("""
@@ -1396,74 +1335,116 @@ def app():
         st.markdown("""
         <div class="main-header">
             <h1>Benchmark Testing</h1>
-            <h3>Validate Models with Real-World Fact Check Data</h3>
+            <h3>Validate Models with Real Google Fact Check API Data</h3>
         </div>
         """, unsafe_allow_html=True)
         
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("Fact Check Benchmark")
+        st.subheader("Google Fact Check API Integration")
         
-        # Mode selection
-        mode_col1, mode_col2 = st.columns(2)
-        with mode_col1:
-            use_demo = st.checkbox("🎯 Use Demo Mode (Recommended)", value=True, 
-                                  help="Test with sample fact-check data - no API key needed")
-        with mode_col2:
-            if not use_demo:
-                if 'GOOGLE_API_KEY' not in st.secrets:
-                    st.error("API Key not found in secrets.toml")
-                    st.info("Switch to Demo Mode or add your key to .streamlit/secrets.toml")
-                else:
-                    st.success("✅ API Key found!")
+        # Check for API key
+        if 'GOOGLE_API_KEY' not in st.secrets:
+            st.error("""
+            ## 🔑 Google API Key Required
+            
+            To use the Google Fact Check API benchmark, please add your API key to `.streamlit/secrets.toml`:
+            
+            ```toml
+            GOOGLE_API_KEY = "your_actual_api_key_here"
+            ```
+            
+            **How to get your API key:**
+            1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+            2. Enable "Fact Check Tools API"
+            3. Create an API key in Credentials
+            4. Add it to secrets.toml
+            """)
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
+        
+        # API key is available - show benchmark interface
+        st.success("✅ Google API Key found! Ready to fetch live fact-check data.")
         
         bench_col1, bench_col2, bench_col3 = st.columns([2,2,1])
         
         with bench_col1:
             num_claims = st.slider(
-                "Number of test claims:",
-                min_value=5,
-                max_value=50,
-                value=10,
-                step=5,
-                key='num_claims'
+                "Number of claims to fetch:",
+                min_value=10,
+                max_value=200,
+                value=50,
+                step=10,
+                key='num_claims',
+                help="Number of real fact-check claims to fetch from Google API"
             )
         
         with bench_col2:
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Run Benchmark Test", key="benchmark_btn", use_container_width=True):
+            if st.button("Fetch & Run Google Benchmark", key="benchmark_btn", use_container_width=True):
+                # Pre-flight checks
                 if not st.session_state.get('trained_models'):
                     st.error("Please train models first in the Model Training page!")
                 else:
-                    with st.spinner('Loading fact-check data...'):
-                        if use_demo:
-                            api_results = get_demo_google_claims()
-                            st.success("✅ Demo data loaded successfully!")
-                        else:
-                            api_key = st.secrets["GOOGLE_API_KEY"]
-                            api_results = fetch_google_claims(api_key, num_claims)
-                            if api_results:
-                                st.success(f"✅ Fetched {len(api_results)} claims from Google API!")
+                    with st.spinner('Fetching live data from Google Fact Check API...'):
+                        api_key = st.secrets["GOOGLE_API_KEY"]
+                        api_results = fetch_google_claims(api_key, num_claims)
                         
-                        google_df = process_and_map_google_claims(api_results)
+                        if api_results:
+                            st.success(f"✅ Successfully fetched {len(api_results)} claims from Google API!")
+                            google_df = process_and_map_google_claims(api_results)
 
-                        if not google_df.empty:
-                            trained_models = st.session_state['trained_models']
-                            trained_vectorizer = st.session_state['trained_vectorizer']
-                            selected_phase_run = st.session_state['selected_phase_run']
-                            benchmark_results_df = run_google_benchmark(google_df, trained_models, trained_vectorizer, selected_phase_run)
-                            st.session_state['google_benchmark_results'] = benchmark_results_df
-                            st.session_state['google_df'] = google_df
-                            st.markdown(f'<div class="success-box">✅ Benchmark complete! Tested on {len(google_df)} claims.</div>', unsafe_allow_html=True)
+                            if not google_df.empty:
+                                trained_models = st.session_state['trained_models']
+                                trained_vectorizer = st.session_state['trained_vectorizer']
+                                selected_phase_run = st.session_state['selected_phase_run']
+                                benchmark_results_df = run_google_benchmark(google_df, trained_models, trained_vectorizer, selected_phase_run)
+                                st.session_state['google_benchmark_results'] = benchmark_results_df
+                                st.session_state['google_df'] = google_df
+                                st.markdown(f'<div class="success-box">✅ Benchmark complete! Tested on {len(google_df)} real Google Fact Check claims.</div>', unsafe_allow_html=True)
+                            else:
+                                st.warning("No valid claims were processed after filtering.")
                         else:
-                            st.warning("No claims were processed. Try adjusting parameters.")
+                            st.error("Failed to fetch data from Google API. Please check your API key and internet connection.")
         
         with bench_col3:
             st.markdown("<br>", unsafe_allow_html=True)
-            st.caption("Tests models against fact-check data")
+            st.metric("API Status", "Ready" if 'GOOGLE_API_KEY' in st.secrets else "Missing")
+            st.caption("Using Google Fact Check API")
+        
+        # Show API usage information
+        with st.expander("🔧 API Information & Tips"):
+            st.markdown("""
+            **Google Fact Check API Details:**
+            - Fetches real-time fact-checked claims from various publishers
+            - Uses Google's Fact Check Tools API
+            - Returns claims with verified ratings (True, False, Mostly True, etc.)
+            
+            **Tips for Better Results:**
+            - Start with 20-50 claims for faster testing
+            - Use 100+ claims for more reliable benchmarks
+            - Ensure your models are trained before running benchmarks
+            - The API may return fewer claims than requested if limited data is available
+            """)
         
         # Benchmark results preview
         if not st.session_state['google_benchmark_results'].empty:
-            st.subheader("Benchmark Results")
+            st.markdown("---")
+            st.subheader("Google API Benchmark Results")
+            
+            # Show some stats about the fetched data
+            if not st.session_state['google_df'].empty:
+                google_df = st.session_state['google_df']
+                true_count = len(google_df[google_df['ground_truth'] == 1])
+                false_count = len(google_df[google_df['ground_truth'] == 0])
+                
+                stat_col1, stat_col2, stat_col3 = st.columns(3)
+                with stat_col1:
+                    st.metric("Total Claims", len(google_df))
+                with stat_col2:
+                    st.metric("True Claims", true_count)
+                with stat_col3:
+                    st.metric("False Claims", false_count)
+            
             st.dataframe(st.session_state['google_benchmark_results'], use_container_width=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1545,7 +1526,7 @@ def app():
             # Google Benchmark Results
             if not st.session_state['google_benchmark_results'].empty:
                 st.markdown("---")
-                st.header("Fact Check Benchmark Results")
+                st.header("Google Fact Check Benchmark Results")
                 
                 google_results = st.session_state['google_benchmark_results']
                 politifacts_results = st.session_state['df_results']
