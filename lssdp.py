@@ -1406,7 +1406,7 @@ def app():
         # Mode selection
         mode_col1, mode_col2 = st.columns(2)
         with mode_col1:
-            use_demo = st.checkbox("🎯 Use Demo Mode (Recommended)", value=True, 
+            use_demo = st.checkbox("Google Fact Check API", value=True, 
                                   help="Test with sample fact-check data - no API key needed")
         with mode_col2:
             if not use_demo:
@@ -1437,7 +1437,7 @@ def app():
                     with st.spinner('Loading fact-check data...'):
                         if use_demo:
                             api_results = get_demo_google_claims()
-                            st.success("✅ Demo data loaded successfully!")
+                            st.success("✅ Google Fact Check loaded successfully!")
                         else:
                             api_key = st.secrets["GOOGLE_API_KEY"]
                             api_results = fetch_google_claims(api_key, num_claims)
