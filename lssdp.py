@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -31,32 +30,11 @@ from scipy import sparse
 import io
 import os
 
-# ---- Visuals: Lottie support ----
-from streamlit_lottie import st_lottie  # new import for visuals (ensure package installed)
-
-# ------------------------------
-# Helpers for Lottie animations
-# ------------------------------
-def load_lottieurl(url: str):
-    """Load a lottie animation from a URL. Returns JSON dict or None."""
-    try:
-        r = requests.get(url, timeout=10)
-        if r.status_code == 200:
-            return r.json()
-    except Exception:
-        return None
-    return None
-
-# Example Lottie JSONs (replace with your preferred Lottie URLs if desired)
-LOTTIE_VERIFY_URL = "https://assets9.lottiefiles.com/packages/lf20_qp1q7mct.json"
-LOTTIE_SUCCESS_URL = "https://assets9.lottiefiles.com/packages/lf20_touohxv0.json"
-
-# -------------------------------------------------------------------
-# Existing configuration & constants (unchanged)
-# -------------------------------------------------------------------
+# --- Configuration ---
 SCRAPED_DATA_PATH = 'politifact_data.csv'
 N_SPLITS = 5
 
+# Google Fact Check API rating mappings (for binary classification)
 GOOGLE_TRUE_RATINGS = ["True", "Mostly True", "Accurate", "Correct"]
 GOOGLE_FALSE_RATINGS = ["False", "Mostly False", "Pants on Fire", "Pants on Fire!", "Fake", "Incorrect", "Baseless", "Misleading"] 
 
@@ -83,7 +61,7 @@ def load_spacy_model():
             nlp = spacy.load("en_core_web_sm")
             return nlp
         except:
-            st.error("Failed to download SpaCy model automatically. Please check your requirements.txt")
+            st.error("Failed to download spaCy model automatically. Please check your requirements.txt")
             raise e
 
 # Load resources outside main app flow
@@ -825,87 +803,281 @@ def generate_humorous_critique(df_results: pd.DataFrame, selected_phase: str) ->
 # ============================
 
 def app():
-    # --- Modern Theme Configuration (page-level)
+    # --- Modern Theme Configuration ---
     st.set_page_config(
         page_title='FactChecker: AI Fact-Checking Platform',
         layout='wide',
         initial_sidebar_state='expanded'
     )
 
-    # ---- Load Lottie assets (visuals only) ----
-    lottie_verify_json = load_lottieurl(LOTTIE_VERIFY_URL)
-    lottie_success_json = load_lottieurl(LOTTIE_SUCCESS_URL)
-
-    # ---- Concise CSS for Purple + Mint Pastel Visuals ----
+    # Custom CSS for Amazon Prime Inspired Dark Theme
     st.markdown("""
     <style>
-    :root{
-      --lavender-primary: #7C3AED;
-      --mint-accent: #34D399;
-      --background-light: #F3E8FF;
-      --white: #FFFFFF;
-      --text-dark: #1F2937;
-      --muted: #6B7280;
-      --lavender-medium: #DDD6FE;
+    /* Amazon Prime Inspired Dark Theme */
+    :root {
+        --prime-dark: #0f171e;
+        --prime-darker: #1a242f;
+        --prime-blue: #00a8e1;
+        --prime-light-blue: #00c8ff;
+        --prime-gray: #2a3f5f;
+        --prime-light-gray: #7a8ca0;
+        --prime-white: #ffffff;
+        --prime-text: #e6e6e6;
     }
+    
+    /* Main content background - Prime Dark */
     .main .block-container {
-      background-color: var(--background-light) !important;
-      color: var(--text-dark) !important;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      padding-top: 1.2rem;
-      padding-bottom: 2.0rem;
+        background-color: var(--prime-dark) !important;
+        color: var(--prime-text) !important;
     }
-    /* Header */
-    .main-header{
-      background: linear-gradient(135deg, rgba(124,58,237,0.95), rgba(139,92,246,0.95));
-      padding: 2rem;
-      border-radius: 12px;
-      color: white;
-      text-align:center;
-      box-shadow: 0 10px 30px rgba(124,58,237,0.08);
-      margin-bottom: 1.5rem;
+    
+    /* Headers with Prime Blue accent */
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--prime-white) !important;
+        font-weight: 600;
     }
-    .main-header h1{ margin:0; font-size:2.2rem; font-weight:700; }
-    .main-header h3{ margin:0; font-size:1rem; font-weight:400; opacity:0.95; }
-
-    /* Card */
-    .card{
-      background: var(--white);
-      border-radius: 14px;
-      padding: 1.25rem;
-      margin-bottom: 1.2rem;
-      box-shadow: 0 6px 20px rgba(124,58,237,0.06);
-      border: 1px solid var(--lavender-medium);
-      transition: all 0.18s ease;
+    
+    /* All text elements - Light Gray */
+    p, div, span, li, td, th, label, .stMarkdown, .stCaption, .stText {
+        color: var(--prime-text) !important;
     }
-    .card:hover{ transform: translateY(-4px); box-shadow: 0 12px 32px rgba(124,58,237,0.09); }
-
-    /* Buttons */
+    
+    /* Sidebar styling - Darker Prime */
+    .css-1d391kg, .css-1lcbmhc, .sidebar .sidebar-content {
+        background-color: var(--prime-darker) !important;
+        color: var(--prime-text) !important;
+        border-right: 1px solid var(--prime-gray);
+    }
+    
+    /* Sidebar text */
+    .sidebar .sidebar-content * {
+        color: var(--prime-text) !important;
+    }
+    
+    /* Main header - Prime Blue Gradient */
+    .main-header {
+        background: linear-gradient(135deg, var(--prime-blue) 0%, var(--prime-light-blue) 100%);
+        padding: 2rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 12px rgba(0, 168, 225, 0.3);
+        border: none;
+    }
+    
+    .main-header h1 {
+        color: var(--prime-white) !important;
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        text-align: center;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    }
+    
+    .main-header h3 {
+        color: var(--prime-white) !important;
+        font-size: 1.1rem;
+        text-align: center;
+        font-weight: 400;
+        opacity: 0.9;
+    }
+    
+    /* Cards - Dark Gray with subtle borders */
+    .card {
+        background: var(--prime-darker);
+        padding: 1.5rem;
+        border-radius: 8px;
+        border: 1px solid var(--prime-gray);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        margin-bottom: 1rem;
+        color: var(--prime-text) !important;
+        transition: all 0.3s ease;
+    }
+    
+    .card:hover {
+        border-color: var(--prime-blue);
+        box-shadow: 0 4px 16px rgba(0, 168, 225, 0.2);
+    }
+    
+    .card h3, .card h4, .card p, .card li, .card span, .card div {
+        color: var(--prime-text) !important;
+    }
+    
+    /* Metric cards - Prime Dark with Blue accent */
+    .metric-card {
+        background: var(--prime-darker);
+        padding: 1rem;
+        border-radius: 8px;
+        text-align: center;
+        border: 2px solid var(--prime-blue);
+        color: var(--prime-text) !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0, 168, 225, 0.3);
+    }
+    
+    .metric-card h3, .metric-card h2, .metric-card p {
+        color: var(--prime-text) !important;
+        margin: 0.5rem 0;
+    }
+    
+    .metric-card h2 {
+        color: var(--prime-blue) !important;
+        font-size: 1.8rem;
+        font-weight: 700;
+    }
+    
+    /* Buttons - Prime Blue Gradient */
     .stButton>button {
-      background: linear-gradient(90deg, var(--lavender-primary), var(--mint-accent)) !important;
-      color: white !important;
-      border-radius: 10px !important;
-      padding: 0.6rem 1rem !important;
-      font-weight:600 !important;
-      box-shadow: 0 6px 18px rgba(124,58,237,0.16) !important;
+        background: linear-gradient(135deg, var(--prime-blue) 0%, var(--prime-light-blue) 100%);
+        color: var(--prime-white) !important;
+        border: none;
+        padding: 0.7rem 1.5rem;
+        border-radius: 6px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        width: 100%;
+        box-shadow: 0 2px 6px rgba(0, 168, 225, 0.3);
     }
-    .stButton>button:hover { transform: translateY(-2px); }
-
+    
+    .stButton>button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 168, 225, 0.4);
+        color: var(--prime-white) !important;
+    }
+    
+    /* Feature pills - Prime Blue */
+    .feature-pill {
+        background: var(--prime-blue);
+        color: var(--prime-white) !important;
+        padding: 0.3rem 0.8rem;
+        border-radius: 16px;
+        font-size: 0.8rem;
+        margin: 0.2rem;
+        display: inline-block;
+        border: 1px solid var(--prime-light-blue);
+    }
+    
+    /* Status boxes - Dark with colored borders */
+    .success-box {
+        background: rgba(34, 197, 94, 0.1);
+        color: var(--prime-text) !important;
+        padding: 1rem;
+        border-radius: 6px;
+        margin: 1rem 0;
+        border: 1px solid #22c55e;
+    }
+    
+    .warning-box {
+        background: rgba(245, 158, 11, 0.1);
+        color: var(--prime-text) !important;
+        padding: 1rem;
+        border-radius: 6px;
+        margin: 1rem 0;
+        border: 1px solid #f59e0b;
+    }
+    
+    .info-box {
+        background: rgba(59, 130, 246, 0.1);
+        color: var(--prime-text) !important;
+        padding: 1rem;
+        border-radius: 6px;
+        margin: 1rem 0;
+        border: 1px solid var(--prime-blue);
+    }
+    
+    /* Dataframes and tables - Dark theme */
+    .dataframe {
+        color: var(--prime-text) !important;
+        background-color: var(--prime-darker) !important;
+        border: 1px solid var(--prime-gray);
+    }
+    
+    .dataframe th {
+        background-color: var(--prime-blue) !important;
+        color: var(--prime-white) !important;
+        font-weight: 600;
+        border: 1px solid var(--prime-gray);
+    }
+    
+    .dataframe td {
+        background-color: var(--prime-darker) !important;
+        color: var(--prime-text) !important;
+        border: 1px solid var(--prime-gray);
+    }
+    
+    /* Streamlit native elements */
+    .stSelectbox, .stSlider, .stDateInput, .stRadio {
+        color: var(--prime-text) !important;
+    }
+    
+    .stSelectbox label, .stSlider label, .stDateInput label, .stRadio label {
+        color: var(--prime-text) !important;
+        font-weight: 500;
+    }
+    
     /* Input fields */
-    .stTextInput>div>div>input { border-radius:10px !important; padding:10px !important; border:1px solid var(--lavender-medium) !important; background:white !important; color:var(--text-dark) !important; }
-
-    /* Metric cards */
-    .metric-card{ border-radius:12px; padding:1rem; background:var(--white); border:1px solid var(--lavender-medium); box-shadow: 0 6px 18px rgba(52,211,153,0.08); }
-
-    /* Progress bar */
-    .stProgress > div > div { background: linear-gradient(90deg, var(--lavender-primary), var(--mint-accent)) !important; }
-
-    /* Footer small text */
-    .app-footer { color: var(--muted); font-size:0.95rem; text-align:center; margin-top:1rem; }
+    .stTextInput input, .stNumberInput input, .stTextArea textarea {
+        background-color: var(--prime-darker) !important;
+        color: var(--prime-text) !important;
+        border: 1px solid var(--prime-gray) !important;
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background-color: var(--prime-darker) !important;
+        color: var(--prime-text) !important;
+        font-weight: 600;
+        border: 1px solid var(--prime-gray);
+    }
+    
+    /* Progress bars */
+    .stProgress > div > div {
+        background-color: var(--prime-blue) !important;
+    }
+    
+    /* Radio and checkbox labels */
+    .stRadio label, .stCheckbox label {
+        color: var(--prime-text) !important;
+    }
+    
+    /* Metric containers */
+    [data-testid="metric-container"] {
+        color: var(--prime-text) !important;
+        background-color: var(--prime-darker) !important;
+    }
+    
+    [data-testid="metric-container"] label {
+        color: var(--prime-text) !important;
+        font-weight: 500;
+    }
+    
+    [data-testid="metric-container"] div {
+        color: var(--prime-blue) !important;
+        font-weight: 700;
+    }
+    
+    /* Make ALL text consistent in main content */
+    .main * {
+        color: var(--prime-text) !important;
+    }
+    
+    /* Specific styling for charts */
+    .stChart {
+        background-color: var(--prime-darker) !important;
+    }
+    
+    /* Divider lines */
+    hr {
+        border-color: var(--prime-gray) !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-    # --- State Management (unchanged) ---
+    # --- State Management ---
     if 'scraped_df' not in st.session_state:
         st.session_state['scraped_df'] = pd.DataFrame()
     if 'df_results' not in st.session_state:
@@ -924,39 +1096,44 @@ def app():
     # ============================
     
     st.sidebar.markdown("""
-    <div style='text-align: center; padding: 1.0rem 0; border-bottom: 1px solid #EEE; margin-bottom: 1rem;'>
-        <h2 style='color: #7C3AED; margin-bottom: 0.2rem; font-weight: 700; font-size: 1.5rem;'>FactChecker</h2>
-        <p style='color: #6B7280; font-size: 0.9rem; margin: 0; font-weight: 500;'>AI-Powered Fact-Checking Platform</p>
+    <div style='text-align: center; padding: 1rem 0; border-bottom: 1px solid #2a3f5f; margin-bottom: 1rem;'>
+        <h2 style='color: #00a8e1; margin-bottom: 0.5rem; font-weight: 700;'>FactChecker</h2>
+        <p style='color: #7a8ca0; font-size: 0.9rem; margin: 0; font-weight: 400;'>AI-Powered Fact-Checking Platform</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Navigation (unchanged)
+    # Navigation
     page = st.sidebar.radio(
         "Navigation",
         ["Dashboard", "Data Collection", "Model Training", "Benchmark Testing", "Results & Analysis"],
         key='navigation'
     )
     
-    # Sidebar info panel (unchanged)
+    # Sidebar info panel
     st.sidebar.markdown("---")
     st.sidebar.markdown("### System Status")
-    data_status = "✅ Ready" if not st.session_state['scraped_df'].empty else "❌ No Data"
-    models_status = "✅ Trained" if st.session_state['trained_models'] else "❌ Not Trained"
-    benchmark_status = "✅ Complete" if not st.session_state['google_benchmark_results'].empty else "⏳ Pending"
+    
+    # Status indicators
+    data_status = "Ready" if not st.session_state['scraped_df'].empty else "No Data"
+    models_status = "Trained" if st.session_state['trained_models'] else "Not Trained"
+    benchmark_status = "Complete" if not st.session_state['google_benchmark_results'].empty else "Pending"
+    
     st.sidebar.markdown(f"""
-    <div style='background: #F3E8FF; padding: 0.8rem; border-radius: 10px; border: 1px solid #EEE;'>
-        <p style='margin: 0.2rem 0; font-weight: 500;'>{data_status}</p>
-        <p style='margin: 0.2rem 0; font-weight: 500;'>{models_status}</p>
-        <p style='margin: 0.2rem 0; font-weight: 500;'>{benchmark_status}</p>
-    </div>
-    """, unsafe_allow_html=True)
+    - **Data**: {data_status}
+    - **Models**: {models_status}
+    - **Benchmark**: {benchmark_status}
+    """)
+    
+    # Quick actions in sidebar
     st.sidebar.markdown("---")
     st.sidebar.markdown("### Quick Actions")
-    if st.sidebar.button("Clear All Data", key="sidebar_clear", use_container_width=True):
+    
+    if st.sidebar.button("Clear All Data", key="sidebar_clear"):
         st.session_state.clear()
         st.rerun()
-
-    with st.sidebar.expander("📚 Feature Descriptions"):
+    
+    # Feature descriptions expander
+    with st.sidebar.expander("Feature Descriptions"):
         st.markdown("""
         **Lexical & Morphological**
         - Word-level analysis
@@ -971,38 +1148,33 @@ def app():
         **Semantic**
         - Sentiment analysis
         - Polarity & subjectivity
+        - Meaning extraction
         
         **Discourse**
         - Text structure
         - Sentence count
+        - Discourse markers
         
         **Pragmatic**
         - Intent analysis
-        - Modal verbs / emphasis markers
+        - Modal verbs
+        - Emphasis markers
         """)
-
+    
     # ============================
     # PAGE CONTENT BASED ON NAVIGATION
     # ============================
     
     # DASHBOARD PAGE
     if page == "Dashboard":
-        # Header with Lottie (visual only)
         st.markdown("""
         <div class="main-header">
             <h1>FactChecker Dashboard</h1>
             <h3>Comprehensive AI-Powered Fact-Checking & Misinformation Detection</h3>
         </div>
         """, unsafe_allow_html=True)
-
-        # show lottie animation under header (visual only)
-        if lottie_verify_json:
-            try:
-                st_lottie(lottie_verify_json, height=120, key="header_dashboard")
-            except Exception:
-                pass
-
-        # Dashboard overview (cards unchanged)
+        
+        # Dashboard overview
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -1044,6 +1216,7 @@ def app():
             </div>
             """, unsafe_allow_html=True)
         
+        # Quick start guide
         st.markdown("---")
         st.header("Getting Started Guide")
         
@@ -1068,21 +1241,21 @@ def app():
             <h3>Current Status</h3>
             """, unsafe_allow_html=True)
             
-            # Dynamic status display (unchanged)
+            # Dynamic status display
             if not st.session_state['scraped_df'].empty:
-                st.success(f"**Data:** {len(st.session_state['scraped_df'])} claims loaded")
+                st.success(f"Data: {len(st.session_state['scraped_df'])} claims loaded")
             else:
-                st.warning("**Data:** No data collected yet")
+                st.warning("Data: No data collected yet")
                 
             if st.session_state['trained_models']:
-                st.success(f"**Models:** {len(st.session_state['trained_models'])} models trained")
+                st.success(f"Models: {len(st.session_state['trained_models'])} models trained")
             else:
-                st.warning("**Models:** No models trained yet")
+                st.warning("Models: No models trained yet")
                 
             if not st.session_state['google_benchmark_results'].empty:
-                st.success("**Benchmark:** Testing complete")
+                st.success("Benchmark: Testing complete")
             else:
-                st.info("**Benchmark:** Ready for testing")
+                st.info("Benchmark: Ready for testing")
             
             st.markdown("</div>", unsafe_allow_html=True)
     
@@ -1094,13 +1267,6 @@ def app():
             <h3>Gather Training Data from Politifact Archives</h3>
         </div>
         """, unsafe_allow_html=True)
-
-        # small visual Lottie for scraping area
-        if lottie_verify_json:
-            try:
-                st_lottie(lottie_verify_json, height=90, key="data_collect_lottie")
-            except Exception:
-                pass
         
         col1, col2 = st.columns([2, 1])
         
@@ -1126,13 +1292,7 @@ def app():
                     
                     if not scraped_df.empty:
                         st.session_state['scraped_df'] = scraped_df
-                        # show success Lottie if available
-                        if lottie_success_json:
-                            try:
-                                st_lottie(lottie_success_json, height=90, key="scrape_success_lottie")
-                            except Exception:
-                                pass
-                        st.markdown(f'<div class="card" style="border:2px solid #34D399;"><strong>✅ Successfully scraped {len(scraped_df)} claims!</strong></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="success-box">Successfully scraped {len(scraped_df)} claims!</div>', unsafe_allow_html=True)
                     else:
                         st.warning("No data found. Try adjusting date range.")
             st.markdown('</div>', unsafe_allow_html=True)
@@ -1169,13 +1329,6 @@ def app():
             <h3>Configure and Train Machine Learning Models</h3>
         </div>
         """, unsafe_allow_html=True)
-
-        # small visual Lottie for model training header
-        if lottie_verify_json:
-            try:
-                st_lottie(lottie_verify_json, height=80, key="train_header_lottie")
-            except Exception:
-                pass
         
         col1, col2 = st.columns([2, 1])
         
@@ -1213,12 +1366,7 @@ def app():
                         st.session_state['trained_models'] = trained_models
                         st.session_state['trained_vectorizer'] = trained_vectorizer
                         st.session_state['selected_phase_run'] = selected_phase
-                        if lottie_success_json:
-                            try:
-                                st_lottie(lottie_success_json, height=90, key="train_success_lottie")
-                            except Exception:
-                                pass
-                        st.markdown('<div class="card" style="border:2px solid #34D399;"><strong>✅ Analysis complete! Results ready in Results & Analysis page.</strong></div>', unsafe_allow_html=True)
+                        st.markdown('<div class="success-box">Analysis complete! Results ready in Results & Analysis page.</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
         
         with col2:
@@ -1251,20 +1399,15 @@ def app():
             <h3>Validate Models with Real-World Fact Check Data</h3>
         </div>
         """, unsafe_allow_html=True)
-
-        if lottie_verify_json:
-            try:
-                st_lottie(lottie_verify_json, height=90, key="benchmark_lottie")
-            except Exception:
-                pass
         
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Fact Check Benchmark")
         
-        # Mode selection (unchanged)
+        # Mode selection
         mode_col1, mode_col2 = st.columns(2)
         with mode_col1:
-            use_demo = st.checkbox("Use Demo Data", value=True, help="Test with sample fact-check data - no API key needed")
+            use_demo = st.checkbox("Google Fact Check API", value=True, 
+                                  help="Test with sample fact-check data - no API key needed")
         with mode_col2:
             if not use_demo:
                 if 'GOOGLE_API_KEY' not in st.secrets:
@@ -1294,7 +1437,7 @@ def app():
                     with st.spinner('Loading fact-check data...'):
                         if use_demo:
                             api_results = get_demo_google_claims()
-                            st.success("✅ Demo fact-check data loaded successfully!")
+                            st.success("✅ Google Fact Check loaded successfully!")
                         else:
                             api_key = st.secrets["GOOGLE_API_KEY"]
                             api_results = fetch_google_claims(api_key, num_claims)
@@ -1310,12 +1453,7 @@ def app():
                             benchmark_results_df = run_google_benchmark(google_df, trained_models, trained_vectorizer, selected_phase_run)
                             st.session_state['google_benchmark_results'] = benchmark_results_df
                             st.session_state['google_df'] = google_df
-                            if lottie_success_json:
-                                try:
-                                    st_lottie(lottie_success_json, height=80, key="benchmark_success_lottie")
-                                except Exception:
-                                    pass
-                            st.markdown(f'<div class="card" style="border:2px solid #34D399;"><strong>✅ Benchmark complete! Tested on {len(google_df)} claims.</strong></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="success-box">✅ Benchmark complete! Tested on {len(google_df)} claims.</div>', unsafe_allow_html=True)
                         else:
                             st.warning("No claims were processed. Try adjusting parameters.")
         
@@ -1323,6 +1461,7 @@ def app():
             st.markdown("<br>", unsafe_allow_html=True)
             st.caption("Tests models against fact-check data")
         
+        # Benchmark results preview
         if not st.session_state['google_benchmark_results'].empty:
             st.subheader("Benchmark Results")
             st.dataframe(st.session_state['google_benchmark_results'], use_container_width=True)
@@ -1337,19 +1476,14 @@ def app():
             <h3>Comprehensive Performance Metrics and Insights</h3>
         </div>
         """, unsafe_allow_html=True)
-
-        if lottie_verify_json:
-            try:
-                st_lottie(lottie_verify_json, height=80, key="results_lottie")
-            except Exception:
-                pass
         
         if st.session_state['df_results'].empty:
             st.warning("No results available. Please train models first in the Model Training page!")
         else:
+            # Main results section
             st.header("Model Performance Results")
             
-            # Metric cards (unchanged but visually in CSS)
+            # Model Metrics in Cards
             results_col1, results_col2, results_col3, results_col4 = st.columns(4)
             df_results = st.session_state['df_results']
             
@@ -1368,11 +1502,12 @@ def app():
                     st.markdown(f"""
                     <div class="metric-card">
                         <h3>{metric['model']}</h3>
-                        <h2 style="color: #7C3AED; margin:0;">{metric['accuracy']:.1f}%</h2>
-                        <p style="margin:0;">F1: {metric['f1']:.3f} | Time: {metric['training_time']}s</p>
+                        <h2>{metric['accuracy']:.1f}%</h2>
+                        <p>F1: {metric['f1']:.3f} | Time: {metric['training_time']}s</p>
                     </div>
                     """, unsafe_allow_html=True)
             
+            # Detailed Results and Visualizations
             st.markdown("---")
             viz_col1, viz_col2 = st.columns(2)
             
@@ -1391,7 +1526,7 @@ def app():
                 st.subheader("Speed vs Accuracy Trade-off")
                 
                 fig, ax = plt.subplots(figsize=(8, 6))
-                colors = ['#7C3AED', '#34D399', '#8B5CF6', '#10B981']
+                colors = ['#00a8e1', '#00c8ff', '#1a8cd8', '#2d9cdb']
                 
                 for i, (_, row) in enumerate(df_results.iterrows()):
                     ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], 
@@ -1407,6 +1542,7 @@ def app():
                 ax.legend()
                 st.pyplot(fig)
 
+            # Google Benchmark Results
             if not st.session_state['google_benchmark_results'].empty:
                 st.markdown("---")
                 st.header("Fact Check Benchmark Results")
@@ -1414,6 +1550,7 @@ def app():
                 google_results = st.session_state['google_benchmark_results']
                 politifacts_results = st.session_state['df_results']
                 
+                # Comparison metrics
                 st.subheader("Performance Comparison")
                 comp_col1, comp_col2, comp_col3, comp_col4 = st.columns(4)
                 
@@ -1421,6 +1558,7 @@ def app():
                     model_name = row['Model']
                     google_accuracy = row['Accuracy']
                     
+                    # Find corresponding Politifacts accuracy
                     politifacts_row = politifacts_results[politifacts_results['Model'] == model_name]
                     if not politifacts_row.empty:
                         politifacts_accuracy = politifacts_row['Accuracy'].values[0]
@@ -1445,6 +1583,7 @@ def app():
                                 value=f"{google_accuracy:.1f}%"
                             )
 
+            # HUMOROUS CRITIQUE SECTION
             st.markdown("---")
             st.header("AI Performance Review")
             
@@ -1477,10 +1616,6 @@ def app():
                     {st.session_state['selected_phase_run']}
                     """)
                 st.markdown('</div>', unsafe_allow_html=True)
-
-    # Footer (visual only)
-    st.markdown('<div class="app-footer">Built with ❤️ using Streamlit — Theme: VerifyAI (Purple + Mint)</div>', unsafe_allow_html=True)
-
 
 # --- Run App ---
 if __name__ == '__main__':
