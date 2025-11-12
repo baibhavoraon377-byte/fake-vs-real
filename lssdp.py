@@ -28,6 +28,7 @@ from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_sc
 from sklearn.preprocessing import LabelEncoder
 from scipy import sparse
 import io
+import os
 
 # --- Configuration ---
 SCRAPED_DATA_PATH = 'politifact_data.csv'
@@ -51,7 +52,17 @@ def load_spacy_model():
         https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
         imbalanced-learn # Required for SMOTE
         """, language='text')
-        raise e
+        # Try to download the model if not available
+        try:
+            import subprocess
+            import sys
+            st.info("Attempting to download spaCy model...")
+            subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
+            nlp = spacy.load("en_core_web_sm")
+            return nlp
+        except:
+            st.error("Failed to download spaCy model automatically. Please check your requirements.txt")
+            raise e
 
 # Load resources outside main app flow
 try:
@@ -69,10 +80,6 @@ pragmatic_words = ["must", "should", "might", "could", "will", "?", "!"]
 def fetch_google_claims(api_key, num_claims=100):
     """
     Fetches claims from Google Fact Check API with pagination handling.
-
-    TODO: User must add GOOGLE_API_KEY to .streamlit/secrets.toml
-    Get your API key from: https://console.cloud.google.com/apis/credentials
-    Enable the "Fact Check Tools API" in Google Cloud Console first.
     """
     base_url = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
     collected_claims = []
@@ -320,7 +327,7 @@ def run_google_benchmark(google_df, trained_models, vectorizer, selected_phase):
     return pd.DataFrame(results_list)
 
 # ============================
-# 1. WEB SCRAPING FUNCTION (Remains identical to previous successful version)
+# 1. WEB SCRAPING FUNCTION
 # ============================
 
 def scrape_data_by_date_range(start_date: pd.Timestamp, end_date: pd.Timestamp):
@@ -668,7 +675,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
     return pd.DataFrame(results_list), trained_models_final, vectorizer
 
 # ============================
-# 4. HUMOR & CRITIQUE FUNCTIONS (REMAINS UNCHANGED)
+# 4. HUMOR & CRITIQUE FUNCTIONS
 # ============================
 
 def get_phase_critique(best_phase: str) -> str:
@@ -733,7 +740,7 @@ def app():
         initial_sidebar_state='expanded'
     )
 
-    # Custom CSS for Amazon Prime Inspired Dark Theme
+    # Custom CSS for  Inspired Dark Theme
     st.markdown("""
     <style>
     /* Amazon Prime Inspired Dark Theme */
@@ -1055,6 +1062,16 @@ def app():
         st.session_state.clear()
         st.rerun()
     
+    # Debug section for API key
+    with st.sidebar.expander(" Debug Info"):
+        if st.button("Check API Key Status"):
+            if 'GOOGLE_API_KEY' in st.secrets:
+                st.success(" Google API Key found!")
+                st.code(f"Key: {st.secrets['GOOGLE_API_KEY'][:10]}...")
+            else:
+                st.error(" Google API Key not found")
+                st.info("Add GOOGLE_API_KEY to .streamlit/secrets.toml")
+    
     # Feature descriptions expander
     with st.sidebar.expander("Feature Descriptions"):
         st.markdown("""
@@ -1326,6 +1343,57 @@ def app():
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Google Fact Check API Integration")
         
+        # Check for API key first with improved error handling
+        if 'GOOGLE_API_KEY' not in st.secrets:
+            st.error("""
+            ##  Google API Key Required
+            
+            To use the Google Fact Check API benchmark, you need to:
+            
+            1. **Get a Google API Key**:
+               - Visit [Google Cloud Console](https://console.cloud.google.com/)
+               - Enable "Fact Check Tools API"
+               - Create an API key
+            
+            2. **Add to secrets.toml**:
+               Create a file `.streamlit/secrets.toml` with:
+               ```toml
+               GOOGLE_API_KEY = "your_actual_api_key_here"
+               ```
+            
+            3. **Restart the app**
+            """)
+            
+            with st.expander(" Detailed Setup Instructions"):
+                st.markdown("""
+                ### Step-by-Step Guide:
+                
+                1. **Go to [Google Cloud Console](https://console.cloud.google.com/)**
+                2. **Create a new project** or select existing one
+                3. **Enable Fact Check Tools API**:
+                   - Navigate to "APIs & Services" > "Library"
+                   - Search for "Fact Check Tools API"
+                   - Click "Enable"
+                4. **Create API Key**:
+                   - Go to "APIs & Services" > "Credentials"
+                   - Click "Create Credentials" > "API Key"
+                   - Copy the generated key
+                5. **Set up secrets file**:
+                   ```
+                   # Local development:
+                   mkdir .streamlit
+                   echo 'GOOGLE_API_KEY = "your_key_here"' > .streamlit/secrets.toml
+                   
+                   # Streamlit Cloud: Add in Settings > Secrets
+                   ```
+                6. **Restart your Streamlit app**
+                """)
+            
+            st.info("💡 **Don't have a Google API key?** You can still use all other features including data collection, model training, and analysis with Politifact data.")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
+        
+        # If API key exists, show the benchmark interface
         bench_col1, bench_col2, bench_col3 = st.columns([2,2,1])
         
         with bench_col1:
@@ -1344,8 +1412,6 @@ def app():
                 # Pre-flight checks
                 if not st.session_state.get('trained_models'):
                     st.error("Please train models first in the Model Training page!")
-                elif 'GOOGLE_API_KEY' not in st.secrets:
-                    st.error("Google API key not found in secrets.toml")
                 else:
                     with st.spinner('Fetching live fact-check data...'):
                         api_key = st.secrets["GOOGLE_API_KEY"]
@@ -1360,6 +1426,8 @@ def app():
                             st.session_state['google_benchmark_results'] = benchmark_results_df
                             st.session_state['google_df'] = google_df
                             st.markdown(f'<div class="success-box">Benchmark complete! Tested on {len(google_df)} Google claims.</div>', unsafe_allow_html=True)
+                        else:
+                            st.warning("No Google claims were processed. This could be due to API limits or no matching claims found.")
         
         with bench_col3:
             st.markdown("<br>", unsafe_allow_html=True)
