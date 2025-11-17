@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Fake vs Real — FactChecker (Context Menu)",
+  "version": "1.2",
+  "description": "Open the Fake-vs-Real AI FactChecker app or send selected text to it via right-click.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "permissions": [
+    "contextMenus",
+    "tabs",
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

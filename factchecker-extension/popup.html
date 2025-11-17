@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FactChecker</title>
+  <style>
+    body {
+      font-family: Inter, Arial, Helvetica, sans-serif;
+      width: 340px;
+      margin: 0;
+      padding: 14px;
+      background: #0f171e;
+      color: #e6e6e6;
+    }
+    h2 { margin: 0 0 8px 0; color:#00c8ff; font-size:18px; }
+    p { margin: 0 0 12px 0; color:#a8b6c6; font-size:13px; }
+    .btn {
+      display:block;
+      width:100%;
+      padding:10px;
+      border:none;
+      border-radius:8px;
+      background: linear-gradient(135deg,#00a8e1,#00c8ff);
+      color:#fff;
+      font-weight:600;
+      cursor:pointer;
+      text-align:center;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+      margin-top:8px;
+    }
+    input[type="text"]{
+      width:100%;
+      padding:10px;
+      border-radius:8px;
+      border:1px solid #233445;
+      background:#111820;
+      color:#e6e6e6;
+      box-sizing:border-box;
+      margin-top:8px;
+    }
+    .small {
+      margin-top:8px;
+      font-size:12px;
+      color:#8fa3b8;
+      text-align:center;
+    }
+    .note { font-size:12px; color:#9fb0c7; margin-top:10px; }
+    .link { color:#bfefff; text-decoration:none; font-weight:600; }
+  </style>
+</head>
+<body>
+  <h2>Fake vs Real — FactChecker</h2>
+  <p>Open the AI fact-checker or check selected text from any page (right-click → "Check selected text").</p>
+
+  <label for="text">Send custom text to app</label>
+  <input id="text" type="text" placeholder="Paste or type text to check..." />
+  <button id="openBtn" class="btn">Open App with Text</button>
+
+  <div class="note">Or use the right-click menu on any selected text: <strong>Check selected text</strong>.</div>
+  <div class="small"><a class="link" href="https://fake-vs-real-hduyc4x8emtd4ckofztnbd.streamlit.app/" target="_blank">Open hosted Streamlit app</a></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
