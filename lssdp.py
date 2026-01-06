@@ -1,5 +1,5 @@
 # lssdp.py
-# Updated Streamlit app with professional styling: larger navigation text, no emojis
+# Updated Streamlit app with purple and white professional theme
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -808,43 +808,64 @@ def generate_humorous_critique(df_results: pd.DataFrame, selected_phase: str) ->
 def app():
     st.set_page_config(page_title='FactChecker: AI Fact-Checking Platform', layout='wide', initial_sidebar_state='expanded')
 
-    # ==================== PROFESSIONAL STYLING ====================
+    # ==================== PURPLE & WHITE THEME ====================
     st.markdown("""
     <style>
-    /* General body styles */
-    body { 
-        background:#0f171e; 
-        color:#e6e6e6; 
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-    .card { 
-        background:#1a242f; 
-        padding:16px; 
-        border-radius:8px; 
-        border-left: 4px solid #00c8ff;
-        margin-bottom: 12px;
+    /* ========== MAIN THEME COLORS ========== */
+    :root {
+        --primary-purple: #8A2BE2;       /* Purple */
+        --primary-purple-light: #9B4DFF; /* Lighter purple */
+        --primary-purple-dark: #6A0DAD;  /* Darker purple */
+        --accent-blue: #00BFFF;          /* Accent blue */
+        --background-white: #FFFFFF;     /* White background */
+        --background-light: #F8F9FA;     /* Light grey background */
+        --text-dark: #333333;            /* Dark text */
+        --text-medium: #666666;          /* Medium text */
+        --text-light: #888888;           /* Light text */
+        --border-color: #E0E0E0;         /* Border color */
+        --card-shadow: 0 4px 12px rgba(138, 43, 226, 0.1); /* Purple shadow */
     }
     
-    /* ========== PROFESSIONAL NAVIGATION BAR ========== */
-    /* Make the entire sidebar larger and professional */
+    /* General body styles - WHITE BACKGROUND */
+    body { 
+        background-color: var(--background-white) !important;
+        color: var(--text-dark) !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    
+    /* Main content area */
+    .main .block-container {
+        background-color: var(--background-white);
+        padding-top: 2rem;
+    }
+    
+    /* ========== PURPLE SIDEBAR ========== */
+    /* Purple sidebar background */
     section[data-testid="stSidebar"] {
-        font-size: 1.25em !important;
-        background: linear-gradient(180deg, #1a242f 0%, #0f171e 100%);
-        border-right: 1px solid #2a3b4d;
+        background: linear-gradient(180deg, var(--primary-purple) 0%, var(--primary-purple-dark) 100%) !important;
+        border-right: 1px solid var(--primary-purple-dark);
+        color: white !important;
+    }
+    
+    /* Sidebar text - white for contrast */
+    section[data-testid="stSidebar"] * {
+        color: white !important;
     }
     
     /* Professional sidebar title */
     .css-1d391kg h1 {
         font-size: 32px !important;
         margin-bottom: 35px !important;
-        color: #00c8ff !important;
+        color: white !important;
         font-weight: 600;
         padding-bottom: 15px;
-        border-bottom: 2px solid #2a3b4d;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.2);
         text-align: center;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
     
-    /* Professional radio buttons - LARGER TEXT */
+    /* ========== NAVIGATION RADIO BUTTONS ========== */
+    /* Professional radio buttons - LARGER WHITE TEXT */
     .stRadio > div {
         font-size: 20px !important;
         font-weight: 500 !important;
@@ -857,84 +878,256 @@ def app():
         padding: 15px 0 !important;
     }
     
-    /* Professional radio button styling */
+    /* Professional radio button styling - WHITE BACKGROUND IN SIDEBAR */
     .stRadio [role="radio"] {
         padding: 16px 24px !important;
         margin: 6px 0 !important;
         border-radius: 10px !important;
         transition: all 0.3s ease !important;
-        border: 2px solid #2a3b4d !important;
-        background-color: #1a242f;
-        font-size: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.3) !important;
+        background-color: rgba(255, 255, 255, 0.1) !important;
+        font-size: 18px !important;
+        color: white !important;
     }
     
     /* Hover effect for radio buttons */
     .stRadio [role="radio"]:hover {
-        background-color: #233040 !important;
-        border-color: #00c8ff !important;
+        background-color: rgba(255, 255, 255, 0.2) !important;
+        border-color: white !important;
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 200, 255, 0.2);
+        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
     }
     
     /* Selected radio button style - professional */
     .stRadio [role="radio"][aria-checked="true"] {
-        background-color: rgba(0, 200, 255, 0.15) !important;
-        border-color: #00c8ff !important;
-        color: #00c8ff !important;
+        background-color: rgba(255, 255, 255, 0.25) !important;
+        border-color: white !important;
+        color: white !important;
         font-weight: 600 !important;
-        box-shadow: 0 4px 12px rgba(0, 200, 255, 0.3);
+        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
     }
     
-    /* Make the radio button circles larger and professional */
+    /* Make the radio button circles larger and white */
     .stRadio [role="radio"] > div:first-child {
         width: 24px !important;
         height: 24px !important;
         margin-right: 16px !important;
-        border: 2px solid #2a3b4d;
+        border: 2px solid rgba(255, 255, 255, 0.5) !important;
+        background-color: transparent !important;
     }
     
     .stRadio [role="radio"][aria-checked="true"] > div:first-child {
-        border-color: #00c8ff;
-        background-color: #00c8ff;
+        border-color: white !important;
+        background-color: white !important;
     }
     
-    /* Professional headers */
-    h1, h2, h3 {
-        color: #00c8ff !important;
-        font-weight: 600;
-        margin-bottom: 20px;
+    /* ========== CARDS ========== */
+    .card { 
+        background: var(--background-light) !important;
+        padding: 20px !important;
+        border-radius: 12px !important;
+        border-left: 5px solid var(--primary-purple) !important;
+        margin-bottom: 16px !important;
+        box-shadow: var(--card-shadow) !important;
+        border: 1px solid var(--border-color) !important;
     }
     
-    /* Professional buttons */
+    .card h3, .card h4 {
+        color: var(--primary-purple) !important;
+        margin-top: 0 !important;
+        margin-bottom: 12px !important;
+    }
+    
+    .card p {
+        color: var(--text-medium) !important;
+        margin-bottom: 8px !important;
+    }
+    
+    /* ========== HEADERS ========== */
+    h1, h2, h3, h4 {
+        color: var(--primary-purple) !important;
+        font-weight: 600 !important;
+        margin-bottom: 20px !important;
+    }
+    
+    h1 {
+        font-size: 2.5rem !important;
+        border-bottom: 3px solid var(--primary-purple) !important;
+        padding-bottom: 10px !important;
+        margin-bottom: 30px !important;
+    }
+    
+    h2 {
+        font-size: 2rem !important;
+        margin-top: 30px !important;
+    }
+    
+    h3 {
+        font-size: 1.5rem !important;
+    }
+    
+    /* ========== BUTTONS ========== */
+    /* Purple gradient buttons */
     .stButton > button {
-        background: linear-gradient(135deg, #00c8ff 0%, #0099cc 100%);
-        color: white;
-        font-weight: 500;
-        border: none;
-        padding: 12px 24px;
-        border-radius: 8px;
-        font-size: 16px;
-        transition: all 0.3s ease;
+        background: linear-gradient(135deg, var(--primary-purple) 0%, var(--primary-purple-dark) 100%) !important;
+        color: white !important;
+        font-weight: 500 !important;
+        border: none !important;
+        padding: 12px 24px !important;
+        border-radius: 8px !important;
+        font-size: 16px !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 8px rgba(138, 43, 226, 0.2) !important;
     }
     
     .stButton > button:hover {
-        background: linear-gradient(135deg, #00d8ff 0%, #00aadd 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 200, 255, 0.3);
+        background: linear-gradient(135deg, var(--primary-purple-light) 0%, var(--primary-purple) 100%) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 12px rgba(138, 43, 226, 0.3) !important;
     }
     
-    /* Professional info boxes */
-    .stInfo, .stWarning, .stSuccess, .stError {
-        border-radius: 8px;
-        border-left: 4px solid;
-        padding: 16px;
-        font-size: 16px;
+    /* ========== FORMS AND INPUTS ========== */
+    /* Text inputs, select boxes, etc */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > div,
+    .stTextArea > div > div > textarea,
+    .stDateInput > div > div > input {
+        border: 2px solid var(--border-color) !important;
+        border-radius: 8px !important;
+        padding: 10px !important;
+        background-color: white !important;
     }
     
-    /* Remove emoji styling from sidebar */
-    .css-1d391kg h1::before,
-    .css-1d391kg h1::after {
-        content: none !important;
+    .stTextInput > div > div > input:focus,
+    .stSelectbox > div > div > div:focus,
+    .stTextArea > div > div > textarea:focus,
+    .stDateInput > div > div > input:focus {
+        border-color: var(--primary-purple) !important;
+        box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.1) !important;
+    }
+    
+    /* ========== DATA TABLES ========== */
+    .dataframe {
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
+    }
+    
+    .dataframe th {
+        background-color: var(--primary-purple) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        border: none !important;
+    }
+    
+    .dataframe td {
+        border: 1px solid var(--border-color) !important;
+    }
+    
+    .dataframe tr:nth-child(even) {
+        background-color: var(--background-light) !important;
+    }
+    
+    .dataframe tr:hover {
+        background-color: rgba(138, 43, 226, 0.05) !important;
+    }
+    
+    /* ========== METRICS ========== */
+    /* Metric cards styling */
+    .stMetric {
+        background-color: white !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px !important;
+        padding: 15px !important;
+        box-shadow: var(--card-shadow) !important;
+    }
+    
+    .stMetric label {
+        color: var(--text-medium) !important;
+        font-weight: 500 !important;
+    }
+    
+    .stMetric value {
+        color: var(--primary-purple) !important;
+        font-weight: 600 !important;
+        font-size: 24px !important;
+    }
+    
+    /* ========== STATUS MESSAGES ========== */
+    /* Info boxes with purple theme */
+    .stInfo {
+        background-color: rgba(138, 43, 226, 0.1) !important;
+        border-left: 4px solid var(--primary-purple) !important;
+        border-radius: 8px !important;
+        color: var(--text-dark) !important;
+    }
+    
+    .stSuccess {
+        background-color: rgba(0, 255, 0, 0.1) !important;
+        border-left: 4px solid #28a745 !important;
+        border-radius: 8px !important;
+        color: var(--text-dark) !important;
+    }
+    
+    .stWarning {
+        background-color: rgba(255, 193, 7, 0.1) !important;
+        border-left: 4px solid #ffc107 !important;
+        border-radius: 8px !important;
+        color: var(--text-dark) !important;
+    }
+    
+    .stError {
+        background-color: rgba(220, 53, 69, 0.1) !important;
+        border-left: 4px solid #dc3545 !important;
+        border-radius: 8px !important;
+        color: var(--text-dark) !important;
+    }
+    
+    /* ========== PLOT STYLING ========== */
+    /* Make matplotlib plots blend with theme */
+    .stPlot {
+        border: 1px solid var(--border-color) !important;
+        border-radius: 8px !important;
+        padding: 15px !important;
+        background-color: white !important;
+    }
+    
+    /* ========== OTHER ELEMENTS ========== */
+    /* Horizontal rules */
+    hr {
+        border: none !important;
+        height: 2px !important;
+        background: linear-gradient(90deg, var(--primary-purple) 0%, transparent 100%) !important;
+        margin: 30px 0 !important;
+    }
+    
+    /* Captions */
+    .stCaption {
+        color: var(--text-light) !important;
+        font-style: italic !important;
+    }
+    
+    /* Remove Streamlit default branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* ========== SIDEBAR SPECIFIC OVERRIDES ========== */
+    /* Ensure sidebar widgets have correct colors */
+    section[data-testid="stSidebar"] .stCheckbox label,
+    section[data-testid="stSidebar"] .stSlider label,
+    section[data-testid="stSidebar"] .stSelectbox label {
+        color: white !important;
+    }
+    
+    section[data-testid="stSidebar"] .stCheckbox span {
+        background-color: white !important;
+        border-color: white !important;
+    }
+    
+    section[data-testid="stSidebar"] .stCheckbox input:checked + span {
+        background-color: var(--primary-purple) !important;
+        border-color: white !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -974,7 +1167,7 @@ def app():
             st.success("Loaded saved models from disk. Single-text checks are available.")
         st.session_state['models_loaded_attempted'] = True
 
-    # ==================== PROFESSIONAL NAVIGATION ====================
+    # ==================== NAVIGATION ====================
     st.sidebar.title("FactChecker")
     page = st.sidebar.radio("Navigation", 
                            ["Dashboard", 
@@ -986,8 +1179,8 @@ def app():
 
     # --- DASHBOARD ---
     if page == "Dashboard":
-        st.markdown("<h1 style='color:#00c8ff;'>FactChecker Dashboard</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#cccccc; margin-bottom:30px;'>AI-Powered Fact-Checking Platform for Political Claims Analysis</p>", unsafe_allow_html=True)
+        st.markdown("<h1>FactChecker Dashboard</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:18px; color:#666666; margin-bottom:30px;'>AI-Powered Fact-Checking Platform for Political Claims Analysis</p>", unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -1014,8 +1207,8 @@ def app():
 
     # --- DATA COLLECTION ---
     elif page == "Data Collection":
-        st.markdown("<h1 style='color:#00c8ff;'>Data Collection</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#cccccc; margin-bottom:30px;'>Scrape and import political claims from fact-checking sources</p>", unsafe_allow_html=True)
+        st.markdown("<h1>Data Collection</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:18px; color:#666666; margin-bottom:30px;'>Scrape and import political claims from fact-checking sources</p>", unsafe_allow_html=True)
         
         min_date = pd.to_datetime('2007-01-01')
         max_date = pd.to_datetime('today').normalize()
@@ -1045,8 +1238,8 @@ def app():
 
     # --- MODEL TRAINING ---
     elif page == "Model Training":
-        st.markdown("<h1 style='color:#00c8ff;'>Model Training</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#cccccc; margin-bottom:30px;'>Train machine learning models with advanced NLP feature extraction</p>", unsafe_allow_html=True)
+        st.markdown("<h1>Model Training</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:18px; color:#666666; margin-bottom:30px;'>Train machine learning models with advanced NLP feature extraction</p>", unsafe_allow_html=True)
         
         if st.session_state['scraped_df'].empty:
             st.warning("Please collect data first from the Data Collection page!")
@@ -1100,8 +1293,8 @@ def app():
 
     # --- BENCHMARK TESTING ---
     elif page == "Benchmark Testing":
-        st.markdown("<h1 style='color:#00c8ff;'>Benchmark Testing</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#cccccc; margin-bottom:30px;'>Validate model performance with external datasets</p>", unsafe_allow_html=True)
+        st.markdown("<h1>Benchmark Testing</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:18px; color:#666666; margin-bottom:30px;'>Validate model performance with external datasets</p>", unsafe_allow_html=True)
 
         # Read query param if present
         try:
@@ -1221,8 +1414,8 @@ def app():
 
     # --- RESULTS & ANALYSIS ---
     elif page == "Results & Analysis":
-        st.markdown("<h1 style='color:#00c8ff;'>Results & Analysis</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#cccccc; margin-bottom:30px;'>Model performance metrics and analytical insights</p>", unsafe_allow_html=True)
+        st.markdown("<h1>Results & Analysis</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:18px; color:#666666; margin-bottom:30px;'>Model performance metrics and analytical insights</p>", unsafe_allow_html=True)
         
         if st.session_state['df_results'].empty:
             st.warning("No results available. Please train models first in the Model Training page!")
@@ -1274,7 +1467,7 @@ def app():
             with viz_col2:
                 st.subheader("Speed vs Accuracy Analysis")
                 fig, ax = plt.subplots(figsize=(8, 6))
-                colors = ['#00a8e1', '#00c8ff', '#1a8cd8', '#2d9cdb']
+                colors = ['#8A2BE2', '#9B4DFF', '#6A0DAD', '#9370DB']  # Purple variations
                 for i, (_, row) in enumerate(df_results.iterrows()):
                     ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], 
                              s=200, alpha=0.7, color=colors[i], label=row['Model'])
