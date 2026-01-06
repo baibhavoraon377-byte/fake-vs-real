@@ -1,5 +1,5 @@
 # lssdp.py
-# Updated Streamlit app with blue and white theme and fixed sidebar
+# Updated Streamlit app with single-text URL handling, save/load trained models, and single-text prediction.
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -519,84 +519,9 @@ def predict_single_text(text, trained_models, vectorizer, selected_phase):
     return results
 
 # --------------------------
-# NEW: SMOTE Data Balancing Function
-# --------------------------
-def apply_smote_to_data(df):
-    """
-    Apply SMOTE to balance the dataset and return balanced data
-    """
-    if df.empty:
-        st.error("No data to balance!")
-        return df
-    
-    # Show original data distribution
-    REAL_LABELS = ["True", "No Flip", "Mostly True", "Half Flip", "Half True"]
-    FAKE_LABELS = ["False", "Barely True", "Pants On Fire", "Full Flop"]
-    
-    def create_binary_target(label):
-        if label in REAL_LABELS:
-            return 1
-        elif label in FAKE_LABELS:
-            return 0
-        else:
-            return np.nan
-    
-    df['target_label'] = df['label'].apply(create_binary_target)
-    df_clean = df.dropna(subset=['target_label'])
-    
-    if df_clean.empty:
-        st.error("No valid labels found for balancing!")
-        return df
-    
-    # Check class distribution
-    class_counts = df_clean['target_label'].value_counts()
-    st.info(f"**Original Class Distribution:**\n"
-            f"- True (1): {class_counts.get(1, 0)} claims\n"
-            f"- False (0): {class_counts.get(0, 0)} claims")
-    
-    if len(class_counts) < 2:
-        st.warning("Only one class found! Cannot apply SMOTE.")
-        return df_clean
-    
-    # Extract features (simple lexical for SMOTE)
-    X_raw = df_clean['statement'].astype(str)
-    y = df_clean['target_label'].astype(int)
-    
-    # Apply simple feature extraction for SMOTE
-    vectorizer = CountVectorizer(max_features=1000)
-    X_features = vectorizer.fit_transform(X_raw.apply(lexical_features))
-    
-    # Apply SMOTE
-    with st.spinner("Applying SMOTE to balance classes..."):
-        try:
-            smote = SMOTE(random_state=42, k_neighbors=min(3, min(class_counts) - 1))
-            X_resampled, y_resampled = smote.fit_resample(X_features, y)
-            
-            # Show new distribution
-            new_counts = pd.Series(y_resampled).value_counts()
-            st.success(f"**After SMOTE:**\n"
-                      f"- True (1): {new_counts.get(1, 0)} claims\n"
-                      f"- False (0): {new_counts.get(0, 0)} claims\n"
-                      f"Total balanced samples: {len(X_resampled)}")
-            
-            # Convert back to DataFrame (approximate - we lose exact text for synthetic samples)
-            st.warning("Note: SMOTE creates synthetic samples. Original text is preserved for real samples.")
-            
-            # Store SMOTE status in session state
-            st.session_state['smote_applied'] = True
-            st.session_state['smote_original_size'] = len(df_clean)
-            st.session_state['smote_balanced_size'] = len(X_resampled)
-            
-            return df_clean
-            
-        except Exception as e:
-            st.error(f"SMOTE failed: {e}")
-            return df_clean
-
-# --------------------------
 # Model training & evaluation (K-Fold & SMOTE)
 # --------------------------
-def evaluate_models(df: pd.DataFrame, selected_phase: str):
+def evaluate_models(df: pd.DataFrame, selected_phase: str, use_smote=True):
     REAL_LABELS = ["True", "No Flip", "Mostly True", "Half Flip", "Half True"]
     FAKE_LABELS = ["False", "Barely True", "Pants On Fire", "Full Flop"]
 
@@ -613,11 +538,6 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
     df = df[df['statement'].astype(str).str.len() > 10]
     X_raw = df['statement'].astype(str)
     y_raw = df['target_label'].astype(int)
-    
-    # Check if SMOTE was applied and show info
-    if st.session_state.get('smote_applied', False):
-        st.info(f"Training with {st.session_state.get('smote_balanced_size', len(df))} balanced samples (SMOTE applied)")
-    
     if len(np.unique(y_raw)) < 2:
         st.error("After binary mapping, only one class remains (all Real or all Fake). Cannot train classifier.")
         return pd.DataFrame(), {}, None
@@ -640,7 +560,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
     X_raw_list = X_raw.tolist()
 
     for name, model in models_to_run.items():
-        st.caption(f"Training {name} with {N_SPLITS}-Fold CV...")
+        st.caption(f"Training {name} with {N_SPLITS}-Fold CV {'& SMOTE' if use_smote else ''}...")
         fold_metrics = {'accuracy': [], 'f1': [], 'precision': [], 'recall': [], 'train_time': [], 'inference_time': []}
         for fold, (train_index, test_index) in enumerate(skf.split(X_features_full, y)):
             X_train_raw = pd.Series([X_raw_list[i] for i in train_index])
@@ -659,8 +579,8 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
                     X_test = vectorizer.transform(X_test_raw.apply(discourse_features))
                 else:
                     # default transform
-                    X_train = vectorizer.transform(X_train_raw.apply(lexical_features))
-                    X_test = vectorizer.transform(X_test_raw.apply(lexical_features))
+                    X_train = vectorizer.transform(X_train_raw.apply(lexical_features if 'Lexical' in selected_phase else lexic))
+                    X_test = vectorizer.transform(X_test_raw.apply(lexical_features if 'Lexical' in selected_phase else lexic))
             else:
                 X_train, _ = apply_feature_extraction(X_train_raw, selected_phase)
                 X_test, _ = apply_feature_extraction(X_test_raw, selected_phase)
@@ -671,15 +591,13 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
                     clf = model
                     clf.fit(X_train_final, y_train)
                 else:
-                    # Check if SMOTE was applied to decide whether to use it in training
-                    if st.session_state.get('smote_applied', False):
+                    if use_smote:
                         smote_pipeline = ImbPipeline([('sampler', SMOTE(random_state=42, k_neighbors=3)), ('classifier', model)])
                         smote_pipeline.fit(X_train, y_train)
                         clf = smote_pipeline
                     else:
-                        # Train without SMOTE if not applied
-                        model.fit(X_train, y_train)
                         clf = model
+                        clf.fit(X_train, y_train)
                 train_time = time.time() - start_time
                 start_inference = time.time()
                 y_pred = clf.predict(X_test)
@@ -704,12 +622,13 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
                 "Recall": np.mean(fold_metrics['recall']),
                 "Training Time (s)": round(np.mean(fold_metrics['train_time']), 2),
                 "Inference Latency (ms)": round(np.mean(fold_metrics['inference_time']), 2),
+                "SMOTE Used": "Yes" if use_smote and name != "Naive Bayes" else "No"
             }
         else:
             st.error(f"{name} failed across all folds.")
             model_metrics[name] = {
                 "Model": name, "Accuracy": 0, "F1-Score": 0, "Precision": 0, "Recall": 0,
-                "Training Time (s)": 0, "Inference Latency (ms)": 9999,
+                "Training Time (s)": 0, "Inference Latency (ms)": 9999, "SMOTE Used": "No"
             }
 
     # Train final models on full dataset and save them
@@ -735,8 +654,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
                 final_model.fit(X_final_train, y)
                 trained_models_final[name] = final_model
             else:
-                # Check if SMOTE was applied
-                if st.session_state.get('smote_applied', False):
+                if use_smote:
                     smote_pipeline_final = ImbPipeline([('sampler', SMOTE(random_state=42, k_neighbors=3)), ('classifier', final_model)])
                     smote_pipeline_final.fit(X_final, y)
                     trained_models_final[name] = smote_pipeline_final
@@ -755,6 +673,27 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
 
     results_list = list(model_metrics.values())
     return pd.DataFrame(results_list), trained_models_final, vectorizer
+
+# --------------------------
+# SMOTE Analysis Function
+# --------------------------
+def analyze_smote_impact(df: pd.DataFrame, selected_phase: str):
+    """Compare performance with and without SMOTE"""
+    if df.empty:
+        st.error("No data available for SMOTE analysis!")
+        return None, None
+    
+    st.info(f"Running SMOTE impact analysis on {selected_phase} features...")
+    
+    # Train with SMOTE
+    with st.spinner("Training models WITH SMOTE..."):
+        results_with_smote, models_with, vectorizer_with = evaluate_models(df, selected_phase, use_smote=True)
+    
+    # Train without SMOTE
+    with st.spinner("Training models WITHOUT SMOTE..."):
+        results_without_smote, models_without, vectorizer_without = evaluate_models(df, selected_phase, use_smote=False)
+    
+    return results_with_smote, results_without_smote
 
 # --------------------------
 # Humor & critique functions (unchanged)
@@ -808,405 +747,39 @@ def generate_humorous_critique(df_results: pd.DataFrame, selected_phase: str) ->
 def app():
     st.set_page_config(page_title='FactChecker: AI Fact-Checking Platform', layout='wide', initial_sidebar_state='expanded')
 
-    # ==================== BLUE & WHITE THEME WITH FIXED SIDEBAR ====================
+    # CSS with increased navigation font size
     st.markdown("""
     <style>
-    /* ========== MAIN THEME COLORS ========== */
-    :root {
-        --primary-blue: #2563EB;       /* Professional Blue */
-        --primary-blue-light: #3B82F6; /* Lighter Blue */
-        --primary-blue-dark: #1D4ED8;  /* Darker Blue */
-        --accent-blue: #00BFFF;        /* Accent Blue */
-        --background-white: #FFFFFF;   /* White background */
-        --background-light: #F8FAFC;   /* Very light blue-grey */
-        --text-dark: #1E293B;          /* Dark blue-grey text */
-        --text-medium: #475569;        /* Medium blue-grey text */
-        --text-light: #64748B;         /* Light blue-grey text */
-        --border-color: #E2E8F0;       /* Light border */
-        --card-shadow: 0 4px 12px rgba(37, 99, 235, 0.08); /* Subtle blue shadow */
-    }
+    body { background:#0f171e; color:#e6e6e6; }
+    .card { background:#1a242f; padding:12px; border-radius:8px; }
     
-    /* General body styles - WHITE BACKGROUND */
-    body { 
-        background-color: var(--background-white) !important;
-        color: var(--text-dark) !important;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Segoe UI', sans-serif;
-    }
-    
-    /* Main content area */
-    .main .block-container {
-        background-color: var(--background-white);
-        padding-top: 2rem;
-    }
-    
-    /* ========== BLUE SIDEBAR ========== */
-    /* Blue sidebar background - FIXED TO ALWAYS BE VISIBLE */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%) !important;
-        border-right: 1px solid var(--primary-blue-dark);
-        color: white !important;
-        min-width: 280px !important;
-        max-width: 350px !important;
-    }
-    
-    /* PREVENT SIDEBAR FROM COLLAPSING */
-    [data-testid="collapsedControl"] {
-        display: none !important;
-    }
-    
-    /* Sidebar text - white for contrast */
-    section[data-testid="stSidebar"] * {
-        color: white !important;
-    }
-    
-    /* Professional sidebar title */
-    .css-1d391kg h1 {
-        font-size: 32px !important;
-        margin-bottom: 35px !important;
-        color: white !important;
-        font-weight: 600;
-        padding-bottom: 15px;
-        border-bottom: 2px solid rgba(255, 255, 255, 0.2);
-        text-align: center;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    
-    /* ========== NAVIGATION RADIO BUTTONS ========== */
-    /* Professional radio buttons - LARGER WHITE TEXT */
-    .stRadio > div {
-        font-size: 20px !important;
-        font-weight: 500 !important;
-        line-height: 2.2 !important;
-    }
-    
-    /* Increased spacing between radio options */
-    .stRadio [role="radiogroup"] {
-        gap: 18px !important;
-        padding: 15px 0 !important;
-    }
-    
-    /* Professional radio button styling - WHITE BACKGROUND IN SIDEBAR */
-    .stRadio [role="radio"] {
-        padding: 16px 24px !important;
-        margin: 6px 0 !important;
-        border-radius: 10px !important;
-        transition: all 0.3s ease !important;
-        border: 2px solid rgba(255, 255, 255, 0.3) !important;
-        background-color: rgba(255, 255, 255, 0.12) !important;
+    /* Increased navigation menu font size */
+    div[data-testid="stSidebarNav"] div,
+    div[data-testid="stSidebarNav"] a,
+    div[data-testid="stSidebarNav"] span,
+    div[data-testid="stSidebarNav"] label {
         font-size: 18px !important;
-        color: white !important;
-    }
-    
-    /* Hover effect for radio buttons */
-    .stRadio [role="radio"]:hover {
-        background-color: rgba(255, 255, 255, 0.2) !important;
-        border-color: white !important;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
-    }
-    
-    /* Selected radio button style - professional */
-    .stRadio [role="radio"][aria-checked="true"] {
-        background-color: rgba(255, 255, 255, 0.25) !important;
-        border-color: white !important;
-        color: white !important;
-        font-weight: 600 !important;
-        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.25);
-    }
-    
-    /* Make the radio button circles larger and white */
-    .stRadio [role="radio"] > div:first-child {
-        width: 24px !important;
-        height: 24px !important;
-        margin-right: 16px !important;
-        border: 2px solid rgba(255, 255, 255, 0.5) !important;
-        background-color: transparent !important;
-    }
-    
-    .stRadio [role="radio"][aria-checked="true"] > div:first-child {
-        border-color: white !important;
-        background-color: white !important;
-    }
-    
-    /* ========== CARDS ========== */
-    .card { 
-        background: var(--background-light) !important;
-        padding: 22px !important;
-        border-radius: 12px !important;
-        border-left: 5px solid var(--primary-blue) !important;
-        margin-bottom: 18px !important;
-        box-shadow: var(--card-shadow) !important;
-        border: 1px solid var(--border-color) !important;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    
-    .card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.12);
-    }
-    
-    .card h3, .card h4 {
-        color: var(--primary-blue) !important;
-        margin-top: 0 !important;
-        margin-bottom: 14px !important;
-        font-weight: 600;
-    }
-    
-    .card p {
-        color: var(--text-medium) !important;
-        margin-bottom: 10px !important;
-        line-height: 1.6;
-    }
-    
-    /* ========== HEADERS ========== */
-    h1, h2, h3, h4 {
-        color: var(--primary-blue) !important;
-        font-weight: 700 !important;
-        margin-bottom: 24px !important;
-    }
-    
-    h1 {
-        font-size: 2.75rem !important;
-        border-bottom: 3px solid var(--primary-blue) !important;
-        padding-bottom: 12px !important;
-        margin-bottom: 35px !important;
-        letter-spacing: -0.5px;
-    }
-    
-    h2 {
-        font-size: 2.25rem !important;
-        margin-top: 35px !important;
-    }
-    
-    h3 {
-        font-size: 1.75rem !important;
-    }
-    
-    /* ========== BUTTONS ========== */
-    /* Blue gradient buttons */
-    .stButton > button {
-        background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%) !important;
-        color: white !important;
-        font-weight: 600 !important;
-        border: none !important;
-        padding: 14px 28px !important;
-        border-radius: 10px !important;
-        font-size: 16px !important;
-        transition: all 0.3s ease !important;
-        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2) !important;
-        letter-spacing: 0.3px;
-    }
-    
-    .stButton > button:hover {
-        background: linear-gradient(135deg, var(--primary-blue-light) 0%, var(--primary-blue) 100%) !important;
-        transform: translateY(-3px) !important;
-        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3) !important;
-    }
-    
-    /* ========== FORMS AND INPUTS ========== */
-    /* Text inputs, select boxes, etc */
-    .stTextInput > div > div > input,
-    .stSelectbox > div > div > div,
-    .stTextArea > div > div > textarea,
-    .stDateInput > div > div > input {
-        border: 2px solid var(--border-color) !important;
-        border-radius: 10px !important;
-        padding: 12px 16px !important;
-        background-color: white !important;
-        font-size: 16px !important;
-        color: var(--text-dark) !important;
-    }
-    
-    .stTextInput > div > div > input:focus,
-    .stSelectbox > div > div > div:focus,
-    .stTextArea > div > div > textarea:focus,
-    .stDateInput > div > div > input:focus {
-        border-color: var(--primary-blue) !important;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
-        outline: none !important;
-    }
-    
-    /* Labels */
-    .stTextInput label,
-    .stSelectbox label,
-    .stTextArea label,
-    .stDateInput label {
-        color: var(--text-dark) !important;
-        font-weight: 600 !important;
-        margin-bottom: 8px !important;
-        font-size: 16px !important;
-    }
-    
-    /* ========== DATA TABLES ========== */
-    .dataframe {
-        border: 1px solid var(--border-color) !important;
-        border-radius: 10px !important;
-        overflow: hidden !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    }
-    
-    .dataframe th {
-        background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%) !important;
-        color: white !important;
-        font-weight: 600 !important;
-        border: none !important;
-        padding: 16px 20px !important;
-        font-size: 15px;
-    }
-    
-    .dataframe td {
-        border: 1px solid var(--border-color) !important;
-        padding: 14px 20px !important;
-        color: var(--text-medium);
-        font-size: 15px;
-    }
-    
-    .dataframe tr:nth-child(even) {
-        background-color: var(--background-light) !important;
-    }
-    
-    .dataframe tr:hover {
-        background-color: rgba(37, 99, 235, 0.05) !important;
-    }
-    
-    /* ========== METRICS ========== */
-    /* Metric cards styling */
-    .stMetric {
-        background-color: white !important;
-        border: 1px solid var(--border-color) !important;
-        border-radius: 10px !important;
-        padding: 20px !important;
-        box-shadow: var(--card-shadow) !important;
-        text-align: center;
-    }
-    
-    .stMetric label {
-        color: var(--text-medium) !important;
-        font-weight: 600 !important;
-        font-size: 16px !important;
-        margin-bottom: 8px !important;
-        display: block;
-    }
-    
-    .stMetric value {
-        color: var(--primary-blue) !important;
-        font-weight: 700 !important;
-        font-size: 28px !important;
-        display: block;
-        margin-top: 5px;
-    }
-    
-    .stMetric delta {
         font-weight: 500 !important;
-        font-size: 14px !important;
     }
     
-    /* ========== STATUS MESSAGES ========== */
-    /* Info boxes with blue theme */
-    .stInfo {
-        background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(37, 99, 235, 0.04) 100%) !important;
-        border-left: 4px solid var(--primary-blue) !important;
-        border-radius: 10px !important;
-        color: var(--text-dark) !important;
-        padding: 20px !important;
-        font-size: 16px;
+    /* Radio button labels in sidebar */
+    .st-emotion-cache-1qrvfrg label {
+        font-size: 18px !important;
+        font-weight: 500 !important;
     }
     
-    .stSuccess {
-        background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.04) 100%) !important;
-        border-left: 4px solid #10B981 !important;
-        border-radius: 10px !important;
-        color: var(--text-dark) !important;
-        padding: 20px !important;
-        font-size: 16px;
+    /* Sidebar title */
+    .st-emotion-cache-16idsys p {
+        font-size: 24px !important;
+        font-weight: 700 !important;
     }
     
-    .stWarning {
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.04) 100%) !important;
-        border-left: 4px solid #F59E0B !important;
-        border-radius: 10px !important;
-        color: var(--text-dark) !important;
-        padding: 20px !important;
-        font-size: 16px;
-    }
-    
-    .stError {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.04) 100%) !important;
-        border-left: 4px solid #EF4444 !important;
-        border-radius: 10px !important;
-        color: var(--text-dark) !important;
-        padding: 20px !important;
-        font-size: 16px;
-    }
-    
-    /* ========== PLOT STYLING ========== */
-    /* Make matplotlib plots blend with theme */
-    .stPlot {
-        border: 1px solid var(--border-color) !important;
-        border-radius: 10px !important;
-        padding: 20px !important;
-        background-color: white !important;
-        box-shadow: var(--card-shadow);
-    }
-    
-    /* ========== OTHER ELEMENTS ========== */
-    /* Horizontal rules */
-    hr {
-        border: none !important;
-        height: 2px !important;
-        background: linear-gradient(90deg, var(--primary-blue) 0%, var(--border-color) 100%) !important;
-        margin: 40px 0 !important;
-    }
-    
-    /* Captions */
-    .stCaption {
-        color: var(--text-light) !important;
-        font-style: italic !important;
-        font-size: 14px;
-        margin-top: 8px;
-    }
-    
-    /* Checkboxes and sliders in sidebar */
-    section[data-testid="stSidebar"] .stCheckbox label,
-    section[data-testid="stSidebar"] .stSlider label,
-    section[data-testid="stSidebar"] .stSelectbox label {
-        color: white !important;
-        font-weight: 500;
-    }
-    
-    section[data-testid="stSidebar"] .stCheckbox span {
-        background-color: white !important;
-        border-color: white !important;
-    }
-    
-    section[data-testid="stSidebar"] .stCheckbox input:checked + span {
-        background-color: var(--primary-blue) !important;
-        border-color: white !important;
-    }
-    
-    /* Remove Streamlit default branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* ========== RESPONSIVE DESIGN ========== */
-    @media (max-width: 768px) {
-        section[data-testid="stSidebar"] {
-            min-width: 250px !important;
-            max-width: 300px !important;
-        }
-        
-        h1 {
-            font-size: 2rem !important;
-        }
-        
-        h2 {
-            font-size: 1.75rem !important;
-        }
-        
-        .stRadio > div {
-            font-size: 18px !important;
-        }
+    /* Sidebar headers */
+    .st-emotion-cache-16idsys h1,
+    .st-emotion-cache-16idsys h2,
+    .st-emotion-cache-16idsys h3 {
+        font-size: 20px !important;
+        font-weight: 600 !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1226,19 +799,20 @@ def app():
         st.session_state['google_df'] = pd.DataFrame()
     if 'selected_phase_run' not in st.session_state:
         st.session_state['selected_phase_run'] = None
-    if 'smote_applied' not in st.session_state:
-        st.session_state['smote_applied'] = False
-    if 'smote_original_size' not in st.session_state:
-        st.session_state['smote_original_size'] = 0
-    if 'smote_balanced_size' not in st.session_state:
-        st.session_state['smote_balanced_size'] = 0
+    if 'smote_with_results' not in st.session_state:
+        st.session_state['smote_with_results'] = pd.DataFrame()
+    if 'smote_without_results' not in st.session_state:
+        st.session_state['smote_without_results'] = pd.DataFrame()
 
     # Attempt to load previously saved models on startup (only once)
     if 'models_loaded_attempted' not in st.session_state:
         expected_names = ["Naive_Bayes", "Decision_Tree", "Logistic_Regression", "SVM"]
+        # Try load both with spaces and underscores
         trained_models_loaded, vec_loaded, selected_phase_loaded = load_trained_models(expected_model_names=["Naive Bayes","Decision Tree","Logistic Regression","SVM"])
+        # If any model found (not None), populate session state
         any_model_loaded = any(v is not None for v in trained_models_loaded.values()) if trained_models_loaded else False
         if any_model_loaded:
+            # normalize model keys to display names
             st.session_state['trained_models'] = trained_models_loaded
             st.session_state['trained_vectorizer'] = vec_loaded
             if selected_phase_loaded:
@@ -1246,50 +820,28 @@ def app():
             st.success("Loaded saved models from disk. Single-text checks are available.")
         st.session_state['models_loaded_attempted'] = True
 
-    # ==================== NAVIGATION ====================
-    # The sidebar is now PERMANENTLY VISIBLE and cannot be collapsed
+    # Sidebar and navigation - UPDATED with SMOTE Analysis
     st.sidebar.title("FactChecker")
     page = st.sidebar.radio("Navigation", 
-                           ["Dashboard", 
-                            "Data Collection", 
-                            "Model Training", 
-                            "Benchmark Testing", 
-                            "Results & Analysis"], 
+                           ["Dashboard", "Data Collection", "Model Training", "SMOTE Analysis", "Benchmark Testing", "Results & Analysis"], 
                            key='navigation')
 
     # --- DASHBOARD ---
     if page == "Dashboard":
-        st.markdown("<h1>FactChecker Dashboard</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#475569; margin-bottom:30px;'>AI-Powered Fact-Checking Platform for Political Claims Analysis</p>", unsafe_allow_html=True)
-        
-        col1, col2, col3 = st.columns(3)
+        st.markdown("<h1 style='color:#00c8ff;'>FactChecker Dashboard</h1>", unsafe_allow_html=True)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.markdown('<div class="card"><h3>Data Overview</h3><p>Collect and manage training data from Politifact archives. Import, clean, and prepare datasets for analysis.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="card"><h3>Data Overview</h3><p>Collect and manage training data from Politifact archives</p></div>', unsafe_allow_html=True)
         with col2:
-            st.markdown('<div class="card"><h3>Model Training</h3><p>Advanced NLP feature extraction and machine learning model training with multiple classification algorithms.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="card"><h3>Model Training</h3><p>Advanced NLP feature extraction and ML training</p></div>', unsafe_allow_html=True)
         with col3:
-            st.markdown('<div class="card"><h3>Benchmark Testing</h3><p>Validate model performance with real-world data and external fact-checking APIs for accuracy assessment.</p></div>', unsafe_allow_html=True)
-        
-        # Quick stats if data exists
-        if not st.session_state['scraped_df'].empty:
-            st.markdown("---")
-            st.subheader("Current Dataset Summary")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Claims", len(st.session_state['scraped_df']))
-            with col2:
-                if 'label' in st.session_state['scraped_df'].columns:
-                    true_count = st.session_state['scraped_df']['label'].str.contains('True', case=False).sum()
-                    st.metric("True Claims", true_count)
-            with col3:
-                if st.session_state.get('smote_applied', False):
-                    st.metric("SMOTE Applied", "Yes", f"Balanced to {st.session_state.get('smote_balanced_size', 0)}")
+            st.markdown('<div class="card"><h3>SMOTE Analysis</h3><p>Compare performance with/without oversampling</p></div>', unsafe_allow_html=True)
+        with col4:
+            st.markdown('<div class="card"><h3>Benchmark Testing</h3><p>Validate models with real-world data</p></div>', unsafe_allow_html=True)
 
     # --- DATA COLLECTION ---
     elif page == "Data Collection":
-        st.markdown("<h1>Data Collection</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#475569; margin-bottom:30px;'>Scrape and import political claims from fact-checking sources</p>", unsafe_allow_html=True)
-        
+        st.markdown("<h1 style='color:#00c8ff;'>Data Collection</h1>", unsafe_allow_html=True)
         min_date = pd.to_datetime('2007-01-01')
         max_date = pd.to_datetime('today').normalize()
         date_col1, date_col2 = st.columns(2)
@@ -1297,73 +849,41 @@ def app():
             start_date = st.date_input("Start Date", min_value=min_date, max_value=max_date, value=pd.to_datetime('2023-01-01'))
         with date_col2:
             end_date = st.date_input("End Date", min_value=min_date, max_value=max_date, value=max_date)
-        
         if st.button("Scrape Politifact Data", key="scrape_btn", use_container_width=True):
             if start_date > end_date:
                 st.error("Start date must be before end date")
             else:
-                with st.spinner("Scraping political claims from Politifact..."):
+                with st.spinner("Scraping political claims..."):
                     scraped_df = scrape_data_by_date_range(pd.to_datetime(start_date), pd.to_datetime(end_date))
                 if not scraped_df.empty:
                     st.session_state['scraped_df'] = scraped_df
                     st.success(f"Successfully scraped {len(scraped_df)} claims!")
                 else:
                     st.warning("No data found. Try adjusting date range.")
-        
         if not st.session_state['scraped_df'].empty:
-            st.markdown("---")
-            st.subheader("Dataset Preview")
             st.dataframe(st.session_state['scraped_df'].head(10), use_container_width=True)
-            st.caption(f"Showing 10 of {len(st.session_state['scraped_df'])} total claims")
 
     # --- MODEL TRAINING ---
     elif page == "Model Training":
-        st.markdown("<h1>Model Training</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#475569; margin-bottom:30px;'>Train machine learning models with advanced NLP feature extraction</p>", unsafe_allow_html=True)
-        
+        st.markdown("<h1 style='color:#00c8ff;'>Model Training</h1>", unsafe_allow_html=True)
         if st.session_state['scraped_df'].empty:
             st.warning("Please collect data first from the Data Collection page!")
         else:
-            # Data Balancing Section
-            st.markdown("---")
-            st.subheader("Data Balancing")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Apply SMOTE to Balance Data", 
-                           use_container_width=True,
-                           help="Apply Synthetic Minority Over-sampling Technique to balance class distribution"):
-                    with st.spinner("Balancing data with SMOTE..."):
-                        balanced_df = apply_smote_to_data(st.session_state['scraped_df'])
-                        if not balanced_df.empty:
-                            st.session_state['scraped_df'] = balanced_df
-                            
-            with col2:
-                if st.button("Reset SMOTE (Use Original Data)", 
-                           use_container_width=True,
-                           help="Revert to original unbalanced dataset"):
-                    st.session_state['smote_applied'] = False
-                    st.info("SMOTE reset. Using original data distribution.")
-            
-            # Show SMOTE status
-            if st.session_state.get('smote_applied', False):
-                st.success(f"SMOTE Applied: Balanced from {st.session_state['smote_original_size']} to {st.session_state['smote_balanced_size']} samples")
-            else:
-                st.info("No SMOTE applied. Using original data distribution.")
-            
-            # Model Training Options
-            st.markdown("---")
-            st.subheader("Model Training Options")
-            
             phases = ["Lexical & Morphological", "Syntactic", "Semantic", "Discourse", "Pragmatic"]
             selected_phase = st.selectbox("Feature Extraction Method:", phases, key='selected_phase')
-            st.caption(f"Selected feature set: {selected_phase}")
+            
+            # SMOTE option checkbox
+            use_smote = st.checkbox("Apply SMOTE for class balancing (except Naive Bayes)", value=True, 
+                                   help="SMOTE (Synthetic Minority Over-sampling Technique) creates synthetic samples for minority class")
+            
+            st.caption(f"*Selected: {selected_phase}* | *SMOTE: {'Enabled' if use_smote else 'Disabled'}*")
             
             if st.button("Run Model Analysis", key="analyze_btn", use_container_width=True):
-                with st.spinner(f"Training 4 classification models with {N_SPLITS}-Fold Cross Validation..."):
+                with st.spinner(f"Training 4 models with {N_SPLITS}-Fold CV {'& SMOTE' if use_smote else ''}..."):
                     df_results, trained_models, trained_vectorizer = evaluate_models(
                         st.session_state['scraped_df'], 
-                        selected_phase
+                        selected_phase, 
+                        use_smote=use_smote
                     )
                     st.session_state['df_results'] = df_results
                     st.session_state['trained_models'] = trained_models
@@ -1371,12 +891,150 @@ def app():
                     st.session_state['selected_phase_run'] = selected_phase
                     st.success("Analysis complete! Models trained and saved to disk.")
 
+    # --- SMOTE ANALYSIS ---
+    elif page == "SMOTE Analysis":
+        st.markdown("<h1 style='color:#00c8ff;'>SMOTE Impact Analysis</h1>", unsafe_allow_html=True)
+        
+        if st.session_state['scraped_df'].empty:
+            st.warning("Please collect data first from the Data Collection page!")
+        else:
+            phases = ["Lexical & Morphological", "Syntactic", "Semantic", "Discourse", "Pragmatic"]
+            selected_phase = st.selectbox("Select Feature Extraction Method:", phases, key='smote_phase')
+            
+            st.info("""
+            **SMOTE (Synthetic Minority Over-sampling Technique)** helps balance imbalanced datasets by creating synthetic samples for the minority class.
+            This section compares model performance with and without SMOTE application.
+            """)
+            
+            if st.button("Run SMOTE Impact Analysis", key="smote_btn", use_container_width=True):
+                if st.session_state['scraped_df'].empty:
+                    st.error("No data available for analysis!")
+                else:
+                    with st.spinner("Running comprehensive SMOTE analysis (this may take a few minutes)..."):
+                        results_with, results_without = analyze_smote_impact(
+                            st.session_state['scraped_df'], 
+                            selected_phase
+                        )
+                        
+                        if results_with is not None and results_without is not None:
+                            st.session_state['smote_with_results'] = results_with
+                            st.session_state['smote_without_results'] = results_without
+                            st.session_state['selected_phase_run'] = selected_phase
+                            
+                            st.success("SMOTE analysis complete!")
+                            
+                            # Display comparison
+                            st.subheader("SMOTE vs No-SMOTE Performance Comparison")
+                            
+                            # Create comparison dataframe
+                            comparison_data = []
+                            for model in results_with['Model'].unique():
+                                with_row = results_with[results_with['Model'] == model].iloc[0]
+                                without_row = results_without[results_without['Model'] == model].iloc[0]
+                                
+                                comparison_data.append({
+                                    'Model': model,
+                                    'Accuracy (SMOTE)': with_row['Accuracy'],
+                                    'Accuracy (No SMOTE)': without_row['Accuracy'],
+                                    'Accuracy Δ': with_row['Accuracy'] - without_row['Accuracy'],
+                                    'F1 (SMOTE)': with_row['F1-Score'],
+                                    'F1 (No SMOTE)': without_row['F1-Score'],
+                                    'F1 Δ': with_row['F1-Score'] - without_row['F1-Score'],
+                                    'Training Time (SMOTE)': with_row['Training Time (s)'],
+                                    'Training Time (No SMOTE)': without_row['Training Time (s)'],
+                                })
+                            
+                            comparison_df = pd.DataFrame(comparison_data)
+                            
+                            # Display metrics
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                st.markdown("**Accuracy Comparison**")
+                                st.dataframe(comparison_df[['Model', 'Accuracy (SMOTE)', 'Accuracy (No SMOTE)', 'Accuracy Δ']], 
+                                           use_container_width=True)
+                                
+                                # Bar chart for accuracy comparison
+                                fig_acc, ax_acc = plt.subplots(figsize=(10, 6))
+                                x = np.arange(len(comparison_df))
+                                width = 0.35
+                                
+                                ax_acc.bar(x - width/2, comparison_df['Accuracy (SMOTE)'], width, label='With SMOTE', color='#00c8ff')
+                                ax_acc.bar(x + width/2, comparison_df['Accuracy (No SMOTE)'], width, label='Without SMOTE', color='#1a8cd8')
+                                
+                                ax_acc.set_xlabel('Model')
+                                ax_acc.set_ylabel('Accuracy (%)')
+                                ax_acc.set_title('Accuracy: SMOTE vs No-SMOTE')
+                                ax_acc.set_xticks(x)
+                                ax_acc.set_xticklabels(comparison_df['Model'], rotation=45)
+                                ax_acc.legend()
+                                ax_acc.grid(True, alpha=0.3)
+                                
+                                st.pyplot(fig_acc)
+                            
+                            with col2:
+                                st.markdown("**F1-Score Comparison**")
+                                st.dataframe(comparison_df[['Model', 'F1 (SMOTE)', 'F1 (No SMOTE)', 'F1 Δ']], 
+                                           use_container_width=True)
+                                
+                                # Bar chart for F1 comparison
+                                fig_f1, ax_f1 = plt.subplots(figsize=(10, 6))
+                                x = np.arange(len(comparison_df))
+                                width = 0.35
+                                
+                                ax_f1.bar(x - width/2, comparison_df['F1 (SMOTE)'], width, label='With SMOTE', color='#00c8ff')
+                                ax_f1.bar(x + width/2, comparison_df['F1 (No SMOTE)'], width, label='Without SMOTE', color='#1a8cd8')
+                                
+                                ax_f1.set_xlabel('Model')
+                                ax_f1.set_ylabel('F1-Score')
+                                ax_f1.set_title('F1-Score: SMOTE vs No-SMOTE')
+                                ax_f1.set_xticks(x)
+                                ax_f1.set_xticklabels(comparison_df['Model'], rotation=45)
+                                ax_f1.legend()
+                                ax_f1.grid(True, alpha=0.3)
+                                
+                                st.pyplot(fig_f1)
+                            
+                            # Summary insights
+                            st.subheader("SMOTE Impact Summary")
+                            
+                            # Calculate overall impact
+                            avg_acc_with = comparison_df['Accuracy (SMOTE)'].mean()
+                            avg_acc_without = comparison_df['Accuracy (No SMOTE)'].mean()
+                            avg_f1_with = comparison_df['F1 (SMOTE)'].mean()
+                            avg_f1_without = comparison_df['F1 (No SMOTE)'].mean()
+                            
+                            insights_col1, insights_col2, insights_col3 = st.columns(3)
+                            
+                            with insights_col1:
+                                st.metric("Average Accuracy with SMOTE", f"{avg_acc_with:.1f}%")
+                                st.metric("Average Accuracy without SMOTE", f"{avg_acc_without:.1f}%")
+                            
+                            with insights_col2:
+                                acc_delta = avg_acc_with - avg_acc_without
+                                st.metric("Accuracy Impact", f"{acc_delta:+.1f}%", 
+                                         delta_color="normal" if acc_delta > 0 else "inverse")
+                                
+                                f1_delta = avg_f1_with - avg_f1_without
+                                st.metric("F1-Score Impact", f"{f1_delta:+.3f}", 
+                                         delta_color="normal" if f1_delta > 0 else "inverse")
+                            
+                            with insights_col3:
+                                # Find which models benefited most
+                                best_improvement = comparison_df.loc[comparison_df['Accuracy Δ'].idxmax()]
+                                st.info(f"**Biggest Improver**: {best_improvement['Model']} (+{best_improvement['Accuracy Δ']:.1f}%)")
+                                
+                                # Check if SMOTE was beneficial overall
+                                if acc_delta > 0:
+                                    st.success("✅ SMOTE improved overall model performance")
+                                else:
+                                    st.warning("⚠️ SMOTE did not improve overall accuracy")
+
     # --- BENCHMARK TESTING ---
     elif page == "Benchmark Testing":
-        st.markdown("<h1>Benchmark Testing</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#475569; margin-bottom:30px;'>Validate model performance with external datasets</p>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color:#00c8ff;'>Benchmark Testing</h1>", unsafe_allow_html=True)
 
-        # Read query param if present
+        # read query param if present
         try:
             query_params = st.experimental_get_query_params()
             external_text = ""
@@ -1387,85 +1045,66 @@ def app():
         except Exception:
             external_text = ""
 
-        st.subheader("External Benchmark Testing")
+        st.subheader("Fact Check Benchmark")
         mode_col1, mode_col2 = st.columns(2)
         with mode_col1:
-            use_demo = st.checkbox("Use Google Fact Check API Demo Data", value=True)
+            use_demo = st.checkbox("Google Fact Check API (Demo mode)", value=True)
         with mode_col2:
-            num_claims = st.slider("Number of test claims:", min_value=5, max_value=50, value=15, step=5, key='num_claims')
+            pass
+
+        num_claims = st.slider("Number of test claims:", min_value=5, max_value=50, value=10, step=5, key='num_claims')
 
         st.markdown("---")
-        st.subheader("Single Claim Verification")
-        custom_text = st.text_area("Enter text to verify:", value=external_text, key="custom_text_input", height=150,
-                                 placeholder="Paste or type the claim you want to verify here...")
-        
-        if st.button("Run Single-Text Verification", key="single_check_btn", use_container_width=True):
+        st.subheader("Check custom text")
+        custom_text = st.text_input("Text to check (prefilled from extension if provided):", value=external_text, key="custom_text_input")
+        if st.button("Run Single-Text Check", key="single_check_btn", use_container_width=True):
             if not st.session_state.get('trained_models'):
-                st.error("Please train models first in Model Training page before running verification.")
+                st.error("Please train models first in Model Training page before running single-text check.")
             else:
-                with st.spinner("Analyzing claim with trained models..."):
+                with st.spinner("Running models on the provided text..."):
                     trained_models = st.session_state['trained_models']
                     trained_vectorizer = st.session_state.get('trained_vectorizer')
                     selected_phase_run = st.session_state.get('selected_phase_run')
                     results = predict_single_text(custom_text, trained_models, trained_vectorizer, selected_phase_run)
-                    st.markdown("### Model Predictions")
+                    st.markdown("### Single-text Model Predictions")
                     if 'error' in results:
                         st.error(results['error'])
                     else:
-                        # Create a results table
-                        results_data = []
                         for mname, res in results.items():
                             if 'prediction' in res:
-                                label = "REAL/TRUE" if res['prediction'] == 1 else "FAKE/FALSE"
-                                confidence = "High" if res['prediction'] in [0, 1] else "Medium"
-                                results_data.append({"Model": mname, "Prediction": label, "Confidence": confidence})
+                                pretty = "REAL/TRUE (1)" if res['prediction'] == 1 else "FAKE/ FALSE (0)"
+                                st.write(f"**{mname}** → {pretty}")
                             else:
-                                results_data.append({"Model": mname, "Prediction": "Error", "Confidence": "N/A"})
-                        
-                        results_df = pd.DataFrame(results_data)
-                        st.dataframe(results_df, use_container_width=True)
-                        
-                        # Show consensus
-                        if len(results_data) > 0:
-                            real_count = sum(1 for r in results_data if r["Prediction"] == "REAL/TRUE")
-                            fake_count = sum(1 for r in results_data if r["Prediction"] == "FAKE/FALSE")
-                            if real_count > fake_count:
-                                st.success(f"Model Consensus: Likely TRUE ({real_count} of {len(results_data)} models agree)")
-                            elif fake_count > real_count:
-                                st.error(f"Model Consensus: Likely FALSE ({fake_count} of {len(results_data)} models agree)")
-                            else:
-                                st.warning(f"Model Consensus: Split Decision ({real_count}-{fake_count})")
+                                st.write(f"**{mname}** → Error: {res.get('error')}")
 
-        # Auto-run when external text present
+        # auto-run when external text present and models loaded
         if external_text and st.session_state.get('trained_models') and custom_text == external_text:
-            with st.spinner("Auto-verifying external text..."):
+            with st.spinner("Auto-running models on external text..."):
                 trained_models = st.session_state['trained_models']
                 trained_vectorizer = st.session_state.get('trained_vectorizer')
                 selected_phase_run = st.session_state.get('selected_phase_run')
                 auto_results = predict_single_text(external_text, trained_models, trained_vectorizer, selected_phase_run)
-                st.markdown("### Auto-Verification Results")
+                st.markdown("### Auto-run predictions for URL text")
                 if 'error' in auto_results:
                     st.error(auto_results['error'])
                 else:
-                    # Create summary
-                    real_count = sum(1 for mname, res in auto_results.items() if 'prediction' in res and res['prediction'] == 1)
-                    total_models = len([m for mname, res in auto_results.items() if 'prediction' in res])
-                    if real_count > total_models/2:
-                        st.success(f"External Claim Assessment: Likely TRUE ({real_count}/{total_models} models)")
-                    else:
-                        st.error(f"External Claim Assessment: Likely FALSE ({total_models-real_count}/{total_models} models)")
+                    for mname, res in auto_results.items():
+                        if 'prediction' in res:
+                            pretty = "REAL/TRUE (1)" if res['prediction'] == 1 else "FAKE/ FALSE (0)"
+                            st.write(f"**{mname}** → {pretty}")
+                        else:
+                            st.write(f"**{mname}** → Error: {res.get('error')}")
 
         st.markdown("---")
-        st.subheader("Batch Benchmark Testing")
-        
+        # Benchmark using demo or Google API
         if st.button("Run Benchmark Test", key="benchmark_btn", use_container_width=True):
             if not st.session_state.get('trained_models'):
                 st.error("Please train models first in the Model Training page!")
             else:
-                with st.spinner('Loading benchmark data...'):
+                with st.spinner('Loading fact-check data...'):
                     if use_demo:
                         api_results = get_demo_google_claims()
-                        st.success("Demo Google Fact Check data loaded successfully")
+                        st.success("✅ Demo Google Fact Check loaded successfully!")
                     else:
                         if 'GOOGLE_API_KEY' not in st.secrets:
                             st.error("API Key not found in secrets.toml")
@@ -1474,7 +1113,7 @@ def app():
                             api_key = st.secrets["GOOGLE_API_KEY"]
                             api_results = fetch_google_claims(api_key, num_claims)
                             if api_results:
-                                st.success(f"Fetched {len(api_results)} claims from Google API")
+                                st.success(f"✅ Fetched {len(api_results)} claims from Google API!")
                     google_df = process_and_map_google_claims(api_results)
                     if not google_df.empty:
                         trained_models = st.session_state['trained_models']
@@ -1483,143 +1122,118 @@ def app():
                         benchmark_results_df = run_google_benchmark(google_df, trained_models, trained_vectorizer, selected_phase_run)
                         st.session_state['google_benchmark_results'] = benchmark_results_df
                         st.session_state['google_df'] = google_df
-                        st.success(f"Benchmark complete! Tested on {len(google_df)} external claims.")
+                        st.success(f"✅ Benchmark complete! Tested on {len(google_df)} claims.")
                     else:
                         st.warning("No claims were processed. Try adjusting parameters.")
 
         if not st.session_state['google_benchmark_results'].empty:
-            st.markdown("---")
             st.subheader("Benchmark Results")
             st.dataframe(st.session_state['google_benchmark_results'], use_container_width=True)
 
     # --- RESULTS & ANALYSIS ---
     elif page == "Results & Analysis":
-        st.markdown("<h1>Results & Analysis</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#475569; margin-bottom:30px;'>Model performance metrics and analytical insights</p>", unsafe_allow_html=True)
-        
-        if st.session_state['df_results'].empty:
+        st.markdown("<h1 style='color:#00c8ff;'>Results & Analysis</h1>", unsafe_allow_html=True)
+        if st.session_state['df_results'].empty and st.session_state['smote_with_results'].empty:
             st.warning("No results available. Please train models first in the Model Training page!")
         else:
-            st.header("Model Performance Summary")
-            
-            # Show SMOTE status if applied
-            if st.session_state.get('smote_applied', False):
-                st.info(f"Analysis based on SMOTE-balanced data: {st.session_state.get('smote_balanced_size', 'N/A')} samples")
-            
-            df_results = st.session_state['df_results']
-            
-            # Model performance cards
-            results_col1, results_col2, results_col3, results_col4 = st.columns(4)
-            metrics_data = []
-            for _, row in df_results.iterrows():
-                metrics_data.append({
-                    'model': row['Model'], 
-                    'accuracy': row['Accuracy'], 
-                    'f1': row['F1-Score'], 
-                    'training_time': row['Training Time (s)']
-                })
-            
-            for i, metric in enumerate(metrics_data):
-                col = [results_col1, results_col2, results_col3, results_col4][i]
-                with col:
-                    st.markdown(f"""
-                    <div class='card'>
-                        <h4>{metric['model']}</h4>
-                        <p><strong>Accuracy:</strong> {metric['accuracy']:.1f}%</p>
-                        <p><strong>F1-Score:</strong> {metric['f1']:.3f}</p>
-                        <p><strong>Training Time:</strong> {metric['training_time']}s</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            # Visualizations
-            st.markdown("---")
-            st.subheader("Performance Analysis")
-            
-            viz_col1, viz_col2 = st.columns(2)
-            with viz_col1:
-                st.subheader("Performance Metrics Comparison")
-                chart_metric = st.selectbox("Select metric:", 
-                                          ['Accuracy', 'F1-Score', 'Precision', 'Recall', 'Training Time (s)', 'Inference Latency (ms)'], 
-                                          key='chart_metric')
-                chart_data = df_results[['Model', chart_metric]].set_index('Model')
-                st.bar_chart(chart_data)
-            
-            with viz_col2:
-                st.subheader("Speed vs Accuracy Analysis")
-                fig, ax = plt.subplots(figsize=(8, 6))
-                colors = ['#2563EB', '#3B82F6', '#1D4ED8', '#60A5FA']  # Blue variations
-                for i, (_, row) in enumerate(df_results.iterrows()):
-                    ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], 
-                             s=200, alpha=0.7, color=colors[i], label=row['Model'])
-                    ax.annotate(row['Model'], 
-                              (row['Inference Latency (ms)'] + 5, row['Accuracy']), 
-                              fontsize=10, alpha=0.9)
-                ax.set_xlabel('Inference Latency (ms)')
-                ax.set_ylabel('Accuracy (%)')
-                ax.set_title('Model Performance: Speed vs Accuracy')
-                ax.grid(True, alpha=0.3)
-                ax.legend(loc='best')
-                st.pyplot(fig)
-            
-            # Benchmark Comparison
-            if not st.session_state['google_benchmark_results'].empty:
-                st.markdown("---")
-                st.header("External Benchmark Comparison")
-                google_results = st.session_state['google_benchmark_results']
-                politifacts_results = st.session_state['df_results']
+            # Check which results to show
+            if not st.session_state['smote_with_results'].empty:
+                # Show SMOTE analysis results
+                st.header("SMOTE Analysis Results")
                 
-                st.subheader("Cross-Dataset Performance")
-                comp_col1, comp_col2, comp_col3, comp_col4 = st.columns(4)
-                for idx, (_, row) in enumerate(google_results.iterrows()):
-                    model_name = row['Model']
-                    google_accuracy = row['Accuracy']
-                    politifacts_row = politifacts_results[politifacts_results['Model'] == model_name]
-                    if not politifacts_row.empty:
-                        politifacts_accuracy = politifacts_row['Accuracy'].values[0]
-                        delta = google_accuracy - politifacts_accuracy
-                        delta_color = "normal" if delta >= 0 else "inverse"
-                    else:
-                        delta = None
-                        delta_color = "off"
-                    col = [comp_col1, comp_col2, comp_col3, comp_col4][idx]
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("With SMOTE")
+                    st.dataframe(st.session_state['smote_with_results'], use_container_width=True)
+                with col2:
+                    st.subheader("Without SMOTE")
+                    st.dataframe(st.session_state['smote_without_results'], use_container_width=True)
+                
+                st.markdown("---")
+            
+            if not st.session_state['df_results'].empty:
+                # Show regular training results
+                st.header("Model Performance Results")
+                df_results = st.session_state['df_results']
+                results_col1, results_col2, results_col3, results_col4 = st.columns(4)
+                metrics_data = []
+                for _, row in df_results.iterrows():
+                    metrics_data.append({'model': row['Model'], 'accuracy': row['Accuracy'], 'f1': row['F1-Score'], 'training_time': row['Training Time (s)']})
+                for i, metric in enumerate(metrics_data):
+                    col = [results_col1, results_col2, results_col3, results_col4][i]
                     with col:
-                        if delta is not None:
-                            st.metric(label=f"{model_name}", 
-                                    value=f"{google_accuracy:.1f}%", 
-                                    delta=f"{delta:+.1f}%", 
-                                    delta_color=delta_color,
-                                    help=f"Accuracy on external data vs training data ({politifacts_accuracy:.1f}%)")
+                        smote_status = " (with SMOTE)" if 'SMOTE Used' in row and row['SMOTE Used'] == 'Yes' else ""
+                        st.markdown(f"<div class='card'><h4>{metric['model']}{smote_status}</h4><p>{metric['accuracy']:.1f}% | F1 {metric['f1']:.3f} | {metric['training_time']}s</p></div>", unsafe_allow_html=True)
+                st.markdown("---")
+                viz_col1, viz_col2 = st.columns(2)
+                with viz_col1:
+                    st.subheader("Performance Metrics")
+                    chart_metric = st.selectbox("Select metric to visualize:", ['Accuracy', 'F1-Score', 'Precision', 'Recall', 'Training Time (s)', 'Inference Latency (ms)'], key='chart_metric')
+                    chart_data = df_results[['Model', chart_metric]].set_index('Model')
+                    st.bar_chart(chart_data)
+                with viz_col2:
+                    st.subheader("Speed vs Accuracy Trade-off")
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    colors = ['#00a8e1', '#00c8ff', '#1a8cd8', '#2d9cdb']
+                    for i, (_, row) in enumerate(df_results.iterrows()):
+                        ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], s=200, alpha=0.7, color=colors[i], label=row['Model'])
+                        ax.annotate(row['Model'], (row['Inference Latency (ms)'] + 5, row['Accuracy']), fontsize=9, alpha=0.8)
+                    ax.set_xlabel('Inference Latency (ms)')
+                    ax.set_ylabel('Accuracy (%)')
+                    ax.set_title('Model Performance: Speed vs Accuracy')
+                    ax.grid(True, alpha=0.3)
+                    ax.legend()
+                    st.pyplot(fig)
+                if not st.session_state['google_benchmark_results'].empty:
+                    st.markdown("---")
+                    st.header("Fact Check Benchmark Results")
+                    google_results = st.session_state['google_benchmark_results']
+                    politifacts_results = st.session_state['df_results']
+                    st.subheader("Performance Comparison")
+                    comp_col1, comp_col2, comp_col3, comp_col4 = st.columns(4)
+                    for idx, (_, row) in enumerate(google_results.iterrows()):
+                        model_name = row['Model']
+                        google_accuracy = row['Accuracy']
+                        politifacts_row = politifacts_results[politifacts_results['Model'] == model_name]
+                        if not politifacts_row.empty:
+                            politifacts_accuracy = politifacts_row['Accuracy'].values[0]
+                            delta = google_accuracy - politifacts_accuracy
+                            delta_color = "normal" if delta >= 0 else "inverse"
                         else:
-                            st.metric(label=f"{model_name}", value=f"{google_accuracy:.1f}%")
-            
-            # Performance Review
-            st.markdown("---")
-            st.header("Performance Review")
-            
-            critique_col1, critique_col2 = st.columns([2, 1])
-            with critique_col1:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                critique_text = generate_humorous_critique(st.session_state['df_results'], st.session_state['selected_phase_run'])
-                st.markdown(critique_text)
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            with critique_col2:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("Top Performer")
-                if not st.session_state['df_results'].empty:
-                    best_model = st.session_state['df_results'].loc[st.session_state['df_results']['F1-Score'].idxmax()]
-                    st.markdown(f"""
-                    **Model:** {best_model['Model']}
-                    
-                    **Accuracy:** {best_model['Accuracy']:.1f}%
-                    
-                    **F1-Score:** {best_model['F1-Score']:.3f}
-                    
-                    **Inference Speed:** {best_model['Inference Latency (ms)']}ms
-                    
-                    **Feature Set:** {st.session_state['selected_phase_run']}
-                    """)
-                st.markdown('</div>', unsafe_allow_html=True)
+                            delta = None
+                            delta_color = "off"
+                        col = [comp_col1, comp_col2, comp_col3, comp_col4][idx]
+                        with col:
+                            if delta is not None:
+                                st.metric(label=f"{model_name}", value=f"{google_accuracy:.1f}%", delta=f"{delta:+.1f}%", delta_color=delta_color)
+                            else:
+                                st.metric(label=f"{model_name}", value=f"{google_accuracy:.1f}%")
+                st.markdown("---")
+                st.header("AI Performance Review")
+                critique_col1, critique_col2 = st.columns([2, 1])
+                with critique_col1:
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    critique_text = generate_humorous_critique(st.session_state['df_results'], st.session_state['selected_phase_run'])
+                    st.markdown(critique_text)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                with critique_col2:
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    st.subheader("Winner's Circle")
+                    if not st.session_state['df_results'].empty:
+                        best_model = st.session_state['df_results'].loc[st.session_state['df_results']['F1-Score'].idxmax()]
+                        st.markdown(f"""
+                        **Champion Model:**  
+                        **{best_model['Model']}**
+                        
+                        **Performance:**  
+                        {best_model['Accuracy']:.1f}% Accuracy  
+                        {best_model['F1-Score']:.3f} F1-Score  
+                        {best_model['Inference Latency (ms)']}ms Inference
+                        
+                        **Feature Set:**  
+                        {st.session_state['selected_phase_run']}
+                        """)
+                    st.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == '__main__':
     app()
