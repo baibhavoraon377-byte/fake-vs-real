@@ -1,5 +1,5 @@
 # lssdp.py
-# Updated Streamlit app with single-text URL handling, save/load trained models, and single-text prediction.
+# Updated Streamlit app with dark blue/white theme, improved visualizations, and separate SMOTE analysis
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,6 +11,7 @@ from urllib.parse import urljoin
 import time
 import random
 import matplotlib.pyplot as plt
+import seaborn as sns
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
 
@@ -24,7 +25,7 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, confusion_matrix, classification_report
 from sklearn.preprocessing import LabelEncoder
 from scipy import sparse
 import io
@@ -32,6 +33,13 @@ import os
 from joblib import dump, load
 import json
 import pathlib
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+
+# Set plotly theme
+import plotly.io as pio
+pio.templates.default = "plotly_dark"
 
 # --- Configuration ---
 SCRAPED_DATA_PATH = 'politifact_data.csv'
@@ -519,6 +527,123 @@ def predict_single_text(text, trained_models, vectorizer, selected_phase):
     return results
 
 # --------------------------
+# Enhanced Visualization Functions
+# --------------------------
+def create_radar_chart(df_results):
+    """Create a radar chart comparing model performance"""
+    categories = ['Accuracy', 'F1-Score', 'Precision', 'Recall', 'Speed']
+    
+    fig = go.Figure()
+    
+    # Normalize metrics for radar chart
+    for idx, row in df_results.iterrows():
+        values = [
+            row['Accuracy'] / 100,  # Normalize to 0-1
+            row['F1-Score'],
+            row['Precision'],
+            row['Recall'],
+            1 - (row['Inference Latency (ms)'] / 1000)  # Normalize speed (higher is better)
+        ]
+        values = [max(0, min(1, v)) for v in values]  # Clip to 0-1
+        
+        fig.add_trace(go.Scatterpolar(
+            r=values,
+            theta=categories,
+            fill='toself',
+            name=row['Model'],
+            line=dict(color=px.colors.qualitative.Set1[idx]),
+            opacity=0.7
+        ))
+    
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 1]
+            )),
+        showlegend=True,
+        title="Model Performance Radar Chart",
+        height=500
+    )
+    
+    return fig
+
+def create_performance_heatmap(df_results):
+    """Create a heatmap of model performance metrics"""
+    metrics_df = df_results.set_index('Model')[['Accuracy', 'F1-Score', 'Precision', 'Recall']]
+    
+    fig = go.Figure(data=go.Heatmap(
+        z=metrics_df.values,
+        x=metrics_df.columns,
+        y=metrics_df.index,
+        colorscale='Viridis',
+        text=np.round(metrics_df.values, 3),
+        texttemplate='%{text}',
+        textfont={"size": 12},
+        hoverongaps=False))
+    
+    fig.update_layout(
+        title="Model Performance Heatmap",
+        xaxis_title="Metrics",
+        yaxis_title="Models",
+        height=400
+    )
+    
+    return fig
+
+def create_confusion_matrix_plot(y_true, y_pred, model_name):
+    """Create a confusion matrix visualization"""
+    cm = confusion_matrix(y_true, y_pred)
+    
+    fig = go.Figure(data=go.Heatmap(
+        z=cm,
+        x=['Predicted Fake', 'Predicted Real'],
+        y=['Actual Fake', 'Actual Real'],
+        colorscale='RdBu',
+        text=cm,
+        texttemplate='%{text}',
+        textfont={"size": 16},
+        hoverongaps=False))
+    
+    fig.update_layout(
+        title=f"Confusion Matrix - {model_name}",
+        xaxis_title="Predicted",
+        yaxis_title="Actual",
+        height=400
+    )
+    
+    return fig
+
+def create_3d_scatter(df_results):
+    """Create a 3D scatter plot of model performance"""
+    fig = go.Figure(data=go.Scatter3d(
+        x=df_results['Accuracy'],
+        y=df_results['F1-Score'],
+        z=df_results['Inference Latency (ms)'],
+        mode='markers+text',
+        marker=dict(
+            size=12,
+            color=df_results['Accuracy'],
+            colorscale='Viridis',
+            opacity=0.8
+        ),
+        text=df_results['Model'],
+        textposition="top center"
+    ))
+    
+    fig.update_layout(
+        scene=dict(
+            xaxis_title='Accuracy (%)',
+            yaxis_title='F1-Score',
+            zaxis_title='Inference Time (ms)'
+        ),
+        title="3D Model Performance Comparison",
+        height=600
+    )
+    
+    return fig
+
+# --------------------------
 # Model training & evaluation (K-Fold & SMOTE)
 # --------------------------
 def evaluate_models(df: pd.DataFrame, selected_phase: str, use_smote=True):
@@ -747,39 +872,189 @@ def generate_humorous_critique(df_results: pd.DataFrame, selected_phase: str) ->
 def app():
     st.set_page_config(page_title='FactChecker: AI Fact-Checking Platform', layout='wide', initial_sidebar_state='expanded')
 
-    # CSS with increased navigation font size
+    # CSS with dark blue/white theme and enhanced styling
     st.markdown("""
     <style>
-    body { background:#0f171e; color:#e6e6e6; }
-    .card { background:#1a242f; padding:12px; border-radius:8px; }
+    /* Main theme: Dark Blue & White */
+    .main {
+        background-color: #0a192f;
+        color: #e6f1ff;
+    }
     
-    /* Increased navigation menu font size */
+    .stApp {
+        background: linear-gradient(135deg, #0a192f 0%, #112240 100%);
+    }
+    
+    /* Cards and containers */
+    .card {
+        background: rgba(17, 34, 64, 0.8);
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid rgba(100, 255, 218, 0.1);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        margin-bottom: 20px;
+    }
+    
+    /* Sidebar - Lighter Dark Blue */
+    section[data-testid="stSidebar"] {
+        background-color: #112240 !important;
+        border-right: 1px solid rgba(100, 255, 218, 0.2);
+    }
+    
+    /* Navigation menu styling */
+    div[data-testid="stSidebarNav"] {
+        padding: 15px 0;
+    }
+    
     div[data-testid="stSidebarNav"] div,
     div[data-testid="stSidebarNav"] a,
     div[data-testid="stSidebarNav"] span,
     div[data-testid="stSidebarNav"] label {
         font-size: 18px !important;
         font-weight: 500 !important;
+        color: #ccd6f6 !important;
+        padding: 10px 15px !important;
+        border-radius: 8px !important;
+        margin: 5px 0 !important;
+        transition: all 0.3s ease !important;
     }
     
-    /* Radio button labels in sidebar */
-    .st-emotion-cache-1qrvfrg label {
-        font-size: 18px !important;
-        font-weight: 500 !important;
+    div[data-testid="stSidebarNav"] label:hover {
+        background-color: rgba(100, 255, 218, 0.1) !important;
+        color: #64ffda !important;
+    }
+    
+    div[data-testid="stSidebarNav"] .st-emotion-cache-1qrvfrg.e1f1d6gn0:has(input:checked) label {
+        background-color: rgba(100, 255, 218, 0.2) !important;
+        color: #64ffda !important;
+        border-left: 3px solid #64ffda !important;
     }
     
     /* Sidebar title */
     .st-emotion-cache-16idsys p {
-        font-size: 24px !important;
+        font-size: 28px !important;
         font-weight: 700 !important;
+        color: #64ffda !important;
+        text-align: center;
+        padding-bottom: 20px;
+        border-bottom: 2px solid rgba(100, 255, 218, 0.3);
     }
     
-    /* Sidebar headers */
-    .st-emotion-cache-16idsys h1,
-    .st-emotion-cache-16idsys h2,
-    .st-emotion-cache-16idsys h3 {
-        font-size: 20px !important;
+    /* Headers */
+    h1, h2, h3 {
+        color: #e6f1ff !important;
         font-weight: 600 !important;
+    }
+    
+    h1 {
+        border-bottom: 2px solid #64ffda;
+        padding-bottom: 10px;
+        margin-bottom: 30px !important;
+    }
+    
+    /* Text colors */
+    .stMarkdown {
+        color: #a8b2d1 !important;
+    }
+    
+    /* Buttons */
+    .stButton button {
+        background: linear-gradient(135deg, #64ffda 0%, #00b4d8 100%) !important;
+        color: #0a192f !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 10px 24px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stButton button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(100, 255, 218, 0.3) !important;
+    }
+    
+    /* Input fields */
+    .stTextInput input, .stSelectbox select, .stDateInput input {
+        background-color: rgba(17, 34, 64, 0.8) !important;
+        color: #e6f1ff !important;
+        border: 1px solid rgba(100, 255, 218, 0.3) !important;
+        border-radius: 6px !important;
+    }
+    
+    /* Dataframes */
+    .dataframe {
+        background-color: rgba(17, 34, 64, 0.8) !important;
+        border: 1px solid rgba(100, 255, 218, 0.2) !important;
+        border-radius: 8px !important;
+    }
+    
+    /* Metric cards */
+    .stMetric {
+        background-color: rgba(17, 34, 64, 0.8) !important;
+        border: 1px solid rgba(100, 255, 218, 0.2) !important;
+        border-radius: 10px !important;
+        padding: 15px !important;
+    }
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background-color: rgba(17, 34, 64, 0.8) !important;
+        border-radius: 8px 8px 0 0 !important;
+        border: 1px solid rgba(100, 255, 218, 0.2) !important;
+        color: #a8b2d1 !important;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: rgba(100, 255, 218, 0.2) !important;
+        color: #64ffda !important;
+        border-bottom: 3px solid #64ffda !important;
+    }
+    
+    /* Success, warning, error messages */
+    .stAlert {
+        border-radius: 8px;
+        border: 1px solid;
+    }
+    
+    .stAlert.success {
+        border-color: #64ffda !important;
+        background-color: rgba(100, 255, 218, 0.1) !important;
+    }
+    
+    .stAlert.warning {
+        border-color: #ffd166 !important;
+        background-color: rgba(255, 209, 102, 0.1) !important;
+    }
+    
+    .stAlert.error {
+        border-color: #ef476f !important;
+        background-color: rgba(239, 71, 111, 0.1) !important;
+    }
+    
+    /* Spinner */
+    .stSpinner > div {
+        border-color: #64ffda transparent transparent transparent !important;
+    }
+    
+    /* Checkbox */
+    .stCheckbox label {
+        color: #a8b2d1 !important;
+    }
+    
+    /* Slider */
+    .stSlider [data-testid="stThumbValue"] {
+        color: #64ffda !important;
+    }
+    
+    /* Divider */
+    hr {
+        border-color: rgba(100, 255, 218, 0.3) !important;
+        margin: 30px 0 !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -821,65 +1096,175 @@ def app():
         st.session_state['models_loaded_attempted'] = True
 
     # Sidebar and navigation - UPDATED with SMOTE Analysis
-    st.sidebar.title("FactChecker")
-    page = st.sidebar.radio("Navigation", 
-                           ["Dashboard", "Data Collection", "Model Training", "SMOTE Analysis", "Benchmark Testing", "Results & Analysis"], 
+    st.sidebar.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+    st.sidebar.title("🔍 FactChecker")
+    st.sidebar.markdown("</div>", unsafe_allow_html=True)
+    
+    page = st.sidebar.radio("", 
+                           ["🏠 Dashboard", "📊 Data Collection", "🤖 Model Training", "⚖️ SMOTE Analysis", "🎯 Benchmark Testing", "📈 Results & Analysis"], 
                            key='navigation')
+
+    # Remove emojis for page detection
+    page = page.split(" ", 1)[1] if " " in page else page
 
     # --- DASHBOARD ---
     if page == "Dashboard":
-        st.markdown("<h1 style='color:#00c8ff;'>FactChecker Dashboard</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color:#64ffda;'>FactChecker Dashboard</h1>", unsafe_allow_html=True)
+        
+        # Dashboard metrics
         col1, col2, col3, col4 = st.columns(4)
+        
         with col1:
-            st.markdown('<div class="card"><h3>Data Overview</h3><p>Collect and manage training data from Politifact archives</p></div>', unsafe_allow_html=True)
+            st.markdown("""
+            <div class="card">
+                <h3 style='color:#64ffda;'>📊 Data Overview</h3>
+                <p style='color:#a8b2d1;'>Collect and manage training data from Politifact archives</p>
+                <div style='font-size: 36px; color: #64ffda; text-align: center; margin: 20px 0;'>
+                    <i class="fas fa-database"></i>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
         with col2:
-            st.markdown('<div class="card"><h3>Model Training</h3><p>Advanced NLP feature extraction and ML training</p></div>', unsafe_allow_html=True)
+            st.markdown("""
+            <div class="card">
+                <h3 style='color:#64ffda;'>🤖 Model Training</h3>
+                <p style='color:#a8b2d1;'>Advanced NLP feature extraction and ML training</p>
+                <div style='font-size: 36px; color: #64ffda; text-align: center; margin: 20px 0;'>
+                    <i class="fas fa-robot"></i>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
         with col3:
-            st.markdown('<div class="card"><h3>SMOTE Analysis</h3><p>Compare performance with/without oversampling</p></div>', unsafe_allow_html=True)
+            st.markdown("""
+            <div class="card">
+                <h3 style='color:#64ffda;'>⚖️ SMOTE Analysis</h3>
+                <p style='color:#a8b2d1;'>Compare performance with/without oversampling</p>
+                <div style='font-size: 36px; color: #64ffda; text-align: center; margin: 20px 0;'>
+                    <i class="fas fa-balance-scale"></i>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
         with col4:
-            st.markdown('<div class="card"><h3>Benchmark Testing</h3><p>Validate models with real-world data</p></div>', unsafe_allow_html=True)
+            st.markdown("""
+            <div class="card">
+                <h3 style='color:#64ffda;'>🎯 Benchmark Testing</h3>
+                <p style='color:#a8b2d1;'>Validate models with real-world data</p>
+                <div style='font-size: 36px; color: #64ffda; text-align: center; margin: 20px 0;'>
+                    <i class="fas fa-chart-line"></i>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Quick stats
+        st.markdown("---")
+        st.subheader("Quick Statistics")
+        
+        stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
+        
+        with stat_col1:
+            st.metric("Data Points", f"{len(st.session_state['scraped_df']) if not st.session_state['scraped_df'].empty else '0'}")
+        
+        with stat_col2:
+            st.metric("Trained Models", f"{len(st.session_state['trained_models']) if st.session_state['trained_models'] else '0'}")
+        
+        with stat_col3:
+            st.metric("Best Accuracy", f"{st.session_state['df_results']['Accuracy'].max():.1f}%" if not st.session_state['df_results'].empty else "N/A")
+        
+        with stat_col4:
+            st.metric("Phase Used", st.session_state['selected_phase_run'] if st.session_state['selected_phase_run'] else "None")
 
     # --- DATA COLLECTION ---
     elif page == "Data Collection":
-        st.markdown("<h1 style='color:#00c8ff;'>Data Collection</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color:#64ffda;'>Data Collection</h1>", unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div class="card">
+        <p style='color:#a8b2d1;'>Collect political fact-check data from PolitiFact website for training your models.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         min_date = pd.to_datetime('2007-01-01')
         max_date = pd.to_datetime('today').normalize()
+        
         date_col1, date_col2 = st.columns(2)
         with date_col1:
-            start_date = st.date_input("Start Date", min_value=min_date, max_value=max_date, value=pd.to_datetime('2023-01-01'))
+            start_date = st.date_input("📅 Start Date", min_value=min_date, max_value=max_date, value=pd.to_datetime('2023-01-01'))
         with date_col2:
-            end_date = st.date_input("End Date", min_value=min_date, max_value=max_date, value=max_date)
-        if st.button("Scrape Politifact Data", key="scrape_btn", use_container_width=True):
+            end_date = st.date_input("📅 End Date", min_value=min_date, max_value=max_date, value=max_date)
+        
+        if st.button("🚀 Scrape Politifact Data", key="scrape_btn", use_container_width=True):
             if start_date > end_date:
                 st.error("Start date must be before end date")
             else:
-                with st.spinner("Scraping political claims..."):
+                with st.spinner("🌐 Scraping political claims..."):
                     scraped_df = scrape_data_by_date_range(pd.to_datetime(start_date), pd.to_datetime(end_date))
                 if not scraped_df.empty:
                     st.session_state['scraped_df'] = scraped_df
-                    st.success(f"Successfully scraped {len(scraped_df)} claims!")
+                    st.success(f"✅ Successfully scraped {len(scraped_df)} claims!")
+                    
+                    # Show data distribution
+                    if 'label' in scraped_df.columns:
+                        st.subheader("📊 Data Distribution")
+                        label_counts = scraped_df['label'].value_counts()
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            fig = go.Figure(data=[go.Pie(
+                                labels=label_counts.index,
+                                values=label_counts.values,
+                                hole=.3,
+                                marker_colors=px.colors.sequential.Viridis
+                            )])
+                            fig.update_layout(title="Claim Labels Distribution", height=400)
+                            st.plotly_chart(fig, use_container_width=True)
+                        
+                        with col2:
+                            fig = go.Figure(data=[go.Bar(
+                                x=label_counts.index,
+                                y=label_counts.values,
+                                marker_color='#64ffda'
+                            )])
+                            fig.update_layout(
+                                title="Label Counts",
+                                xaxis_title="Label",
+                                yaxis_title="Count",
+                                height=400
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
                 else:
-                    st.warning("No data found. Try adjusting date range.")
+                    st.warning("⚠️ No data found. Try adjusting date range.")
+        
         if not st.session_state['scraped_df'].empty:
+            st.subheader("📋 Sample Data")
             st.dataframe(st.session_state['scraped_df'].head(10), use_container_width=True)
 
     # --- MODEL TRAINING ---
     elif page == "Model Training":
-        st.markdown("<h1 style='color:#00c8ff;'>Model Training</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color:#64ffda;'>Model Training</h1>", unsafe_allow_html=True)
+        
         if st.session_state['scraped_df'].empty:
-            st.warning("Please collect data first from the Data Collection page!")
+            st.warning("⚠️ Please collect data first from the Data Collection page!")
         else:
+            st.markdown("""
+            <div class="card">
+            <p style='color:#a8b2d1;'>Train machine learning models using different NLP feature extraction techniques.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
             phases = ["Lexical & Morphological", "Syntactic", "Semantic", "Discourse", "Pragmatic"]
-            selected_phase = st.selectbox("Feature Extraction Method:", phases, key='selected_phase')
+            selected_phase = st.selectbox("🔧 Feature Extraction Method:", phases, key='selected_phase')
             
             # SMOTE option checkbox
-            use_smote = st.checkbox("Apply SMOTE for class balancing (except Naive Bayes)", value=True, 
+            use_smote = st.checkbox("⚖️ Apply SMOTE for class balancing (except Naive Bayes)", value=True, 
                                    help="SMOTE (Synthetic Minority Over-sampling Technique) creates synthetic samples for minority class")
             
-            st.caption(f"*Selected: {selected_phase}* | *SMOTE: {'Enabled' if use_smote else 'Disabled'}*")
+            st.info(f"**Selected Phase:** `{selected_phase}` | **SMOTE:** `{'Enabled' if use_smote else 'Disabled'}`")
             
-            if st.button("Run Model Analysis", key="analyze_btn", use_container_width=True):
-                with st.spinner(f"Training 4 models with {N_SPLITS}-Fold CV {'& SMOTE' if use_smote else ''}..."):
+            if st.button("🚀 Run Model Analysis", key="analyze_btn", use_container_width=True):
+                with st.spinner(f"🤖 Training 4 models with {N_SPLITS}-Fold CV {'& SMOTE' if use_smote else ''}..."):
                     df_results, trained_models, trained_vectorizer = evaluate_models(
                         st.session_state['scraped_df'], 
                         selected_phase, 
@@ -889,28 +1274,34 @@ def app():
                     st.session_state['trained_models'] = trained_models
                     st.session_state['trained_vectorizer'] = trained_vectorizer
                     st.session_state['selected_phase_run'] = selected_phase
-                    st.success("Analysis complete! Models trained and saved to disk.")
+                    st.success("✅ Analysis complete! Models trained and saved to disk.")
 
     # --- SMOTE ANALYSIS ---
     elif page == "SMOTE Analysis":
-        st.markdown("<h1 style='color:#00c8ff;'>SMOTE Impact Analysis</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color:#64ffda;'>SMOTE Impact Analysis</h1>", unsafe_allow_html=True)
         
         if st.session_state['scraped_df'].empty:
-            st.warning("Please collect data first from the Data Collection page!")
+            st.warning("⚠️ Please collect data first from the Data Collection page!")
         else:
             phases = ["Lexical & Morphological", "Syntactic", "Semantic", "Discourse", "Pragmatic"]
-            selected_phase = st.selectbox("Select Feature Extraction Method:", phases, key='smote_phase')
+            selected_phase = st.selectbox("🔧 Select Feature Extraction Method:", phases, key='smote_phase')
             
-            st.info("""
-            **SMOTE (Synthetic Minority Over-sampling Technique)** helps balance imbalanced datasets by creating synthetic samples for the minority class.
-            This section compares model performance with and without SMOTE application.
-            """)
+            st.markdown("""
+            <div class="card">
+            <h4 style='color:#64ffda;'>⚖️ About SMOTE</h4>
+            <p style='color:#a8b2d1;'>
+            <strong>SMOTE (Synthetic Minority Over-sampling Technique)</strong> helps balance imbalanced datasets 
+            by creating synthetic samples for the minority class. This analysis compares model performance 
+            with and without SMOTE application to understand its impact on different algorithms.
+            </p>
+            </div>
+            """, unsafe_allow_html=True)
             
-            if st.button("Run SMOTE Impact Analysis", key="smote_btn", use_container_width=True):
+            if st.button("🔬 Run SMOTE Impact Analysis", key="smote_btn", use_container_width=True):
                 if st.session_state['scraped_df'].empty:
-                    st.error("No data available for analysis!")
+                    st.error("❌ No data available for analysis!")
                 else:
-                    with st.spinner("Running comprehensive SMOTE analysis (this may take a few minutes)..."):
+                    with st.spinner("🔍 Running comprehensive SMOTE analysis (this may take a few minutes)..."):
                         results_with, results_without = analyze_smote_impact(
                             st.session_state['scraped_df'], 
                             selected_phase
@@ -921,10 +1312,10 @@ def app():
                             st.session_state['smote_without_results'] = results_without
                             st.session_state['selected_phase_run'] = selected_phase
                             
-                            st.success("SMOTE analysis complete!")
+                            st.success("✅ SMOTE analysis complete!")
                             
                             # Display comparison
-                            st.subheader("SMOTE vs No-SMOTE Performance Comparison")
+                            st.subheader("📊 SMOTE vs No-SMOTE Performance Comparison")
                             
                             # Create comparison dataframe
                             comparison_data = []
@@ -946,57 +1337,98 @@ def app():
                             
                             comparison_df = pd.DataFrame(comparison_data)
                             
-                            # Display metrics
-                            col1, col2 = st.columns(2)
+                            # Display metrics in tabs
+                            tab1, tab2, tab3 = st.tabs(["📈 Accuracy Comparison", "📊 F1-Score Comparison", "📋 Detailed Metrics"])
                             
-                            with col1:
-                                st.markdown("**Accuracy Comparison**")
-                                st.dataframe(comparison_df[['Model', 'Accuracy (SMOTE)', 'Accuracy (No SMOTE)', 'Accuracy Δ']], 
-                                           use_container_width=True)
+                            with tab1:
+                                col1, col2 = st.columns([3, 2])
                                 
-                                # Bar chart for accuracy comparison
-                                fig_acc, ax_acc = plt.subplots(figsize=(10, 6))
-                                x = np.arange(len(comparison_df))
-                                width = 0.35
+                                with col1:
+                                    # Bar chart for accuracy comparison
+                                    fig = go.Figure()
+                                    
+                                    fig.add_trace(go.Bar(
+                                        name='With SMOTE',
+                                        x=comparison_df['Model'],
+                                        y=comparison_df['Accuracy (SMOTE)'],
+                                        marker_color='#64ffda',
+                                        text=comparison_df['Accuracy (SMOTE)'].round(1),
+                                        textposition='auto',
+                                    ))
+                                    
+                                    fig.add_trace(go.Bar(
+                                        name='Without SMOTE',
+                                        x=comparison_df['Model'],
+                                        y=comparison_df['Accuracy (No SMOTE)'],
+                                        marker_color='#00b4d8',
+                                        text=comparison_df['Accuracy (No SMOTE)'].round(1),
+                                        textposition='auto',
+                                    ))
+                                    
+                                    fig.update_layout(
+                                        title='Accuracy: SMOTE vs No-SMOTE',
+                                        xaxis_title='Model',
+                                        yaxis_title='Accuracy (%)',
+                                        barmode='group',
+                                        height=500,
+                                        plot_bgcolor='rgba(0,0,0,0)',
+                                        paper_bgcolor='rgba(0,0,0,0)',
+                                        font=dict(color='#e6f1ff')
+                                    )
+                                    
+                                    st.plotly_chart(fig, use_container_width=True)
                                 
-                                ax_acc.bar(x - width/2, comparison_df['Accuracy (SMOTE)'], width, label='With SMOTE', color='#00c8ff')
-                                ax_acc.bar(x + width/2, comparison_df['Accuracy (No SMOTE)'], width, label='Without SMOTE', color='#1a8cd8')
-                                
-                                ax_acc.set_xlabel('Model')
-                                ax_acc.set_ylabel('Accuracy (%)')
-                                ax_acc.set_title('Accuracy: SMOTE vs No-SMOTE')
-                                ax_acc.set_xticks(x)
-                                ax_acc.set_xticklabels(comparison_df['Model'], rotation=45)
-                                ax_acc.legend()
-                                ax_acc.grid(True, alpha=0.3)
-                                
-                                st.pyplot(fig_acc)
+                                with col2:
+                                    st.dataframe(comparison_df[['Model', 'Accuracy (SMOTE)', 'Accuracy (No SMOTE)', 'Accuracy Δ']], 
+                                               use_container_width=True)
                             
-                            with col2:
-                                st.markdown("**F1-Score Comparison**")
-                                st.dataframe(comparison_df[['Model', 'F1 (SMOTE)', 'F1 (No SMOTE)', 'F1 Δ']], 
-                                           use_container_width=True)
+                            with tab2:
+                                col1, col2 = st.columns([3, 2])
                                 
-                                # Bar chart for F1 comparison
-                                fig_f1, ax_f1 = plt.subplots(figsize=(10, 6))
-                                x = np.arange(len(comparison_df))
-                                width = 0.35
+                                with col1:
+                                    # Bar chart for F1 comparison
+                                    fig = go.Figure()
+                                    
+                                    fig.add_trace(go.Bar(
+                                        name='With SMOTE',
+                                        x=comparison_df['Model'],
+                                        y=comparison_df['F1 (SMOTE)'],
+                                        marker_color='#64ffda',
+                                        text=comparison_df['F1 (SMOTE)'].round(3),
+                                        textposition='auto',
+                                    ))
+                                    
+                                    fig.add_trace(go.Bar(
+                                        name='Without SMOTE',
+                                        x=comparison_df['Model'],
+                                        y=comparison_df['F1 (No SMOTE)'],
+                                        marker_color='#00b4d8',
+                                        text=comparison_df['F1 (No SMOTE)'].round(3),
+                                        textposition='auto',
+                                    ))
+                                    
+                                    fig.update_layout(
+                                        title='F1-Score: SMOTE vs No-SMOTE',
+                                        xaxis_title='Model',
+                                        yaxis_title='F1-Score',
+                                        barmode='group',
+                                        height=500,
+                                        plot_bgcolor='rgba(0,0,0,0)',
+                                        paper_bgcolor='rgba(0,0,0,0)',
+                                        font=dict(color='#e6f1ff')
+                                    )
+                                    
+                                    st.plotly_chart(fig, use_container_width=True)
                                 
-                                ax_f1.bar(x - width/2, comparison_df['F1 (SMOTE)'], width, label='With SMOTE', color='#00c8ff')
-                                ax_f1.bar(x + width/2, comparison_df['F1 (No SMOTE)'], width, label='Without SMOTE', color='#1a8cd8')
-                                
-                                ax_f1.set_xlabel('Model')
-                                ax_f1.set_ylabel('F1-Score')
-                                ax_f1.set_title('F1-Score: SMOTE vs No-SMOTE')
-                                ax_f1.set_xticks(x)
-                                ax_f1.set_xticklabels(comparison_df['Model'], rotation=45)
-                                ax_f1.legend()
-                                ax_f1.grid(True, alpha=0.3)
-                                
-                                st.pyplot(fig_f1)
+                                with col2:
+                                    st.dataframe(comparison_df[['Model', 'F1 (SMOTE)', 'F1 (No SMOTE)', 'F1 Δ']], 
+                                               use_container_width=True)
+                            
+                            with tab3:
+                                st.dataframe(comparison_df, use_container_width=True)
                             
                             # Summary insights
-                            st.subheader("SMOTE Impact Summary")
+                            st.subheader("📝 SMOTE Impact Summary")
                             
                             # Calculate overall impact
                             avg_acc_with = comparison_df['Accuracy (SMOTE)'].mean()
@@ -1007,32 +1439,43 @@ def app():
                             insights_col1, insights_col2, insights_col3 = st.columns(3)
                             
                             with insights_col1:
-                                st.metric("Average Accuracy with SMOTE", f"{avg_acc_with:.1f}%")
-                                st.metric("Average Accuracy without SMOTE", f"{avg_acc_without:.1f}%")
+                                st.metric("📈 Average Accuracy with SMOTE", f"{avg_acc_with:.1f}%")
+                                st.metric("📊 Average F1 with SMOTE", f"{avg_f1_with:.3f}")
                             
                             with insights_col2:
-                                acc_delta = avg_acc_with - avg_acc_without
-                                st.metric("Accuracy Impact", f"{acc_delta:+.1f}%", 
-                                         delta_color="normal" if acc_delta > 0 else "inverse")
-                                
-                                f1_delta = avg_f1_with - avg_f1_without
-                                st.metric("F1-Score Impact", f"{f1_delta:+.3f}", 
-                                         delta_color="normal" if f1_delta > 0 else "inverse")
+                                st.metric("📈 Average Accuracy without SMOTE", f"{avg_acc_without:.1f}%")
+                                st.metric("📊 Average F1 without SMOTE", f"{avg_f1_without:.3f}")
                             
                             with insights_col3:
-                                # Find which models benefited most
-                                best_improvement = comparison_df.loc[comparison_df['Accuracy Δ'].idxmax()]
-                                st.info(f"**Biggest Improver**: {best_improvement['Model']} (+{best_improvement['Accuracy Δ']:.1f}%)")
+                                acc_delta = avg_acc_with - avg_acc_without
+                                f1_delta = avg_f1_with - avg_f1_without
                                 
-                                # Check if SMOTE was beneficial overall
-                                if acc_delta > 0:
-                                    st.success("✅ SMOTE improved overall model performance")
-                                else:
-                                    st.warning("⚠️ SMOTE did not improve overall accuracy")
+                                st.metric("🎯 Accuracy Impact", f"{acc_delta:+.1f}%", 
+                                         delta_color="normal" if acc_delta > 0 else "inverse")
+                                st.metric("🎯 F1-Score Impact", f"{f1_delta:+.3f}", 
+                                         delta_color="normal" if f1_delta > 0 else "inverse")
+                            
+                            # Find which models benefited most
+                            best_improvement = comparison_df.loc[comparison_df['Accuracy Δ'].idxmax()]
+                            worst_improvement = comparison_df.loc[comparison_df['Accuracy Δ'].idxmin()]
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.info(f"**🏆 Biggest Improver**: {best_improvement['Model']} (+{best_improvement['Accuracy Δ']:.1f}% accuracy)")
+                            with col2:
+                                st.warning(f"**⚠️ Least Benefited**: {worst_improvement['Model']} ({worst_improvement['Accuracy Δ']:+.1f}% accuracy)")
+                            
+                            # Check if SMOTE was beneficial overall
+                            if acc_delta > 0:
+                                st.success("✅ **Overall Verdict**: SMOTE improved model performance")
+                            elif acc_delta == 0:
+                                st.info("⚖️ **Overall Verdict**: SMOTE had neutral impact on performance")
+                            else:
+                                st.warning("⚠️ **Overall Verdict**: SMOTE decreased overall accuracy")
 
     # --- BENCHMARK TESTING ---
     elif page == "Benchmark Testing":
-        st.markdown("<h1 style='color:#00c8ff;'>Benchmark Testing</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color:#64ffda;'>Benchmark Testing</h1>", unsafe_allow_html=True)
 
         # read query param if present
         try:
@@ -1045,69 +1488,110 @@ def app():
         except Exception:
             external_text = ""
 
-        st.subheader("Fact Check Benchmark")
-        mode_col1, mode_col2 = st.columns(2)
-        with mode_col1:
-            use_demo = st.checkbox("Google Fact Check API (Demo mode)", value=True)
-        with mode_col2:
-            pass
+        st.markdown("""
+        <div class="card">
+        <p style='color:#a8b2d1;'>Test trained models on custom text or benchmark against Google Fact Check data.</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-        num_claims = st.slider("Number of test claims:", min_value=5, max_value=50, value=10, step=5, key='num_claims')
+        st.subheader("🔍 Single Text Analysis")
+        custom_text = st.text_area("📝 Text to analyze (prefilled from extension if provided):", 
+                                  value=external_text, 
+                                  key="custom_text_input",
+                                  height=150)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔎 Run Single-Text Check", key="single_check_btn", use_container_width=True):
+                if not st.session_state.get('trained_models'):
+                    st.error("❌ Please train models first in Model Training page before running single-text check.")
+                else:
+                    with st.spinner("🤖 Running models on the provided text..."):
+                        trained_models = st.session_state['trained_models']
+                        trained_vectorizer = st.session_state.get('trained_vectorizer')
+                        selected_phase_run = st.session_state.get('selected_phase_run')
+                        results = predict_single_text(custom_text, trained_models, trained_vectorizer, selected_phase_run)
+                        st.markdown("### 📊 Single-text Model Predictions")
+                        
+                        if 'error' in results:
+                            st.error(f"❌ {results['error']}")
+                        else:
+                            # Create prediction cards
+                            pred_col1, pred_col2, pred_col3, pred_col4 = st.columns(4)
+                            cols = [pred_col1, pred_col2, pred_col3, pred_col4]
+                            
+                            for idx, (mname, res) in enumerate(results.items()):
+                                with cols[idx % 4]:
+                                    if 'prediction' in res:
+                                        is_real = res['prediction'] == 1
+                                        color = "#64ffda" if is_real else "#ef476f"
+                                        icon = "✅" if is_real else "❌"
+                                        label = "REAL/TRUE" if is_real else "FAKE/FALSE"
+                                        
+                                        st.markdown(f"""
+                                        <div style="background: rgba(17, 34, 64, 0.8); padding: 20px; border-radius: 10px; border-left: 5px solid {color};">
+                                            <h4 style='color:#e6f1ff; margin: 0;'>{icon} {mname}</h4>
+                                            <p style='color:{color}; font-size: 24px; font-weight: bold; margin: 10px 0;'>{label}</p>
+                                            <p style='color:#a8b2d1; margin: 0;'>Prediction: {res['prediction']}</p>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                    else:
+                                        st.error(f"❌ Error: {res.get('error')}")
 
-        st.markdown("---")
-        st.subheader("Check custom text")
-        custom_text = st.text_input("Text to check (prefilled from extension if provided):", value=external_text, key="custom_text_input")
-        if st.button("Run Single-Text Check", key="single_check_btn", use_container_width=True):
-            if not st.session_state.get('trained_models'):
-                st.error("Please train models first in Model Training page before running single-text check.")
-            else:
-                with st.spinner("Running models on the provided text..."):
-                    trained_models = st.session_state['trained_models']
-                    trained_vectorizer = st.session_state.get('trained_vectorizer')
-                    selected_phase_run = st.session_state.get('selected_phase_run')
-                    results = predict_single_text(custom_text, trained_models, trained_vectorizer, selected_phase_run)
-                    st.markdown("### Single-text Model Predictions")
-                    if 'error' in results:
-                        st.error(results['error'])
-                    else:
-                        for mname, res in results.items():
-                            if 'prediction' in res:
-                                pretty = "REAL/TRUE (1)" if res['prediction'] == 1 else "FAKE/ FALSE (0)"
-                                st.write(f"**{mname}** → {pretty}")
-                            else:
-                                st.write(f"**{mname}** → Error: {res.get('error')}")
+        with col2:
+            mode_col1, mode_col2 = st.columns(2)
+            with mode_col1:
+                use_demo = st.checkbox("🌐 Google Fact Check API (Demo mode)", value=True)
+            with mode_col2:
+                num_claims = st.slider("📊 Number of test claims:", min_value=5, max_value=50, value=10, step=5, key='num_claims')
 
         # auto-run when external text present and models loaded
         if external_text and st.session_state.get('trained_models') and custom_text == external_text:
-            with st.spinner("Auto-running models on external text..."):
+            with st.spinner("🤖 Auto-running models on external text..."):
                 trained_models = st.session_state['trained_models']
                 trained_vectorizer = st.session_state.get('trained_vectorizer')
                 selected_phase_run = st.session_state.get('selected_phase_run')
                 auto_results = predict_single_text(external_text, trained_models, trained_vectorizer, selected_phase_run)
-                st.markdown("### Auto-run predictions for URL text")
+                st.markdown("### 🌐 Auto-run predictions for URL text")
                 if 'error' in auto_results:
-                    st.error(auto_results['error'])
+                    st.error(f"❌ {auto_results['error']}")
                 else:
+                    # Create a summary of predictions
+                    predictions = []
                     for mname, res in auto_results.items():
                         if 'prediction' in res:
-                            pretty = "REAL/TRUE (1)" if res['prediction'] == 1 else "FAKE/ FALSE (0)"
-                            st.write(f"**{mname}** → {pretty}")
-                        else:
-                            st.write(f"**{mname}** → Error: {res.get('error')}")
+                            predictions.append(res['prediction'])
+                    
+                    if predictions:
+                        avg_prediction = np.mean(predictions)
+                        final_verdict = "REAL/TRUE" if avg_prediction > 0.5 else "FAKE/FALSE"
+                        confidence = abs(avg_prediction - 0.5) * 200
+                        
+                        st.markdown(f"""
+                        <div class="card">
+                            <h3 style='color:#64ffda;'>Overall Verdict</h3>
+                            <p style='font-size: 32px; color:{'#64ffda' if avg_prediction > 0.5 else '#ef476f'}; font-weight: bold;'>
+                                {'✅' if avg_prediction > 0.5 else '❌'} {final_verdict}
+                            </p>
+                            <p style='color:#a8b2d1;'>Average prediction score: {avg_prediction:.2f}</p>
+                            <p style='color:#a8b2d1;'>Confidence: {confidence:.1f}%</p>
+                        </div>
+                        """, unsafe_allow_html=True)
 
         st.markdown("---")
-        # Benchmark using demo or Google API
-        if st.button("Run Benchmark Test", key="benchmark_btn", use_container_width=True):
+        st.subheader("📊 Benchmark Testing")
+        
+        if st.button("🚀 Run Benchmark Test", key="benchmark_btn", use_container_width=True):
             if not st.session_state.get('trained_models'):
-                st.error("Please train models first in the Model Training page!")
+                st.error("❌ Please train models first in the Model Training page!")
             else:
-                with st.spinner('Loading fact-check data...'):
+                with st.spinner('🌐 Loading fact-check data...'):
                     if use_demo:
                         api_results = get_demo_google_claims()
                         st.success("✅ Demo Google Fact Check loaded successfully!")
                     else:
                         if 'GOOGLE_API_KEY' not in st.secrets:
-                            st.error("API Key not found in secrets.toml")
+                            st.error("🔑 API Key not found in secrets.toml")
                             api_results = []
                         else:
                             api_key = st.secrets["GOOGLE_API_KEY"]
@@ -1124,116 +1608,299 @@ def app():
                         st.session_state['google_df'] = google_df
                         st.success(f"✅ Benchmark complete! Tested on {len(google_df)} claims.")
                     else:
-                        st.warning("No claims were processed. Try adjusting parameters.")
+                        st.warning("⚠️ No claims were processed. Try adjusting parameters.")
 
         if not st.session_state['google_benchmark_results'].empty:
-            st.subheader("Benchmark Results")
-            st.dataframe(st.session_state['google_benchmark_results'], use_container_width=True)
+            st.subheader("📈 Benchmark Results")
+            
+            # Enhanced visualization of benchmark results
+            tab1, tab2 = st.tabs(["📊 Performance Metrics", "📋 Detailed Results"])
+            
+            with tab1:
+                benchmark_df = st.session_state['google_benchmark_results']
+                
+                # Create radar chart
+                st.plotly_chart(create_radar_chart(benchmark_df), use_container_width=True)
+                
+                # Create bar chart comparison
+                fig = make_subplots(rows=2, cols=2, 
+                                  subplot_titles=('Accuracy (%)', 'F1-Score', 'Precision', 'Recall'),
+                                  vertical_spacing=0.15)
+                
+                metrics = ['Accuracy', 'F1-Score', 'Precision', 'Recall']
+                colors = ['#64ffda', '#00b4d8', '#0077b6', '#0096c7']
+                
+                for idx, metric in enumerate(metrics):
+                    row = idx // 2 + 1
+                    col = idx % 2 + 1
+                    
+                    fig.add_trace(
+                        go.Bar(
+                            x=benchmark_df['Model'],
+                            y=benchmark_df[metric],
+                            name=metric,
+                            marker_color=colors[idx],
+                            text=benchmark_df[metric].round(3),
+                            textposition='auto'
+                        ),
+                        row=row, col=col
+                    )
+                
+                fig.update_layout(height=600, showlegend=False, 
+                                plot_bgcolor='rgba(0,0,0,0)',
+                                paper_bgcolor='rgba(0,0,0,0)',
+                                font=dict(color='#e6f1ff'))
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with tab2:
+                st.dataframe(st.session_state['google_benchmark_results'], use_container_width=True)
 
     # --- RESULTS & ANALYSIS ---
     elif page == "Results & Analysis":
-        st.markdown("<h1 style='color:#00c8ff;'>Results & Analysis</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color:#64ffda;'>Results & Analysis</h1>", unsafe_allow_html=True)
+        
         if st.session_state['df_results'].empty and st.session_state['smote_with_results'].empty:
-            st.warning("No results available. Please train models first in the Model Training page!")
+            st.warning("⚠️ No results available. Please train models first in the Model Training page!")
         else:
-            # Check which results to show
-            if not st.session_state['smote_with_results'].empty:
-                # Show SMOTE analysis results
-                st.header("SMOTE Analysis Results")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.subheader("With SMOTE")
-                    st.dataframe(st.session_state['smote_with_results'], use_container_width=True)
-                with col2:
-                    st.subheader("Without SMOTE")
-                    st.dataframe(st.session_state['smote_without_results'], use_container_width=True)
-                
-                st.markdown("---")
+            # Create tabs for different result types
+            tabs = st.tabs(["📈 Model Performance", "📊 SMOTE Analysis", "🎭 AI Review"])
             
-            if not st.session_state['df_results'].empty:
-                # Show regular training results
-                st.header("Model Performance Results")
-                df_results = st.session_state['df_results']
-                results_col1, results_col2, results_col3, results_col4 = st.columns(4)
-                metrics_data = []
-                for _, row in df_results.iterrows():
-                    metrics_data.append({'model': row['Model'], 'accuracy': row['Accuracy'], 'f1': row['F1-Score'], 'training_time': row['Training Time (s)']})
-                for i, metric in enumerate(metrics_data):
-                    col = [results_col1, results_col2, results_col3, results_col4][i]
-                    with col:
-                        smote_status = " (with SMOTE)" if 'SMOTE Used' in row and row['SMOTE Used'] == 'Yes' else ""
-                        st.markdown(f"<div class='card'><h4>{metric['model']}{smote_status}</h4><p>{metric['accuracy']:.1f}% | F1 {metric['f1']:.3f} | {metric['training_time']}s</p></div>", unsafe_allow_html=True)
-                st.markdown("---")
-                viz_col1, viz_col2 = st.columns(2)
-                with viz_col1:
-                    st.subheader("Performance Metrics")
-                    chart_metric = st.selectbox("Select metric to visualize:", ['Accuracy', 'F1-Score', 'Precision', 'Recall', 'Training Time (s)', 'Inference Latency (ms)'], key='chart_metric')
-                    chart_data = df_results[['Model', chart_metric]].set_index('Model')
-                    st.bar_chart(chart_data)
-                with viz_col2:
-                    st.subheader("Speed vs Accuracy Trade-off")
-                    fig, ax = plt.subplots(figsize=(8, 6))
-                    colors = ['#00a8e1', '#00c8ff', '#1a8cd8', '#2d9cdb']
-                    for i, (_, row) in enumerate(df_results.iterrows()):
-                        ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], s=200, alpha=0.7, color=colors[i], label=row['Model'])
-                        ax.annotate(row['Model'], (row['Inference Latency (ms)'] + 5, row['Accuracy']), fontsize=9, alpha=0.8)
-                    ax.set_xlabel('Inference Latency (ms)')
-                    ax.set_ylabel('Accuracy (%)')
-                    ax.set_title('Model Performance: Speed vs Accuracy')
-                    ax.grid(True, alpha=0.3)
-                    ax.legend()
-                    st.pyplot(fig)
-                if not st.session_state['google_benchmark_results'].empty:
+            with tabs[0]:
+                if not st.session_state['df_results'].empty:
+                    df_results = st.session_state['df_results']
+                    
+                    # Enhanced model performance cards
+                    st.subheader("🏆 Model Performance Leaderboard")
+                    
+                    # Sort by accuracy
+                    df_sorted = df_results.sort_values('Accuracy', ascending=False)
+                    
+                    # Create metrics cards
+                    metrics_cols = st.columns(4)
+                    for idx, (_, row) in enumerate(df_sorted.iterrows()):
+                        with metrics_cols[idx]:
+                            color = "#64ffda" if idx == 0 else "#00b4d8" if idx == 1 else "#0077b6" if idx == 2 else "#0096c7"
+                            st.markdown(f"""
+                            <div style="background: rgba(17, 34, 64, 0.8); padding: 20px; border-radius: 12px; border-left: 5px solid {color}; margin-bottom: 20px;">
+                                <h3 style='color:{color}; margin: 0;'>{'🥇' if idx == 0 else '🥈' if idx == 1 else '🥉' if idx == 2 else '📊'} {row['Model']}</h3>
+                                <div style="font-size: 32px; color: {color}; font-weight: bold; margin: 10px 0;">{row['Accuracy']:.1f}%</div>
+                                <div style="color: #a8b2d1;">
+                                    <div>📊 F1: {row['F1-Score']:.3f}</div>
+                                    <div>⚡ Speed: {row['Inference Latency (ms)']}ms</div>
+                                    <div>🕒 Train: {row['Training Time (s)']}s</div>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
                     st.markdown("---")
-                    st.header("Fact Check Benchmark Results")
-                    google_results = st.session_state['google_benchmark_results']
-                    politifacts_results = st.session_state['df_results']
-                    st.subheader("Performance Comparison")
-                    comp_col1, comp_col2, comp_col3, comp_col4 = st.columns(4)
-                    for idx, (_, row) in enumerate(google_results.iterrows()):
-                        model_name = row['Model']
-                        google_accuracy = row['Accuracy']
-                        politifacts_row = politifacts_results[politifacts_results['Model'] == model_name]
-                        if not politifacts_row.empty:
-                            politifacts_accuracy = politifacts_row['Accuracy'].values[0]
-                            delta = google_accuracy - politifacts_accuracy
-                            delta_color = "normal" if delta >= 0 else "inverse"
-                        else:
-                            delta = None
-                            delta_color = "off"
-                        col = [comp_col1, comp_col2, comp_col3, comp_col4][idx]
-                        with col:
-                            if delta is not None:
-                                st.metric(label=f"{model_name}", value=f"{google_accuracy:.1f}%", delta=f"{delta:+.1f}%", delta_color=delta_color)
-                            else:
-                                st.metric(label=f"{model_name}", value=f"{google_accuracy:.1f}%")
-                st.markdown("---")
-                st.header("AI Performance Review")
-                critique_col1, critique_col2 = st.columns([2, 1])
-                with critique_col1:
-                    st.markdown('<div class="card">', unsafe_allow_html=True)
-                    critique_text = generate_humorous_critique(st.session_state['df_results'], st.session_state['selected_phase_run'])
-                    st.markdown(critique_text)
-                    st.markdown('</div>', unsafe_allow_html=True)
-                with critique_col2:
-                    st.markdown('<div class="card">', unsafe_allow_html=True)
-                    st.subheader("Winner's Circle")
-                    if not st.session_state['df_results'].empty:
+                    
+                    # Enhanced visualizations
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.subheader("📊 Performance Heatmap")
+                        st.plotly_chart(create_performance_heatmap(df_results), use_container_width=True)
+                    
+                    with col2:
+                        st.subheader("🎯 Accuracy vs Speed")
+                        fig = go.Figure()
+                        
+                        for idx, row in df_results.iterrows():
+                            fig.add_trace(go.Scatter(
+                                x=[row['Inference Latency (ms)']],
+                                y=[row['Accuracy']],
+                                mode='markers+text',
+                                marker=dict(size=row['F1-Score']*50 + 20, 
+                                          color=row['Accuracy'],
+                                          colorscale='Viridis',
+                                          showscale=True),
+                                name=row['Model'],
+                                text=row['Model'],
+                                textposition="top center"
+                            ))
+                        
+                        fig.update_layout(
+                            title='Model Performance: Accuracy vs Inference Speed',
+                            xaxis_title='Inference Latency (ms)',
+                            yaxis_title='Accuracy (%)',
+                            height=500,
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            font=dict(color='#e6f1ff')
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    st.subheader("🌐 3D Performance Comparison")
+                    st.plotly_chart(create_3d_scatter(df_results), use_container_width=True)
+                    
+                    # Benchmark comparison if available
+                    if not st.session_state['google_benchmark_results'].empty:
+                        st.markdown("---")
+                        st.subheader("📈 Benchmark Comparison")
+                        
+                        google_results = st.session_state['google_benchmark_results']
+                        politifacts_results = st.session_state['df_results']
+                        
+                        comparison_data = []
+                        for _, google_row in google_results.iterrows():
+                            model_name = google_row['Model']
+                            google_accuracy = google_row['Accuracy']
+                            
+                            politifacts_row = politifacts_results[politifacts_results['Model'] == model_name]
+                            if not politifacts_row.empty:
+                                politifacts_accuracy = politifacts_row['Accuracy'].values[0]
+                                
+                                comparison_data.append({
+                                    'Model': model_name,
+                                    'PolitiFact Accuracy': politifacts_accuracy,
+                                    'Google Benchmark Accuracy': google_accuracy,
+                                    'Delta': google_accuracy - politifacts_accuracy
+                                })
+                        
+                        if comparison_data:
+                            comparison_df = pd.DataFrame(comparison_data)
+                            
+                            fig = go.Figure(data=[
+                                go.Bar(name='PolitiFact', x=comparison_df['Model'], y=comparison_df['PolitiFact Accuracy'], marker_color='#64ffda'),
+                                go.Bar(name='Google Benchmark', x=comparison_df['Model'], y=comparison_df['Google Benchmark Accuracy'], marker_color='#00b4d8')
+                            ])
+                            
+                            fig.update_layout(
+                                title='Accuracy Comparison: PolitiFact vs Google Benchmark',
+                                xaxis_title='Model',
+                                yaxis_title='Accuracy (%)',
+                                barmode='group',
+                                height=500,
+                                plot_bgcolor='rgba(0,0,0,0)',
+                                paper_bgcolor='rgba(0,0,0,0)',
+                                font=dict(color='#e6f1ff')
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+            
+            with tabs[1]:
+                if not st.session_state['smote_with_results'].empty:
+                    st.subheader("⚖️ SMOTE Analysis Results")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("##### 📈 With SMOTE")
+                        st.dataframe(st.session_state['smote_with_results'].style.format({
+                            'Accuracy': '{:.1f}%',
+                            'F1-Score': '{:.3f}',
+                            'Precision': '{:.3f}',
+                            'Recall': '{:.3f}'
+                        }), use_container_width=True)
+                    
+                    with col2:
+                        st.markdown("##### 📊 Without SMOTE")
+                        st.dataframe(st.session_state['smote_without_results'].style.format({
+                            'Accuracy': '{:.1f}%',
+                            'F1-Score': '{:.3f}',
+                            'Precision': '{:.3f}',
+                            'Recall': '{:.3f}'
+                        }), use_container_width=True)
+                    
+                    # SMOTE impact visualization
+                    st.subheader("📊 SMOTE Impact Visualization")
+                    
+                    # Prepare data for visualization
+                    models = st.session_state['smote_with_results']['Model'].tolist()
+                    
+                    fig = make_subplots(rows=1, cols=2, 
+                                      subplot_titles=('Accuracy Impact', 'F1-Score Impact'),
+                                      specs=[[{'type': 'bar'}, {'type': 'bar'}]])
+                    
+                    # Accuracy comparison
+                    acc_with = st.session_state['smote_with_results']['Accuracy'].tolist()
+                    acc_without = st.session_state['smote_without_results']['Accuracy'].tolist()
+                    
+                    fig.add_trace(
+                        go.Bar(name='With SMOTE', x=models, y=acc_with, marker_color='#64ffda'),
+                        row=1, col=1
+                    )
+                    
+                    fig.add_trace(
+                        go.Bar(name='Without SMOTE', x=models, y=acc_without, marker_color='#00b4d8'),
+                        row=1, col=1
+                    )
+                    
+                    # F1 comparison
+                    f1_with = st.session_state['smote_with_results']['F1-Score'].tolist()
+                    f1_without = st.session_state['smote_without_results']['F1-Score'].tolist()
+                    
+                    fig.add_trace(
+                        go.Bar(name='With SMOTE', x=models, y=f1_with, marker_color='#64ffda', showlegend=False),
+                        row=1, col=2
+                    )
+                    
+                    fig.add_trace(
+                        go.Bar(name='Without SMOTE', x=models, y=f1_without, marker_color='#00b4d8', showlegend=False),
+                        row=1, col=2
+                    )
+                    
+                    fig.update_layout(
+                        height=500,
+                        barmode='group',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        font=dict(color='#e6f1ff'),
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+                    
+                    fig.update_yaxes(title_text="Accuracy (%)", row=1, col=1)
+                    fig.update_yaxes(title_text="F1-Score", row=1, col=2)
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+            
+            with tabs[2]:
+                st.subheader("🎭 AI Performance Review")
+                
+                if not st.session_state['df_results'].empty:
+                    critique_col1, critique_col2 = st.columns([2, 1])
+                    
+                    with critique_col1:
+                        st.markdown('<div class="card">', unsafe_allow_html=True)
+                        critique_text = generate_humorous_critique(st.session_state['df_results'], st.session_state['selected_phase_run'])
+                        st.markdown(critique_text)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    with critique_col2:
+                        st.markdown('<div class="card">', unsafe_allow_html=True)
+                        st.subheader("🏆 Winner's Circle")
+                        
                         best_model = st.session_state['df_results'].loc[st.session_state['df_results']['F1-Score'].idxmax()]
+                        
                         st.markdown(f"""
-                        **Champion Model:**  
-                        **{best_model['Model']}**
+                        <div style="text-align: center;">
+                            <div style="font-size: 48px; color: #64ffda; margin: 20px 0;">🏆</div>
+                            <h3 style='color:#64ffda; margin: 10px 0;'>{best_model['Model']}</h3>
+                        </div>
                         
-                        **Performance:**  
-                        {best_model['Accuracy']:.1f}% Accuracy  
-                        {best_model['F1-Score']:.3f} F1-Score  
-                        {best_model['Inference Latency (ms)']}ms Inference
+                        <div style="background: rgba(100, 255, 218, 0.1); padding: 15px; border-radius: 8px; margin: 20px 0;">
+                            <div style="display: flex; justify-content: space-between; margin: 10px 0;">
+                                <span style='color:#a8b2d1;'>Accuracy:</span>
+                                <span style='color:#64ffda; font-weight: bold;'>{best_model['Accuracy']:.1f}%</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin: 10px 0;">
+                                <span style='color:#a8b2d1;'>F1-Score:</span>
+                                <span style='color:#64ffda; font-weight: bold;'>{best_model['F1-Score']:.3f}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin: 10px 0;">
+                                <span style='color:#a8b2d1;'>Inference Speed:</span>
+                                <span style='color:#64ffda; font-weight: bold;'>{best_model['Inference Latency (ms)']}ms</span>
+                            </div>
+                        </div>
                         
-                        **Feature Set:**  
-                        {st.session_state['selected_phase_run']}
-                        """)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                        <div style="margin-top: 20px; padding: 15px; background: rgba(17, 34, 64, 0.8); border-radius: 8px;">
+                            <h4 style='color:#64ffda; margin: 0 0 10px 0;'>Feature Set</h4>
+                            <p style='color:#a8b2d1; margin: 0;'>{st.session_state['selected_phase_run']}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        st.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == '__main__':
     app()
