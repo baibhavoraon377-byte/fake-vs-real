@@ -1,5 +1,5 @@
 # lssdp.py
-# Updated Streamlit app with purple and white professional theme
+# Updated Streamlit app with lighter purple sidebar and expand/collapse toggle
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -808,14 +808,14 @@ def generate_humorous_critique(df_results: pd.DataFrame, selected_phase: str) ->
 def app():
     st.set_page_config(page_title='FactChecker: AI Fact-Checking Platform', layout='wide', initial_sidebar_state='expanded')
 
-    # ==================== PURPLE & WHITE THEME ====================
+    # ==================== LIGHTER PURPLE SIDEBAR WITH TOGGLE ====================
     st.markdown("""
     <style>
     /* ========== MAIN THEME COLORS ========== */
     :root {
-        --primary-purple: #8A2BE2;       /* Purple */
-        --primary-purple-light: #9B4DFF; /* Lighter purple */
-        --primary-purple-dark: #6A0DAD;  /* Darker purple */
+        --primary-purple: #A855F7;       /* Lighter Purple */
+        --primary-purple-light: #C084FC; /* Even lighter purple */
+        --primary-purple-dark: #9333EA;  /* Darker but still light */
         --accent-blue: #00BFFF;          /* Accent blue */
         --background-white: #FFFFFF;     /* White background */
         --background-light: #F8F9FA;     /* Light grey background */
@@ -823,7 +823,7 @@ def app():
         --text-medium: #666666;          /* Medium text */
         --text-light: #888888;           /* Light text */
         --border-color: #E0E0E0;         /* Border color */
-        --card-shadow: 0 4px 12px rgba(138, 43, 226, 0.1); /* Purple shadow */
+        --card-shadow: 0 4px 12px rgba(168, 85, 247, 0.1); /* Lighter purple shadow */
     }
     
     /* General body styles - WHITE BACKGROUND */
@@ -839,8 +839,8 @@ def app():
         padding-top: 2rem;
     }
     
-    /* ========== PURPLE SIDEBAR ========== */
-    /* Purple sidebar background */
+    /* ========== LIGHTER PURPLE SIDEBAR ========== */
+    /* Lighter purple sidebar background */
     section[data-testid="stSidebar"] {
         background: linear-gradient(180deg, var(--primary-purple) 0%, var(--primary-purple-dark) 100%) !important;
         border-right: 1px solid var(--primary-purple-dark);
@@ -864,6 +864,39 @@ def app():
         text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
     
+    /* ========== SIDEBAR TOGGLE BUTTON ========== */
+    /* Style for the expand/collapse button */
+    .sidebar-toggle-btn {
+        position: fixed !important;
+        top: 20px !important;
+        left: 20px !important;
+        z-index: 9999 !important;
+        background-color: var(--primary-purple) !important;
+        color: white !important;
+        border: 2px solid white !important;
+        border-radius: 50% !important;
+        width: 50px !important;
+        height: 50px !important;
+        font-size: 20px !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .sidebar-toggle-btn:hover {
+        background-color: var(--primary-purple-light) !important;
+        transform: scale(1.1) !important;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3) !important;
+    }
+    
+    /* Hide the button when sidebar is open */
+    .sidebar-open .sidebar-toggle-btn {
+        display: none !important;
+    }
+    
     /* ========== NAVIGATION RADIO BUTTONS ========== */
     /* Professional radio buttons - LARGER WHITE TEXT */
     .stRadio > div {
@@ -885,14 +918,14 @@ def app():
         border-radius: 10px !important;
         transition: all 0.3s ease !important;
         border: 2px solid rgba(255, 255, 255, 0.3) !important;
-        background-color: rgba(255, 255, 255, 0.1) !important;
+        background-color: rgba(255, 255, 255, 0.15) !important; /* Slightly more transparent */
         font-size: 18px !important;
         color: white !important;
     }
     
     /* Hover effect for radio buttons */
     .stRadio [role="radio"]:hover {
-        background-color: rgba(255, 255, 255, 0.2) !important;
+        background-color: rgba(255, 255, 255, 0.25) !important;
         border-color: white !important;
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
@@ -900,7 +933,7 @@ def app():
     
     /* Selected radio button style - professional */
     .stRadio [role="radio"][aria-checked="true"] {
-        background-color: rgba(255, 255, 255, 0.25) !important;
+        background-color: rgba(255, 255, 255, 0.3) !important; /* More visible when selected */
         border-color: white !important;
         color: white !important;
         font-weight: 600 !important;
@@ -977,13 +1010,13 @@ def app():
         border-radius: 8px !important;
         font-size: 16px !important;
         transition: all 0.3s ease !important;
-        box-shadow: 0 4px 8px rgba(138, 43, 226, 0.2) !important;
+        box-shadow: 0 4px 8px rgba(168, 85, 247, 0.2) !important;
     }
     
     .stButton > button:hover {
         background: linear-gradient(135deg, var(--primary-purple-light) 0%, var(--primary-purple) 100%) !important;
         transform: translateY(-2px) !important;
-        box-shadow: 0 6px 12px rgba(138, 43, 226, 0.3) !important;
+        box-shadow: 0 6px 12px rgba(168, 85, 247, 0.3) !important;
     }
     
     /* ========== FORMS AND INPUTS ========== */
@@ -1003,7 +1036,7 @@ def app():
     .stTextArea > div > div > textarea:focus,
     .stDateInput > div > div > input:focus {
         border-color: var(--primary-purple) !important;
-        box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.1) !important;
+        box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1) !important;
     }
     
     /* ========== DATA TABLES ========== */
@@ -1029,7 +1062,7 @@ def app():
     }
     
     .dataframe tr:hover {
-        background-color: rgba(138, 43, 226, 0.05) !important;
+        background-color: rgba(168, 85, 247, 0.05) !important;
     }
     
     /* ========== METRICS ========== */
@@ -1056,7 +1089,7 @@ def app():
     /* ========== STATUS MESSAGES ========== */
     /* Info boxes with purple theme */
     .stInfo {
-        background-color: rgba(138, 43, 226, 0.1) !important;
+        background-color: rgba(168, 85, 247, 0.1) !important;
         border-left: 4px solid var(--primary-purple) !important;
         border-radius: 8px !important;
         color: var(--text-dark) !important;
@@ -1130,6 +1163,67 @@ def app():
         border-color: white !important;
     }
     </style>
+    
+    <!-- Sidebar Toggle Button -->
+    <div id="sidebar-toggle-btn" class="sidebar-toggle-btn">☰</div>
+    
+    <script>
+    // JavaScript to handle sidebar toggle
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleBtn = document.getElementById('sidebar-toggle-btn');
+        const sidebar = document.querySelector('[data-testid="stSidebar"]');
+        
+        // Check initial state
+        if (sidebar) {
+            const isCollapsed = sidebar.querySelector('[aria-expanded="false"]');
+            if (isCollapsed) {
+                // Sidebar is collapsed, show the button
+                toggleBtn.style.display = 'flex';
+            } else {
+                // Sidebar is open, hide the button
+                toggleBtn.style.display = 'none';
+            }
+        }
+        
+        // Toggle button click handler
+        toggleBtn.addEventListener('click', function() {
+            // Find and click the Streamlit's collapse button
+            const collapseBtn = document.querySelector('[data-testid="collapsedControl"] button');
+            if (collapseBtn) {
+                collapseBtn.click();
+            }
+            
+            // Toggle button visibility
+            setTimeout(() => {
+                const sidebar = document.querySelector('[data-testid="stSidebar"]');
+                if (sidebar) {
+                    const isCollapsed = sidebar.querySelector('[aria-expanded="false"]');
+                    if (isCollapsed) {
+                        toggleBtn.style.display = 'flex';
+                    } else {
+                        toggleBtn.style.display = 'none';
+                    }
+                }
+            }, 100);
+        });
+        
+        // Monitor for Streamlit sidebar state changes
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.attributeName === 'aria-expanded') {
+                    const isCollapsed = mutation.target.getAttribute('aria-expanded') === 'false';
+                    toggleBtn.style.display = isCollapsed ? 'flex' : 'none';
+                }
+            });
+        });
+        
+        // Find and observe the sidebar collapse control
+        const collapseControl = document.querySelector('[data-testid="collapsedControl"]');
+        if (collapseControl) {
+            observer.observe(collapseControl, { attributes: true });
+        }
+    });
+    </script>
     """, unsafe_allow_html=True)
 
     # Initialize session state
@@ -1467,7 +1561,7 @@ def app():
             with viz_col2:
                 st.subheader("Speed vs Accuracy Analysis")
                 fig, ax = plt.subplots(figsize=(8, 6))
-                colors = ['#8A2BE2', '#9B4DFF', '#6A0DAD', '#9370DB']  # Purple variations
+                colors = ['#A855F7', '#C084FC', '#9333EA', '#D8B4FE']  # Lighter purple variations
                 for i, (_, row) in enumerate(df_results.iterrows()):
                     ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], 
                              s=200, alpha=0.7, color=colors[i], label=row['Model'])
@@ -1543,3 +1637,4 @@ def app():
 
 if __name__ == '__main__':
     app()
+    
