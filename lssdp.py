@@ -1687,37 +1687,20 @@ def app():
                 if not st.session_state['df_results'].empty:
                     best_model = st.session_state['df_results'].loc[st.session_state['df_results']['F1-Score'].idxmax()]
                     
-                    st.markdown(f"""
-                    <div style="padding:15px;">
-                        <h3 style="color:var(--accent-blue); margin-bottom:15px;">Best Model</h3>
-                        <div style="background:linear-gradient(135deg, var(--primary-blue), var(--accent-blue)); 
-                                 color:white; padding:15px; border-radius:8px; margin-bottom:15px;">
-                            <h2 style="margin:0; font-size:22px;">{best_model['Model']}</h2>
-                        </div>
-                        
-                        <div style="margin:15px 0;">
-                            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                                <span style="color:#666;">Accuracy:</span>
-                                <span style="font-weight:bold; color:var(--accent-blue);">{best_model['Accuracy']:.1f}%</span>
-                            </div>
-                            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                                <span style="color:#666;">F1-Score:</span>
-                                <span style="font-weight:bold; color:var(--accent-blue);">{best_model['F1-Score']:.3f}</span>
-                            </div>
-                            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                                <span style="color:#666;">Inference Time:</span>
-                                <span style="font-weight:bold; color:var(--accent-blue);">{best_model['Inference Latency (ms)']}ms</span>
-                            </div>
-                        </div>
-                        
-                        <div style="background-color:var(--light-blue); padding:12px; border-radius:6px; margin-top:15px;">
-                            <p style="margin:0; font-size:13px; color:var(--accent-blue);">
-                                <strong>Feature Set:</strong><br>
-                                {st.session_state.get('selected_phase_run', 'Not specified')}
-                            </p>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    # Create a nice card for the winner using Streamlit components
+                    st.markdown(f"### 🏆 {best_model['Model']}")
+                    
+                    # Metrics in columns
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Accuracy", f"{best_model['Accuracy']:.1f}%")
+                    with col2:
+                        st.metric("F1-Score", f"{best_model['F1-Score']:.3f}")
+                    with col3:
+                        st.metric("Inference", f"{best_model['Inference Latency (ms)']}ms")
+                    
+                    # Feature set info
+                    st.info(f"**Feature Set:** {st.session_state.get('selected_phase_run', 'Not specified')}")
 
 if __name__ == '__main__':
     app()
