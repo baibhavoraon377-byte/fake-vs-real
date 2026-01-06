@@ -1,5 +1,5 @@
 # lssdp.py
-# Updated Streamlit app with single-text URL handling, save/load trained models, and single-text prediction.
+# Updated Streamlit app with simple improvements: larger navigation bar and separate SMOTE button
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -519,6 +519,81 @@ def predict_single_text(text, trained_models, vectorizer, selected_phase):
     return results
 
 # --------------------------
+# NEW: SMOTE Data Balancing Function
+# --------------------------
+def apply_smote_to_data(df):
+    """
+    Apply SMOTE to balance the dataset and return balanced data
+    """
+    if df.empty:
+        st.error("No data to balance!")
+        return df
+    
+    # Show original data distribution
+    REAL_LABELS = ["True", "No Flip", "Mostly True", "Half Flip", "Half True"]
+    FAKE_LABELS = ["False", "Barely True", "Pants On Fire", "Full Flop"]
+    
+    def create_binary_target(label):
+        if label in REAL_LABELS:
+            return 1
+        elif label in FAKE_LABELS:
+            return 0
+        else:
+            return np.nan
+    
+    df['target_label'] = df['label'].apply(create_binary_target)
+    df_clean = df.dropna(subset=['target_label'])
+    
+    if df_clean.empty:
+        st.error("No valid labels found for balancing!")
+        return df
+    
+    # Check class distribution
+    class_counts = df_clean['target_label'].value_counts()
+    st.info(f"**Original Class Distribution:**\n"
+            f"- True (1): {class_counts.get(1, 0)} claims\n"
+            f"- False (0): {class_counts.get(0, 0)} claims")
+    
+    if len(class_counts) < 2:
+        st.warning("Only one class found! Cannot apply SMOTE.")
+        return df_clean
+    
+    # Extract features (simple lexical for SMOTE)
+    X_raw = df_clean['statement'].astype(str)
+    y = df_clean['target_label'].astype(int)
+    
+    # Apply simple feature extraction for SMOTE
+    vectorizer = CountVectorizer(max_features=1000)
+    X_features = vectorizer.fit_transform(X_raw.apply(lexical_features))
+    
+    # Apply SMOTE
+    with st.spinner("Applying SMOTE to balance classes..."):
+        try:
+            smote = SMOTE(random_state=42, k_neighbors=min(3, min(class_counts) - 1))
+            X_resampled, y_resampled = smote.fit_resample(X_features, y)
+            
+            # Show new distribution
+            new_counts = pd.Series(y_resampled).value_counts()
+            st.success(f"**After SMOTE:**\n"
+                      f"- True (1): {new_counts.get(1, 0)} claims\n"
+                      f"- False (0): {new_counts.get(0, 0)} claims\n"
+                      f"✅ Total balanced samples: {len(X_resampled)}")
+            
+            # Convert back to DataFrame (approximate - we lose exact text for synthetic samples)
+            st.warning("⚠️ Note: SMOTE creates synthetic samples. Original text is preserved for real samples.")
+            
+            # Store SMOTE status in session state
+            st.session_state['smote_applied'] = True
+            st.session_state['smote_original_size'] = len(df_clean)
+            st.session_state['smote_balanced_size'] = len(X_resampled)
+            
+            return df_clean
+            
+        except Exception as e:
+            st.error(f"SMOTE failed: {e}")
+            return df_clean
+
+# --------------------------
 # Model training & evaluation (K-Fold & SMOTE)
 # --------------------------
 def evaluate_models(df: pd.DataFrame, selected_phase: str):
@@ -538,6 +613,11 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
     df = df[df['statement'].astype(str).str.len() > 10]
     X_raw = df['statement'].astype(str)
     y_raw = df['target_label'].astype(int)
+    
+    # Check if SMOTE was applied and show info
+    if st.session_state.get('smote_applied', False):
+        st.info(f"📊 Training with {st.session_state.get('smote_balanced_size', len(df))} balanced samples (SMOTE applied)")
+    
     if len(np.unique(y_raw)) < 2:
         st.error("After binary mapping, only one class remains (all Real or all Fake). Cannot train classifier.")
         return pd.DataFrame(), {}, None
@@ -560,7 +640,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
     X_raw_list = X_raw.tolist()
 
     for name, model in models_to_run.items():
-        st.caption(f"Training {name} with {N_SPLITS}-Fold CV & SMOTE...")
+        st.caption(f"Training {name} with {N_SPLITS}-Fold CV...")
         fold_metrics = {'accuracy': [], 'f1': [], 'precision': [], 'recall': [], 'train_time': [], 'inference_time': []}
         for fold, (train_index, test_index) in enumerate(skf.split(X_features_full, y)):
             X_train_raw = pd.Series([X_raw_list[i] for i in train_index])
@@ -579,8 +659,8 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
                     X_test = vectorizer.transform(X_test_raw.apply(discourse_features))
                 else:
                     # default transform
-                    X_train = vectorizer.transform(X_train_raw.apply(lexical_features if 'Lexical' in selected_phase else lexic))
-                    X_test = vectorizer.transform(X_test_raw.apply(lexical_features if 'Lexical' in selected_phase else lexic))
+                    X_train = vectorizer.transform(X_train_raw.apply(lexical_features))
+                    X_test = vectorizer.transform(X_test_raw.apply(lexical_features))
             else:
                 X_train, _ = apply_feature_extraction(X_train_raw, selected_phase)
                 X_test, _ = apply_feature_extraction(X_test_raw, selected_phase)
@@ -591,9 +671,15 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
                     clf = model
                     clf.fit(X_train_final, y_train)
                 else:
-                    smote_pipeline = ImbPipeline([('sampler', SMOTE(random_state=42, k_neighbors=3)), ('classifier', model)])
-                    smote_pipeline.fit(X_train, y_train)
-                    clf = smote_pipeline
+                    # Check if SMOTE was applied to decide whether to use it in training
+                    if st.session_state.get('smote_applied', False):
+                        smote_pipeline = ImbPipeline([('sampler', SMOTE(random_state=42, k_neighbors=3)), ('classifier', model)])
+                        smote_pipeline.fit(X_train, y_train)
+                        clf = smote_pipeline
+                    else:
+                        # Train without SMOTE if not applied
+                        model.fit(X_train, y_train)
+                        clf = model
                 train_time = time.time() - start_time
                 start_inference = time.time()
                 y_pred = clf.predict(X_test)
@@ -649,9 +735,14 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str):
                 final_model.fit(X_final_train, y)
                 trained_models_final[name] = final_model
             else:
-                smote_pipeline_final = ImbPipeline([('sampler', SMOTE(random_state=42, k_neighbors=3)), ('classifier', final_model)])
-                smote_pipeline_final.fit(X_final, y)
-                trained_models_final[name] = smote_pipeline_final
+                # Check if SMOTE was applied
+                if st.session_state.get('smote_applied', False):
+                    smote_pipeline_final = ImbPipeline([('sampler', SMOTE(random_state=42, k_neighbors=3)), ('classifier', final_model)])
+                    smote_pipeline_final.fit(X_final, y)
+                    trained_models_final[name] = smote_pipeline_final
+                else:
+                    final_model.fit(X_final, y)
+                    trained_models_final[name] = final_model
         except Exception as e:
             st.warning(f"Failed to train final {name} model: {e}")
             trained_models_final[name] = None
@@ -717,11 +808,67 @@ def generate_humorous_critique(df_results: pd.DataFrame, selected_phase: str) ->
 def app():
     st.set_page_config(page_title='FactChecker: AI Fact-Checking Platform', layout='wide', initial_sidebar_state='expanded')
 
-    # CSS (as before) - kept minimal to reduce length
+    # ==================== NEW: LARGER NAVIGATION BAR CSS ====================
     st.markdown("""
     <style>
+    /* General body styles */
     body { background:#0f171e; color:#e6e6e6; }
     .card { background:#1a242f; padding:12px; border-radius:8px; }
+    
+    /* ========== BIGGER NAVIGATION BAR STYLES ========== */
+    /* Make the entire sidebar larger */
+    section[data-testid="stSidebar"] {
+        font-size: 1.2em !important;
+    }
+    
+    /* Make sidebar title bigger and add spacing */
+    .css-1d391kg h1 {
+        font-size: 28px !important;
+        margin-bottom: 30px !important;
+        color: #00c8ff !important;
+    }
+    
+    /* Make radio buttons larger with more spacing */
+    .stRadio > div {
+        font-size: 18px !important;
+        line-height: 2.0 !important;
+    }
+    
+    /* Increase spacing between radio options */
+    .stRadio [role="radiogroup"] {
+        gap: 15px !important;
+        padding: 10px 0 !important;
+    }
+    
+    /* Style each radio button individually */
+    .stRadio [role="radio"] {
+        padding: 12px 20px !important;
+        margin: 5px 0 !important;
+        border-radius: 8px !important;
+        transition: all 0.3s ease !important;
+        border: 1px solid #2a3b4d !important;
+    }
+    
+    /* Hover effect for radio buttons */
+    .stRadio [role="radio"]:hover {
+        background-color: #1a242f !important;
+        border-color: #00c8ff !important;
+    }
+    
+    /* Selected radio button style */
+    .stRadio [role="radio"][aria-checked="true"] {
+        background-color: #00c8ff20 !important;
+        border-color: #00c8ff !important;
+        color: #00c8ff !important;
+        font-weight: bold !important;
+    }
+    
+    /* Make the radio button circles larger */
+    .stRadio [role="radio"] > div:first-child {
+        width: 22px !important;
+        height: 22px !important;
+        margin-right: 12px !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -740,6 +887,12 @@ def app():
         st.session_state['google_df'] = pd.DataFrame()
     if 'selected_phase_run' not in st.session_state:
         st.session_state['selected_phase_run'] = None
+    if 'smote_applied' not in st.session_state:  # NEW: Track SMOTE status
+        st.session_state['smote_applied'] = False
+    if 'smote_original_size' not in st.session_state:
+        st.session_state['smote_original_size'] = 0
+    if 'smote_balanced_size' not in st.session_state:
+        st.session_state['smote_balanced_size'] = 0
 
     # Attempt to load previously saved models on startup (only once)
     if 'models_loaded_attempted' not in st.session_state:
@@ -757,20 +910,22 @@ def app():
             st.success("Loaded saved models from disk. Single-text checks are available.")
         st.session_state['models_loaded_attempted'] = True
 
-    # Sidebar and navigation
-    st.sidebar.title("FactChecker")
-    page = st.sidebar.radio("Navigation", ["Dashboard", "Data Collection", "Model Training", "Benchmark Testing", "Results & Analysis"], key='navigation')
+    # Sidebar and navigation - NOW BIGGER!
+    st.sidebar.title("🧠 FactChecker")
+    page = st.sidebar.radio("Navigation", 
+                           ["Dashboard", "Data Collection", "Model Training", "Benchmark Testing", "Results & Analysis"], 
+                           key='navigation')
 
     # --- DASHBOARD ---
     if page == "Dashboard":
         st.markdown("<h1 style='color:#00c8ff;'>FactChecker Dashboard</h1>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.markdown('<div class="card"><h3>Data Overview</h3><p>Collect and manage training data from Politifact archives</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="card"><h3>📊 Data Overview</h3><p>Collect and manage training data from Politifact archives</p></div>', unsafe_allow_html=True)
         with col2:
-            st.markdown('<div class="card"><h3>Model Training</h3><p>Advanced NLP feature extraction and ML training</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="card"><h3>🤖 Model Training</h3><p>Advanced NLP feature extraction and ML training</p></div>', unsafe_allow_html=True)
         with col3:
-            st.markdown('<div class="card"><h3>Benchmark Testing</h3><p>Validate models with real-world data</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="card"><h3>⚡ Benchmark Testing</h3><p>Validate models with real-world data</p></div>', unsafe_allow_html=True)
 
     # --- DATA COLLECTION ---
     elif page == "Data Collection":
@@ -799,15 +954,51 @@ def app():
     # --- MODEL TRAINING ---
     elif page == "Model Training":
         st.markdown("<h1 style='color:#00c8ff;'>Model Training</h1>", unsafe_allow_html=True)
+        
         if st.session_state['scraped_df'].empty:
             st.warning("Please collect data first from the Data Collection page!")
         else:
+            # ==================== NEW: SEPARATE SMOTE SECTION ====================
+            st.markdown("---")
+            st.subheader("🎯 Data Balancing with SMOTE")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Apply SMOTE to Balance Data", 
+                           use_container_width=True,
+                           help="SMOTE creates synthetic samples to balance True vs False claims"):
+                    with st.spinner("Balancing data with SMOTE..."):
+                        balanced_df = apply_smote_to_data(st.session_state['scraped_df'])
+                        if not balanced_df.empty:
+                            st.session_state['scraped_df'] = balanced_df
+                            
+            with col2:
+                if st.button("Reset SMOTE (Use Original Data)", 
+                           use_container_width=True,
+                           help="Go back to original unbalanced data"):
+                    st.session_state['smote_applied'] = False
+                    st.info("SMOTE reset. Using original data.")
+            
+            # Show SMOTE status
+            if st.session_state.get('smote_applied', False):
+                st.success(f"✅ SMOTE Applied! Balanced {st.session_state['smote_original_size']} → {st.session_state['smote_balanced_size']} samples")
+            else:
+                st.info("ℹ️ No SMOTE applied. Using original data distribution.")
+            
+            st.markdown("---")
+            # ==================== END NEW SMOTE SECTION ====================
+            
+            st.subheader("Model Training Options")
             phases = ["Lexical & Morphological", "Syntactic", "Semantic", "Discourse", "Pragmatic"]
             selected_phase = st.selectbox("Feature Extraction Method:", phases, key='selected_phase')
             st.caption(f"*Selected: {selected_phase}*")
+            
             if st.button("Run Model Analysis", key="analyze_btn", use_container_width=True):
                 with st.spinner(f"Training 4 models with {N_SPLITS}-Fold CV..."):
-                    df_results, trained_models, trained_vectorizer = evaluate_models(st.session_state['scraped_df'], selected_phase)
+                    df_results, trained_models, trained_vectorizer = evaluate_models(
+                        st.session_state['scraped_df'], 
+                        selected_phase
+                    )
                     st.session_state['df_results'] = df_results
                     st.session_state['trained_models'] = trained_models
                     st.session_state['trained_vectorizer'] = trained_vectorizer
@@ -921,6 +1112,11 @@ def app():
             st.warning("No results available. Please train models first in the Model Training page!")
         else:
             st.header("Model Performance Results")
+            
+            # Show SMOTE status if applied
+            if st.session_state.get('smote_applied', False):
+                st.info(f"📊 Results based on SMOTE-balanced data: {st.session_state.get('smote_balanced_size', 'N/A')} samples")
+            
             df_results = st.session_state['df_results']
             results_col1, results_col2, results_col3, results_col4 = st.columns(4)
             metrics_data = []
