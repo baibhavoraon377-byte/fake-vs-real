@@ -913,16 +913,6 @@ def app():
         margin-bottom: 15px !important;
     }
     
-    /* Cards and containers */
-    .card {
-        background: var(--white);
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        border: 1px solid var(--light-blue);
-        margin-bottom: 15px;
-    }
-    
     /* Buttons */
     .stButton button {
         background-color: var(--primary-blue) !important;
@@ -1049,8 +1039,8 @@ def app():
         col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown(f'''
-            <div class="card">
-                <h3 style="color:var(--accent-blue);">Data Overview</h3>
+            <div style="background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--light-blue); margin-bottom: 15px;">
+                <h3 style="color: var(--accent-blue);">Data Overview</h3>
                 <p>Collect and manage training data from Politifact archives</p>
                 <p style="font-size: 20px; font-weight: bold; color: var(--accent-blue);">
                     {len(st.session_state['scraped_df']) if not st.session_state['scraped_df'].empty else 0} claims
@@ -1060,8 +1050,8 @@ def app():
         
         with col2:
             st.markdown(f'''
-            <div class="card">
-                <h3 style="color:var(--accent-blue);">Model Training</h3>
+            <div style="background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--light-blue); margin-bottom: 15px;">
+                <h3 style="color: var(--accent-blue);">Model Training</h3>
                 <p>Advanced NLP feature extraction and ML training</p>
                 <p style="font-size: 20px; font-weight: bold; color: var(--accent-blue);">
                     {len(st.session_state['trained_models']) if st.session_state['trained_models'] else 0} models ready
@@ -1071,8 +1061,8 @@ def app():
         
         with col3:
             st.markdown(f'''
-            <div class="card">
-                <h3 style="color:var(--accent-blue);">Benchmark Testing</h3>
+            <div style="background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--light-blue); margin-bottom: 15px;">
+                <h3 style="color: var(--accent-blue);">Benchmark Testing</h3>
                 <p>Validate models with real-world data</p>
                 <p style="font-size: 20px; font-weight: bold; color: var(--accent-blue);">
                     {len(st.session_state['google_df']) if not st.session_state['google_df'].empty else 0} benchmark claims
@@ -1084,9 +1074,8 @@ def app():
     elif page == "Data Collection":
         st.markdown("<h1 class='main-header'>Data Collection</h1>", unsafe_allow_html=True)
         
-        st.markdown('<div class="card">', unsafe_allow_html=True)
+        # REMOVED: The card container wrapper
         st.write("Collect political fact-check data from Politifact.com within a specific date range.")
-        st.markdown('</div>', unsafe_allow_html=True)
         
         min_date = pd.to_datetime('2007-01-01')
         max_date = pd.to_datetime('today').normalize()
@@ -1192,10 +1181,8 @@ def app():
             if st.button("Go to Data Collection", use_container_width=True):
                 st.switch_page("Data Collection")
         else:
-            # Training configuration
-            st.markdown('<div class="card">', unsafe_allow_html=True)
+            # Training configuration - REMOVED: The card container wrapper
             st.write("Configure and train machine learning models using different NLP feature extraction methods.")
-            st.markdown('</div>', unsafe_allow_html=True)
             
             config_col1, config_col2 = st.columns(2)
             with config_col1:
@@ -1269,9 +1256,8 @@ def app():
     elif page == "Benchmark Testing":
         st.markdown("<h1 class='main-header'>Benchmark Testing</h1>", unsafe_allow_html=True)
         
-        st.markdown('<div class="card">', unsafe_allow_html=True)
+        # REMOVED: The card container wrapper
         st.write("Test trained models on external data and perform single-text fact-checking.")
-        st.markdown('</div>', unsafe_allow_html=True)
 
         # read query param if present
         try:
@@ -1602,14 +1588,13 @@ def app():
             critique_col1, critique_col2 = st.columns([2, 1])
             
             with critique_col1:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
+                # REMOVED: The card container wrapper
                 critique_text = generate_humorous_critique(st.session_state['df_results'], 
                                                          st.session_state['selected_phase_run'])
                 st.markdown(critique_text)
-                st.markdown('</div>', unsafe_allow_html=True)
             
             with critique_col2:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
+                # REMOVED: The card container wrapper
                 st.subheader("Winner Summary")
                 
                 if not st.session_state['df_results'].empty:
@@ -1646,8 +1631,6 @@ def app():
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-                
-                st.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == '__main__':
     app()
