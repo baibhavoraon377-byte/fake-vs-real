@@ -1,5 +1,5 @@
 # lssdp.py
-# Updated Streamlit app with lighter purple sidebar and expand/collapse toggle
+# Updated Streamlit app with blue and white theme and fixed sidebar
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -808,29 +808,29 @@ def generate_humorous_critique(df_results: pd.DataFrame, selected_phase: str) ->
 def app():
     st.set_page_config(page_title='FactChecker: AI Fact-Checking Platform', layout='wide', initial_sidebar_state='expanded')
 
-    # ==================== LIGHTER PURPLE SIDEBAR WITH TOGGLE ====================
+    # ==================== BLUE & WHITE THEME WITH FIXED SIDEBAR ====================
     st.markdown("""
     <style>
     /* ========== MAIN THEME COLORS ========== */
     :root {
-        --primary-purple: #A855F7;       /* Lighter Purple */
-        --primary-purple-light: #C084FC; /* Even lighter purple */
-        --primary-purple-dark: #9333EA;  /* Darker but still light */
-        --accent-blue: #00BFFF;          /* Accent blue */
-        --background-white: #FFFFFF;     /* White background */
-        --background-light: #F8F9FA;     /* Light grey background */
-        --text-dark: #333333;            /* Dark text */
-        --text-medium: #666666;          /* Medium text */
-        --text-light: #888888;           /* Light text */
-        --border-color: #E0E0E0;         /* Border color */
-        --card-shadow: 0 4px 12px rgba(168, 85, 247, 0.1); /* Lighter purple shadow */
+        --primary-blue: #2563EB;       /* Professional Blue */
+        --primary-blue-light: #3B82F6; /* Lighter Blue */
+        --primary-blue-dark: #1D4ED8;  /* Darker Blue */
+        --accent-blue: #00BFFF;        /* Accent Blue */
+        --background-white: #FFFFFF;   /* White background */
+        --background-light: #F8FAFC;   /* Very light blue-grey */
+        --text-dark: #1E293B;          /* Dark blue-grey text */
+        --text-medium: #475569;        /* Medium blue-grey text */
+        --text-light: #64748B;         /* Light blue-grey text */
+        --border-color: #E2E8F0;       /* Light border */
+        --card-shadow: 0 4px 12px rgba(37, 99, 235, 0.08); /* Subtle blue shadow */
     }
     
     /* General body styles - WHITE BACKGROUND */
     body { 
         background-color: var(--background-white) !important;
         color: var(--text-dark) !important;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Segoe UI', sans-serif;
     }
     
     /* Main content area */
@@ -839,12 +839,19 @@ def app():
         padding-top: 2rem;
     }
     
-    /* ========== LIGHTER PURPLE SIDEBAR ========== */
-    /* Lighter purple sidebar background */
+    /* ========== BLUE SIDEBAR ========== */
+    /* Blue sidebar background - FIXED TO ALWAYS BE VISIBLE */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, var(--primary-purple) 0%, var(--primary-purple-dark) 100%) !important;
-        border-right: 1px solid var(--primary-purple-dark);
+        background: linear-gradient(180deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%) !important;
+        border-right: 1px solid var(--primary-blue-dark);
         color: white !important;
+        min-width: 280px !important;
+        max-width: 350px !important;
+    }
+    
+    /* PREVENT SIDEBAR FROM COLLAPSING */
+    [data-testid="collapsedControl"] {
+        display: none !important;
     }
     
     /* Sidebar text - white for contrast */
@@ -861,40 +868,7 @@ def app():
         padding-bottom: 15px;
         border-bottom: 2px solid rgba(255, 255, 255, 0.2);
         text-align: center;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    }
-    
-    /* ========== SIDEBAR TOGGLE BUTTON ========== */
-    /* Style for the expand/collapse button */
-    .sidebar-toggle-btn {
-        position: fixed !important;
-        top: 20px !important;
-        left: 20px !important;
-        z-index: 9999 !important;
-        background-color: var(--primary-purple) !important;
-        color: white !important;
-        border: 2px solid white !important;
-        border-radius: 50% !important;
-        width: 50px !important;
-        height: 50px !important;
-        font-size: 20px !important;
-        cursor: pointer !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    .sidebar-toggle-btn:hover {
-        background-color: var(--primary-purple-light) !important;
-        transform: scale(1.1) !important;
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3) !important;
-    }
-    
-    /* Hide the button when sidebar is open */
-    .sidebar-open .sidebar-toggle-btn {
-        display: none !important;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
     
     /* ========== NAVIGATION RADIO BUTTONS ========== */
@@ -918,26 +892,26 @@ def app():
         border-radius: 10px !important;
         transition: all 0.3s ease !important;
         border: 2px solid rgba(255, 255, 255, 0.3) !important;
-        background-color: rgba(255, 255, 255, 0.15) !important; /* Slightly more transparent */
+        background-color: rgba(255, 255, 255, 0.12) !important;
         font-size: 18px !important;
         color: white !important;
     }
     
     /* Hover effect for radio buttons */
     .stRadio [role="radio"]:hover {
-        background-color: rgba(255, 255, 255, 0.25) !important;
+        background-color: rgba(255, 255, 255, 0.2) !important;
         border-color: white !important;
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
     }
     
     /* Selected radio button style - professional */
     .stRadio [role="radio"][aria-checked="true"] {
-        background-color: rgba(255, 255, 255, 0.3) !important; /* More visible when selected */
+        background-color: rgba(255, 255, 255, 0.25) !important;
         border-color: white !important;
         color: white !important;
         font-weight: 600 !important;
-        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
+        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.25);
     }
     
     /* Make the radio button circles larger and white */
@@ -957,66 +931,76 @@ def app():
     /* ========== CARDS ========== */
     .card { 
         background: var(--background-light) !important;
-        padding: 20px !important;
+        padding: 22px !important;
         border-radius: 12px !important;
-        border-left: 5px solid var(--primary-purple) !important;
-        margin-bottom: 16px !important;
+        border-left: 5px solid var(--primary-blue) !important;
+        margin-bottom: 18px !important;
         box-shadow: var(--card-shadow) !important;
         border: 1px solid var(--border-color) !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.12);
     }
     
     .card h3, .card h4 {
-        color: var(--primary-purple) !important;
+        color: var(--primary-blue) !important;
         margin-top: 0 !important;
-        margin-bottom: 12px !important;
+        margin-bottom: 14px !important;
+        font-weight: 600;
     }
     
     .card p {
         color: var(--text-medium) !important;
-        margin-bottom: 8px !important;
+        margin-bottom: 10px !important;
+        line-height: 1.6;
     }
     
     /* ========== HEADERS ========== */
     h1, h2, h3, h4 {
-        color: var(--primary-purple) !important;
-        font-weight: 600 !important;
-        margin-bottom: 20px !important;
+        color: var(--primary-blue) !important;
+        font-weight: 700 !important;
+        margin-bottom: 24px !important;
     }
     
     h1 {
-        font-size: 2.5rem !important;
-        border-bottom: 3px solid var(--primary-purple) !important;
-        padding-bottom: 10px !important;
-        margin-bottom: 30px !important;
+        font-size: 2.75rem !important;
+        border-bottom: 3px solid var(--primary-blue) !important;
+        padding-bottom: 12px !important;
+        margin-bottom: 35px !important;
+        letter-spacing: -0.5px;
     }
     
     h2 {
-        font-size: 2rem !important;
-        margin-top: 30px !important;
+        font-size: 2.25rem !important;
+        margin-top: 35px !important;
     }
     
     h3 {
-        font-size: 1.5rem !important;
+        font-size: 1.75rem !important;
     }
     
     /* ========== BUTTONS ========== */
-    /* Purple gradient buttons */
+    /* Blue gradient buttons */
     .stButton > button {
-        background: linear-gradient(135deg, var(--primary-purple) 0%, var(--primary-purple-dark) 100%) !important;
+        background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%) !important;
         color: white !important;
-        font-weight: 500 !important;
+        font-weight: 600 !important;
         border: none !important;
-        padding: 12px 24px !important;
-        border-radius: 8px !important;
+        padding: 14px 28px !important;
+        border-radius: 10px !important;
         font-size: 16px !important;
         transition: all 0.3s ease !important;
-        box-shadow: 0 4px 8px rgba(168, 85, 247, 0.2) !important;
+        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2) !important;
+        letter-spacing: 0.3px;
     }
     
     .stButton > button:hover {
-        background: linear-gradient(135deg, var(--primary-purple-light) 0%, var(--primary-purple) 100%) !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 12px rgba(168, 85, 247, 0.3) !important;
+        background: linear-gradient(135deg, var(--primary-blue-light) 0%, var(--primary-blue) 100%) !important;
+        transform: translateY(-3px) !important;
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3) !important;
     }
     
     /* ========== FORMS AND INPUTS ========== */
@@ -1026,35 +1010,55 @@ def app():
     .stTextArea > div > div > textarea,
     .stDateInput > div > div > input {
         border: 2px solid var(--border-color) !important;
-        border-radius: 8px !important;
-        padding: 10px !important;
+        border-radius: 10px !important;
+        padding: 12px 16px !important;
         background-color: white !important;
+        font-size: 16px !important;
+        color: var(--text-dark) !important;
     }
     
     .stTextInput > div > div > input:focus,
     .stSelectbox > div > div > div:focus,
     .stTextArea > div > div > textarea:focus,
     .stDateInput > div > div > input:focus {
-        border-color: var(--primary-purple) !important;
-        box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1) !important;
+        border-color: var(--primary-blue) !important;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
+        outline: none !important;
+    }
+    
+    /* Labels */
+    .stTextInput label,
+    .stSelectbox label,
+    .stTextArea label,
+    .stDateInput label {
+        color: var(--text-dark) !important;
+        font-weight: 600 !important;
+        margin-bottom: 8px !important;
+        font-size: 16px !important;
     }
     
     /* ========== DATA TABLES ========== */
     .dataframe {
         border: 1px solid var(--border-color) !important;
-        border-radius: 8px !important;
+        border-radius: 10px !important;
         overflow: hidden !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
     
     .dataframe th {
-        background-color: var(--primary-purple) !important;
+        background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%) !important;
         color: white !important;
         font-weight: 600 !important;
         border: none !important;
+        padding: 16px 20px !important;
+        font-size: 15px;
     }
     
     .dataframe td {
         border: 1px solid var(--border-color) !important;
+        padding: 14px 20px !important;
+        color: var(--text-medium);
+        font-size: 15px;
     }
     
     .dataframe tr:nth-child(even) {
@@ -1062,7 +1066,7 @@ def app():
     }
     
     .dataframe tr:hover {
-        background-color: rgba(168, 85, 247, 0.05) !important;
+        background-color: rgba(37, 99, 235, 0.05) !important;
     }
     
     /* ========== METRICS ========== */
@@ -1070,59 +1074,79 @@ def app():
     .stMetric {
         background-color: white !important;
         border: 1px solid var(--border-color) !important;
-        border-radius: 8px !important;
-        padding: 15px !important;
+        border-radius: 10px !important;
+        padding: 20px !important;
         box-shadow: var(--card-shadow) !important;
+        text-align: center;
     }
     
     .stMetric label {
         color: var(--text-medium) !important;
-        font-weight: 500 !important;
+        font-weight: 600 !important;
+        font-size: 16px !important;
+        margin-bottom: 8px !important;
+        display: block;
     }
     
     .stMetric value {
-        color: var(--primary-purple) !important;
-        font-weight: 600 !important;
-        font-size: 24px !important;
+        color: var(--primary-blue) !important;
+        font-weight: 700 !important;
+        font-size: 28px !important;
+        display: block;
+        margin-top: 5px;
+    }
+    
+    .stMetric delta {
+        font-weight: 500 !important;
+        font-size: 14px !important;
     }
     
     /* ========== STATUS MESSAGES ========== */
-    /* Info boxes with purple theme */
+    /* Info boxes with blue theme */
     .stInfo {
-        background-color: rgba(168, 85, 247, 0.1) !important;
-        border-left: 4px solid var(--primary-purple) !important;
-        border-radius: 8px !important;
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(37, 99, 235, 0.04) 100%) !important;
+        border-left: 4px solid var(--primary-blue) !important;
+        border-radius: 10px !important;
         color: var(--text-dark) !important;
+        padding: 20px !important;
+        font-size: 16px;
     }
     
     .stSuccess {
-        background-color: rgba(0, 255, 0, 0.1) !important;
-        border-left: 4px solid #28a745 !important;
-        border-radius: 8px !important;
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.04) 100%) !important;
+        border-left: 4px solid #10B981 !important;
+        border-radius: 10px !important;
         color: var(--text-dark) !important;
+        padding: 20px !important;
+        font-size: 16px;
     }
     
     .stWarning {
-        background-color: rgba(255, 193, 7, 0.1) !important;
-        border-left: 4px solid #ffc107 !important;
-        border-radius: 8px !important;
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.04) 100%) !important;
+        border-left: 4px solid #F59E0B !important;
+        border-radius: 10px !important;
         color: var(--text-dark) !important;
+        padding: 20px !important;
+        font-size: 16px;
     }
     
     .stError {
-        background-color: rgba(220, 53, 69, 0.1) !important;
-        border-left: 4px solid #dc3545 !important;
-        border-radius: 8px !important;
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.04) 100%) !important;
+        border-left: 4px solid #EF4444 !important;
+        border-radius: 10px !important;
         color: var(--text-dark) !important;
+        padding: 20px !important;
+        font-size: 16px;
     }
     
     /* ========== PLOT STYLING ========== */
     /* Make matplotlib plots blend with theme */
     .stPlot {
         border: 1px solid var(--border-color) !important;
-        border-radius: 8px !important;
-        padding: 15px !important;
+        border-radius: 10px !important;
+        padding: 20px !important;
         background-color: white !important;
+        box-shadow: var(--card-shadow);
     }
     
     /* ========== OTHER ELEMENTS ========== */
@@ -1130,27 +1154,24 @@ def app():
     hr {
         border: none !important;
         height: 2px !important;
-        background: linear-gradient(90deg, var(--primary-purple) 0%, transparent 100%) !important;
-        margin: 30px 0 !important;
+        background: linear-gradient(90deg, var(--primary-blue) 0%, var(--border-color) 100%) !important;
+        margin: 40px 0 !important;
     }
     
     /* Captions */
     .stCaption {
         color: var(--text-light) !important;
         font-style: italic !important;
+        font-size: 14px;
+        margin-top: 8px;
     }
     
-    /* Remove Streamlit default branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* ========== SIDEBAR SPECIFIC OVERRIDES ========== */
-    /* Ensure sidebar widgets have correct colors */
+    /* Checkboxes and sliders in sidebar */
     section[data-testid="stSidebar"] .stCheckbox label,
     section[data-testid="stSidebar"] .stSlider label,
     section[data-testid="stSidebar"] .stSelectbox label {
         color: white !important;
+        font-weight: 500;
     }
     
     section[data-testid="stSidebar"] .stCheckbox span {
@@ -1159,71 +1180,35 @@ def app():
     }
     
     section[data-testid="stSidebar"] .stCheckbox input:checked + span {
-        background-color: var(--primary-purple) !important;
+        background-color: var(--primary-blue) !important;
         border-color: white !important;
     }
+    
+    /* Remove Streamlit default branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* ========== RESPONSIVE DESIGN ========== */
+    @media (max-width: 768px) {
+        section[data-testid="stSidebar"] {
+            min-width: 250px !important;
+            max-width: 300px !important;
+        }
+        
+        h1 {
+            font-size: 2rem !important;
+        }
+        
+        h2 {
+            font-size: 1.75rem !important;
+        }
+        
+        .stRadio > div {
+            font-size: 18px !important;
+        }
+    }
     </style>
-    
-    <!-- Sidebar Toggle Button -->
-    <div id="sidebar-toggle-btn" class="sidebar-toggle-btn">☰</div>
-    
-    <script>
-    // JavaScript to handle sidebar toggle
-    document.addEventListener('DOMContentLoaded', function() {
-        const toggleBtn = document.getElementById('sidebar-toggle-btn');
-        const sidebar = document.querySelector('[data-testid="stSidebar"]');
-        
-        // Check initial state
-        if (sidebar) {
-            const isCollapsed = sidebar.querySelector('[aria-expanded="false"]');
-            if (isCollapsed) {
-                // Sidebar is collapsed, show the button
-                toggleBtn.style.display = 'flex';
-            } else {
-                // Sidebar is open, hide the button
-                toggleBtn.style.display = 'none';
-            }
-        }
-        
-        // Toggle button click handler
-        toggleBtn.addEventListener('click', function() {
-            // Find and click the Streamlit's collapse button
-            const collapseBtn = document.querySelector('[data-testid="collapsedControl"] button');
-            if (collapseBtn) {
-                collapseBtn.click();
-            }
-            
-            // Toggle button visibility
-            setTimeout(() => {
-                const sidebar = document.querySelector('[data-testid="stSidebar"]');
-                if (sidebar) {
-                    const isCollapsed = sidebar.querySelector('[aria-expanded="false"]');
-                    if (isCollapsed) {
-                        toggleBtn.style.display = 'flex';
-                    } else {
-                        toggleBtn.style.display = 'none';
-                    }
-                }
-            }, 100);
-        });
-        
-        // Monitor for Streamlit sidebar state changes
-        const observer = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-                if (mutation.attributeName === 'aria-expanded') {
-                    const isCollapsed = mutation.target.getAttribute('aria-expanded') === 'false';
-                    toggleBtn.style.display = isCollapsed ? 'flex' : 'none';
-                }
-            });
-        });
-        
-        // Find and observe the sidebar collapse control
-        const collapseControl = document.querySelector('[data-testid="collapsedControl"]');
-        if (collapseControl) {
-            observer.observe(collapseControl, { attributes: true });
-        }
-    });
-    </script>
     """, unsafe_allow_html=True)
 
     # Initialize session state
@@ -1262,6 +1247,7 @@ def app():
         st.session_state['models_loaded_attempted'] = True
 
     # ==================== NAVIGATION ====================
+    # The sidebar is now PERMANENTLY VISIBLE and cannot be collapsed
     st.sidebar.title("FactChecker")
     page = st.sidebar.radio("Navigation", 
                            ["Dashboard", 
@@ -1274,7 +1260,7 @@ def app():
     # --- DASHBOARD ---
     if page == "Dashboard":
         st.markdown("<h1>FactChecker Dashboard</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#666666; margin-bottom:30px;'>AI-Powered Fact-Checking Platform for Political Claims Analysis</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:18px; color:#475569; margin-bottom:30px;'>AI-Powered Fact-Checking Platform for Political Claims Analysis</p>", unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -1302,7 +1288,7 @@ def app():
     # --- DATA COLLECTION ---
     elif page == "Data Collection":
         st.markdown("<h1>Data Collection</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#666666; margin-bottom:30px;'>Scrape and import political claims from fact-checking sources</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:18px; color:#475569; margin-bottom:30px;'>Scrape and import political claims from fact-checking sources</p>", unsafe_allow_html=True)
         
         min_date = pd.to_datetime('2007-01-01')
         max_date = pd.to_datetime('today').normalize()
@@ -1333,7 +1319,7 @@ def app():
     # --- MODEL TRAINING ---
     elif page == "Model Training":
         st.markdown("<h1>Model Training</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#666666; margin-bottom:30px;'>Train machine learning models with advanced NLP feature extraction</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:18px; color:#475569; margin-bottom:30px;'>Train machine learning models with advanced NLP feature extraction</p>", unsafe_allow_html=True)
         
         if st.session_state['scraped_df'].empty:
             st.warning("Please collect data first from the Data Collection page!")
@@ -1388,7 +1374,7 @@ def app():
     # --- BENCHMARK TESTING ---
     elif page == "Benchmark Testing":
         st.markdown("<h1>Benchmark Testing</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#666666; margin-bottom:30px;'>Validate model performance with external datasets</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:18px; color:#475569; margin-bottom:30px;'>Validate model performance with external datasets</p>", unsafe_allow_html=True)
 
         # Read query param if present
         try:
@@ -1509,7 +1495,7 @@ def app():
     # --- RESULTS & ANALYSIS ---
     elif page == "Results & Analysis":
         st.markdown("<h1>Results & Analysis</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:18px; color:#666666; margin-bottom:30px;'>Model performance metrics and analytical insights</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:18px; color:#475569; margin-bottom:30px;'>Model performance metrics and analytical insights</p>", unsafe_allow_html=True)
         
         if st.session_state['df_results'].empty:
             st.warning("No results available. Please train models first in the Model Training page!")
@@ -1561,7 +1547,7 @@ def app():
             with viz_col2:
                 st.subheader("Speed vs Accuracy Analysis")
                 fig, ax = plt.subplots(figsize=(8, 6))
-                colors = ['#A855F7', '#C084FC', '#9333EA', '#D8B4FE']  # Lighter purple variations
+                colors = ['#2563EB', '#3B82F6', '#1D4ED8', '#60A5FA']  # Blue variations
                 for i, (_, row) in enumerate(df_results.iterrows()):
                     ax.scatter(row['Inference Latency (ms)'], row['Accuracy'], 
                              s=200, alpha=0.7, color=colors[i], label=row['Model'])
@@ -1637,4 +1623,3 @@ def app():
 
 if __name__ == '__main__':
     app()
-    
