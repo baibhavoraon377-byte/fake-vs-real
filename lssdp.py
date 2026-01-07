@@ -846,7 +846,7 @@ def predict_single_text(text, trained_models, vectorizer, selected_phase):
     return results
 
 # --------------------------
-# Improved Model training & evaluation with accuracy optimization
+# IMPROVED Model training & evaluation with feature extraction optimization
 # --------------------------
 def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 'statement', label_column: str = 'label', use_smote: bool = True):
     # Use binary_label column if it exists, otherwise use label column
@@ -901,18 +901,18 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
     elif imbalance_ratio >= 0.3 and use_smote:
         st.info(f"Classes are relatively balanced (ratio: {imbalance_ratio:.2f}). Proceeding with SMOTE as requested.")
 
-    # Use the correct function for feature extraction
+    # Extract features ONCE for the entire dataset
     X_features_full, vectorizer = apply_feature_extraction(X_raw, selected_phase)
     if X_features_full is None:
         st.error("Feature extraction failed.")
         return pd.DataFrame(), {}, None
     
-    # Convert sparse matrix to dense if needed for certain phases
-    if hasattr(X_features_full, "toarray") and selected_phase in ["Semantic", "Pragmatic"]:
-        X_features_full = X_features_full.toarray()
-    
+    # Convert to appropriate format
     if isinstance(X_features_full, pd.DataFrame):
         X_features_full = X_features_full.values
+    elif hasattr(X_features_full, "toarray"):
+        X_features_full = X_features_full.toarray()
+    
     y = y_raw.values
     
     # Adjust hyperparameters based on feature phase for better accuracy
@@ -966,67 +966,39 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
     
     skf = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=42)
     model_metrics = {name: [] for name in models_to_run.keys()}
+    
+    # Prepare raw text for each sample (for fold processing if needed)
     X_raw_list = X_raw.tolist()
-
+    
     for name, model in models_to_run.items():
         st.caption(f"Training {name} with {N_SPLITS}-Fold CV and optimized parameters...")
         fold_metrics = {'accuracy': [], 'f1': [], 'precision': [], 'recall': [], 'train_time': [], 'inference_time': []}
         
         for fold, (train_index, test_index) in enumerate(skf.split(X_features_full, y)):
-            X_train_raw = pd.Series([X_raw_list[i] for i in train_index])
-            X_test_raw = pd.Series([X_raw_list[i] for i in test_index])
-            y_train = y[train_index]
-            y_test = y[test_index]
-            
-            # Process features for training and testing
-            if vectorizer is not None:
-                # For phases with vectorizer (Lexical, Syntactic, Discourse)
-                if selected_phase == "Lexical & Morphological":
-                    X_train_processed = X_train_raw.apply(lexical_features)
-                    X_test_processed = X_test_raw.apply(lexical_features)
-                elif selected_phase == "Syntactic":
-                    X_train_processed = X_train_raw.apply(syntactic_features)
-                    X_test_processed = X_test_raw.apply(syntactic_features)
-                elif selected_phase == "Discourse":
-                    X_train_processed = X_train_raw.apply(discourse_features)
-                    X_test_processed = X_test_raw.apply(discourse_features)
-                else:
-                    X_train_processed = X_train_raw
-                    X_test_processed = X_test_raw
-                
-                # Transform using the pre-fitted vectorizer from the full dataset
-                X_train = vectorizer.transform(X_train_processed)
-                X_test = vectorizer.transform(X_test_processed)
-            else:
-                # For phases without vectorizer (Semantic, Pragmatic)
-                if selected_phase == "Semantic":
-                    X_train = pd.DataFrame(X_train_raw.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"]).values
-                    X_test = pd.DataFrame(X_test_raw.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"]).values
-                elif selected_phase == "Pragmatic":
-                    X_train = pd.DataFrame(X_train_raw.apply(pragmatic_features).tolist(), columns=pragmatic_words).values
-                    X_test = pd.DataFrame(X_test_raw.apply(pragmatic_features).tolist(), columns=pragmatic_words).values
-                else:
-                    # Fallback: re-extract features for this fold
-                    X_train, _ = apply_feature_extraction(X_train_raw, selected_phase)
-                    X_test, _ = apply_feature_extraction(X_test_raw, selected_phase)
-                    if isinstance(X_train, pd.DataFrame):
-                        X_train = X_train.values
-                    if isinstance(X_test, pd.DataFrame):
-                        X_test = X_test.values
-            
-            # Convert sparse to dense for models that don't handle sparse well
-            if hasattr(X_train, "toarray") and name in ["Naive Bayes", "Decision Tree"]:
-                X_train = X_train.toarray()
-                X_test = X_test.toarray()
-            
-            start_time = time.time()
             try:
+                # Split the ALREADY PROCESSED features
+                X_train = X_features_full[train_index]
+                X_test = X_features_full[test_index]
+                y_train = y[train_index]
+                y_test = y[test_index]
+                
+                # Convert to dense if needed for specific models
+                if name in ["Naive Bayes", "Decision Tree"]:
+                    if hasattr(X_train, "toarray"):
+                        X_train = X_train.toarray()
+                        X_test = X_test.toarray()
+                    X_train = np.abs(X_train).astype(float) if name == "Naive Bayes" else X_train
+                    X_test = np.abs(X_test).astype(float) if name == "Naive Bayes" else X_test
+                
+                start_time = time.time()
+                
                 if name == "Naive Bayes":
+                    # Naive Bayes needs non-negative values
                     X_train_final = np.abs(X_train).astype(float)
                     clf = model
                     clf.fit(X_train_final, y_train)
                 else:
-                    if use_smote:
+                    if use_smote and len(np.unique(y_train)) > 1:
                         # Ensure we have enough samples for SMOTE
                         min_class_count = np.min(np.bincount(y_train))
                         k_neighbors = min(3, min_class_count - 1) if min_class_count > 1 else 1
@@ -1046,6 +1018,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
                 y_pred = clf.predict(X_test)
                 inference_time = (time.time() - start_inference) * 1000
                 
+                # Calculate metrics
                 fold_metrics['accuracy'].append(accuracy_score(y_test, y_pred))
                 fold_metrics['f1'].append(f1_score(y_test, y_pred, average='weighted', zero_division=0))
                 fold_metrics['precision'].append(precision_score(y_test, y_pred, average='weighted', zero_division=0))
@@ -1054,54 +1027,48 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
                 fold_metrics['inference_time'].append(inference_time)
                 
             except Exception as e:
-                st.warning(f"Fold {fold+1} failed for {name}: {e}")
-                # Use simpler model as fallback
+                st.warning(f"Fold {fold+1} failed for {name}: {str(e)[:100]}")
+                # Fallback: use simple logistic regression
                 try:
-                    if name != "Naive Bayes":
-                        fallback_model = LogisticRegression(max_iter=1000, random_state=42)
-                        fallback_model.fit(X_train, y_train)
-                        y_pred = fallback_model.predict(X_test)
-                        
-                        fold_metrics['accuracy'].append(accuracy_score(y_test, y_pred))
-                        fold_metrics['f1'].append(f1_score(y_test, y_pred, average='weighted', zero_division=0))
-                        fold_metrics['precision'].append(precision_score(y_test, y_pred, average='weighted', zero_division=0))
-                        fold_metrics['recall'].append(recall_score(y_test, y_pred, average='weighted', zero_division=0))
-                        fold_metrics['train_time'].append(time.time() - start_time)
-                        fold_metrics['inference_time'].append((time.time() - start_inference) * 1000)
-                    else:
-                        for key in fold_metrics:
-                            fold_metrics[key].append(0)
+                    fallback_model = LogisticRegression(max_iter=1000, random_state=42)
+                    fallback_model.fit(X_train, y_train)
+                    y_pred = fallback_model.predict(X_test)
+                    
+                    fold_metrics['accuracy'].append(accuracy_score(y_test, y_pred))
+                    fold_metrics['f1'].append(f1_score(y_test, y_pred, average='weighted', zero_division=0))
+                    fold_metrics['precision'].append(precision_score(y_test, y_pred, average='weighted', zero_division=0))
+                    fold_metrics['recall'].append(recall_score(y_test, y_pred, average='weighted', zero_division=0))
+                    fold_metrics['train_time'].append(time.time() - start_time)
+                    fold_metrics['inference_time'].append(inference_time)
                 except:
+                    # If even fallback fails, append zeros
                     for key in fold_metrics:
                         fold_metrics[key].append(0)
         
+        # Calculate final metrics for this model
         if fold_metrics['accuracy'] and any(acc > 0 for acc in fold_metrics['accuracy']):
-            # Calculate weighted metrics, giving more weight to better performing folds
-            weights = np.array(fold_metrics['accuracy']) / sum(fold_metrics['accuracy'])
-            
             model_metrics[name] = {
                 "Model": name,
-                "Accuracy": np.average(fold_metrics['accuracy'], weights=weights) * 100,
-                "F1-Score": np.average(fold_metrics['f1'], weights=weights),
-                "Precision": np.average(fold_metrics['precision'], weights=weights),
-                "Recall": np.average(fold_metrics['recall'], weights=weights),
+                "Accuracy": np.mean(fold_metrics['accuracy']) * 100,
+                "F1-Score": np.mean(fold_metrics['f1']),
+                "Precision": np.mean(fold_metrics['precision']),
+                "Recall": np.mean(fold_metrics['recall']),
                 "Training Time (s)": round(np.mean(fold_metrics['train_time']), 2),
                 "Inference Latency (ms)": round(np.mean(fold_metrics['inference_time']), 2),
             }
         else:
-            st.error(f"{name} failed across all folds.")
             model_metrics[name] = {
                 "Model": name, "Accuracy": 0, "F1-Score": 0, "Precision": 0, "Recall": 0,
                 "Training Time (s)": 0, "Inference Latency (ms)": 9999,
             }
-
-    # Train final models on full dataset with optimized parameters
-    st.caption("Training final models on complete dataset with optimized parameters...")
+    
+    # Train final models on full dataset
+    st.caption("Training final models on complete dataset...")
     trained_models_final = {}
     
     for name in models_to_run.keys():
         try:
-            # Use optimized parameters for final training
+            # Get fresh model with optimized parameters
             if name == "Naive Bayes":
                 final_model = MultinomialNB(**model_params["Naive Bayes"])
             elif name == "Decision Tree":
@@ -1128,36 +1095,19 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
                     gamma=model_params["SVM"]["gamma"]
                 )
             
-            if vectorizer is not None:
-                if 'Lexical' in selected_phase:
-                    X_final_processed = X_raw.apply(lexical_features)
-                elif 'Syntactic' in selected_phase:
-                    X_final_processed = X_raw.apply(syntactic_features)
-                elif 'Discourse' in selected_phase:
-                    X_final_processed = X_raw.apply(discourse_features)
-                else:
-                    X_final_processed = X_raw
-                X_final = vectorizer.transform(X_final_processed)
-            else:
-                # For Semantic and Pragmatic phases
-                if selected_phase == "Semantic":
-                    X_final = pd.DataFrame(X_raw.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"]).values
-                elif selected_phase == "Pragmatic":
-                    X_final = pd.DataFrame(X_raw.apply(pragmatic_features).tolist(), columns=pragmatic_words).values
-                else:
-                    X_final = X_features_full
+            # Prepare final training data
+            X_final = X_features_full.copy()
             
-            # Convert sparse to dense for models that don't handle sparse well
-            if hasattr(X_final, "toarray") and name in ["Naive Bayes", "Decision Tree"]:
-                X_final = X_final.toarray()
+            # Convert to dense if needed
+            if name in ["Naive Bayes", "Decision Tree"]:
+                if hasattr(X_final, "toarray"):
+                    X_final = X_final.toarray()
+                X_final = np.abs(X_final).astype(float) if name == "Naive Bayes" else X_final
             
             if name == "Naive Bayes":
-                X_final_train = np.abs(X_final).astype(float)
-                final_model.fit(X_final_train, y)
-                trained_models_final[name] = final_model
+                final_model.fit(np.abs(X_final).astype(float), y)
             else:
-                if use_smote:
-                    # Ensure we have enough samples for SMOTE
+                if use_smote and len(np.unique(y)) > 1:
                     min_class_count = np.min(np.bincount(y))
                     k_neighbors = min(3, min_class_count - 1) if min_class_count > 1 else 1
                     
@@ -1171,49 +1121,16 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
                     final_model.fit(X_final, y)
                     trained_models_final[name] = final_model
             
-            # Validate final model
-            if hasattr(final_model, 'predict'):
-                try:
-                    if hasattr(X_final, "shape"):
-                        sample_size = min(100, X_final.shape[0])
-                        X_sample = X_final[:sample_size]
-                        y_sample = y[:sample_size]
-                    else:
-                        sample_size = min(100, len(X_final))
-                        X_sample = X_final[:sample_size]
-                        y_sample = y[:sample_size]
-                    
-                    y_pred_final = final_model.predict(X_sample)
-                    accuracy_final = accuracy_score(y_sample, y_pred_final)
-                    if accuracy_final < 0.5:
-                        st.warning(f"Final {name} model shows low accuracy ({accuracy_final:.2%}) on training sample")
-                except:
-                    pass  # Skip validation if it fails
-                    
         except Exception as e:
-            st.error(f"Failed to train final {name} model: {str(e)[:100]}...")  # Show truncated error
-            # Try a simpler approach as fallback
-            try:
-                st.info(f"Trying fallback training for {name}...")
-                if hasattr(X_final, "toarray"):
-                    X_final_dense = X_final.toarray()
-                else:
-                    X_final_dense = X_final
-                
-                fallback_model = LogisticRegression(max_iter=1000, random_state=42)
-                fallback_model.fit(X_final_dense, y)
-                trained_models_final[name] = fallback_model
-                st.success(f"Fallback training successful for {name}")
-            except Exception as fallback_e:
-                st.error(f"Fallback also failed for {name}: {str(fallback_e)[:100]}...")
-                trained_models_final[name] = None
-
-    # Save trained models & vectorizer
+            st.error(f"Failed to train final {name} model: {str(e)[:100]}")
+            trained_models_final[name] = None
+    
+    # Save models
     try:
         save_trained_models(trained_models_final, vectorizer, selected_phase)
     except Exception as e:
         st.warning(f"Saving after training failed: {e}")
-
+    
     results_list = list(model_metrics.values())
     return pd.DataFrame(results_list), trained_models_final, vectorizer
 
