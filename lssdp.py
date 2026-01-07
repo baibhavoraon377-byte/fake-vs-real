@@ -978,27 +978,27 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
             y_train = y[train_index]
             y_test = y[test_index]
             
+            # Process features for training and testing
             if vectorizer is not None:
-                if 'Lexical' in selected_phase:
+                # For phases with vectorizer (Lexical, Syntactic, Discourse)
+                if selected_phase == "Lexical & Morphological":
                     X_train_processed = X_train_raw.apply(lexical_features)
                     X_test_processed = X_test_raw.apply(lexical_features)
-                    X_train = vectorizer.transform(X_train_processed)
-                    X_test = vectorizer.transform(X_test_processed)
-                elif 'Syntactic' in selected_phase:
+                elif selected_phase == "Syntactic":
                     X_train_processed = X_train_raw.apply(syntactic_features)
                     X_test_processed = X_test_raw.apply(syntactic_features)
-                    X_train = vectorizer.transform(X_train_processed)
-                    X_test = vectorizer.transform(X_test_processed)
-                elif 'Discourse' in selected_phase:
+                elif selected_phase == "Discourse":
                     X_train_processed = X_train_raw.apply(discourse_features)
                     X_test_processed = X_test_raw.apply(discourse_features)
-                    X_train = vectorizer.transform(X_train_processed)
-                    X_test = vectorizer.transform(X_test_processed)
                 else:
-                    X_train = vectorizer.transform(X_train_raw)
-                    X_test = vectorizer.transform(X_test_raw)
+                    X_train_processed = X_train_raw
+                    X_test_processed = X_test_raw
+                
+                # Transform using the pre-fitted vectorizer from the full dataset
+                X_train = vectorizer.transform(X_train_processed)
+                X_test = vectorizer.transform(X_test_processed)
             else:
-                # For Semantic and Pragmatic phases
+                # For phases without vectorizer (Semantic, Pragmatic)
                 if selected_phase == "Semantic":
                     X_train = pd.DataFrame(X_train_raw.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"]).values
                     X_test = pd.DataFrame(X_test_raw.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"]).values
@@ -1006,8 +1006,13 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
                     X_train = pd.DataFrame(X_train_raw.apply(pragmatic_features).tolist(), columns=pragmatic_words).values
                     X_test = pd.DataFrame(X_test_raw.apply(pragmatic_features).tolist(), columns=pragmatic_words).values
                 else:
+                    # Fallback: re-extract features for this fold
                     X_train, _ = apply_feature_extraction(X_train_raw, selected_phase)
                     X_test, _ = apply_feature_extraction(X_test_raw, selected_phase)
+                    if isinstance(X_train, pd.DataFrame):
+                        X_train = X_train.values
+                    if isinstance(X_test, pd.DataFrame):
+                        X_test = X_test.values
             
             # Convert sparse to dense for models that don't handle sparse well
             if hasattr(X_train, "toarray") and name in ["Naive Bayes", "Decision Tree"]:
