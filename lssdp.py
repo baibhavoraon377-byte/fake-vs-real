@@ -98,7 +98,13 @@ def get_demo_google_claims():
 # --------------------------
 # GOOGLE FACT CHECK INTEGRATION
 # --------------------------
-def fetch_google_claims(api_key, num_claims=100):
+def fetch_google_claims(num_claims=100):
+    # Get API key from Streamlit secrets
+    if 'GOOGLE_API_KEY' not in st.secrets:
+        st.error("Google API Key not found in secrets.toml. Please add it to run Google API functions.")
+        return []
+    
+    api_key = st.secrets["GOOGLE_API_KEY"]
     base_url = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
     collected_claims = []
     page_token = None
@@ -273,11 +279,18 @@ def run_google_benchmark(google_df, trained_models, vectorizer, selected_phase):
 # --------------------------
 # GOOGLE API VERIFICATION FOR CSV DATA
 # --------------------------
-def verify_with_google_api(df, api_key, max_verifications=50, text_column='statement'):
+def verify_with_google_api(df, max_verifications=50, text_column='statement'):
     """
     Verify claims from CSV using Google Fact Check API
     Returns DataFrame with additional verification columns
     """
+    # Get API key from Streamlit secrets
+    if 'GOOGLE_API_KEY' not in st.secrets:
+        st.error("Google API Key not found in secrets.toml. Please add it to run verification.")
+        return df
+    
+    api_key = st.secrets["GOOGLE_API_KEY"]
+    
     if df.empty or text_column not in df.columns:
         return df
     
@@ -856,7 +869,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
             st.error("DataFrame is empty! Please load data first.")
             return pd.DataFrame(), {}, None
         
-        st.info(f"📊 Data shape: {df.shape[0]} rows, {df.shape[1]} columns")
+        st.info(f"Data shape: {df.shape[0]} rows, {df.shape[1]} columns")
         
         # Check for required columns
         if text_column not in df.columns:
@@ -877,7 +890,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
         
         # Check class distribution
         class_counts = df_clean['binary_label'].value_counts()
-        st.info(f"✅ Class distribution: {dict(class_counts)}")
+        st.info(f"Class distribution: {dict(class_counts)}")
         
         if len(class_counts) < 2:
             st.error(f"Only one class found ({class_counts.index[0]}). Need at least 2 classes for training.")
@@ -888,11 +901,11 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
         y = df_clean['binary_label'].values.astype(int)
         
         # Debug info
-        st.info(f"📝 Sample claims: {list(X_raw.head(3))}")
-        st.info(f"🎯 Sample labels: {list(y[:3])}")
+        st.info(f"Sample claims: {list(X_raw.head(3))}")
+        st.info(f"Sample labels: {list(y[:3])}")
         
         # Apply feature extraction
-        st.info(f"🔧 Extracting {selected_phase} features...")
+        st.info(f"Extracting {selected_phase} features...")
         X_features, vectorizer = apply_feature_extraction(X_raw, selected_phase)
         
         if X_features is None:
@@ -901,7 +914,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
         
         # Convert to dense if sparse and small dataset
         if hasattr(X_features, "shape"):
-            st.info(f"✅ Features shape: {X_features.shape}")
+            st.info(f"Features shape: {X_features.shape}")
             if X_features.shape[0] < 100:  # Small dataset
                 if hasattr(X_features, "toarray"):
                     X_features = X_features.toarray()
@@ -919,7 +932,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
         
         # Simple training without cross-validation for debugging
         for name, model in models_config.items():
-            st.info(f"🤖 Training {name}...")
+            st.info(f"Training {name}...")
             
             try:
                 # Fit the model
@@ -948,10 +961,10 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
                 })
                 
                 trained_models_final[name] = model
-                st.success(f"✅ {name} trained successfully! Accuracy: {accuracy:.2f}%")
+                st.success(f"{name} trained successfully! Accuracy: {accuracy:.2f}%")
                 
             except Exception as e:
-                st.error(f"❌ Failed to train {name}: {str(e)[:200]}")
+                st.error(f"Failed to train {name}: {str(e)[:200]}")
                 results.append({
                     'Model': name,
                     'Accuracy': 0,
@@ -975,7 +988,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
         return df_results, trained_models_final, vectorizer
         
     except Exception as e:
-        st.error(f"❌ CRITICAL ERROR in evaluate_models: {str(e)}")
+        st.error(f"CRITICAL ERROR in evaluate_models: {str(e)}")
         import traceback
         st.code(traceback.format_exc())
         return pd.DataFrame(), {}, None
@@ -1057,86 +1070,103 @@ def show_verification_results(verification_df):
             display_cols.append('google_binary_label')
         
         st.dataframe(verification_df[display_cols], use_container_width=True)
-        
-        # Visualization of verification results
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(14, 10))
-        
-        # 1. Pie chart: Found vs Not Found
-        found_count = len(verification_df[verification_df['google_verification'] == 'Found'])
-        not_found_count = len(verification_df) - found_count
-        
-        if found_count + not_found_count > 0:
-            ax1.pie([found_count, not_found_count], 
-                   labels=['Verified', 'Not Found'], 
-                   autopct='%1.1f%%',
-                   colors=['#4CAF50', '#F44336'])
-            ax1.set_title('Google API Verification Results')
-        else:
-            ax1.text(0.5, 0.5, 'No data', ha='center', va='center')
-            ax1.set_title('No Verification Data')
-        
-        # 2. Bar chart: Confidence levels
-        if found_count > 0:
-            conf_counts = verification_df['verification_confidence'].value_counts()
-            colors_conf = {'High': '#4CAF50', 'Medium': '#FF9800', 'Low': '#F44336'}
-            conf_colors = [colors_conf.get(conf, '#9E9E9E') for conf in conf_counts.index]
-            
-            bars = ax2.bar(range(len(conf_counts)), conf_counts.values, 
-                          color=conf_colors, edgecolor='black')
-            ax2.set_xlabel('Confidence Level')
-            ax2.set_ylabel('Count')
-            ax2.set_title('Verification Confidence Levels')
-            ax2.set_xticks(range(len(conf_counts)))
-            ax2.set_xticklabels(conf_counts.index, fontsize=9)
-            
-            # Add count labels
-            for bar, count in zip(bars, conf_counts.values):
-                height = bar.get_height()
-                ax2.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                        f'{count}', ha='center', va='bottom', fontsize=9)
-        else:
-            ax2.text(0.5, 0.5, 'No matches found', ha='center', va='center')
-            ax2.set_title('No Verification Matches')
-        
-        # 3. Histogram: Match scores
-        if found_count > 0:
-            match_scores = verification_df['match_score'].dropna()
-            ax3.hist(match_scores, bins=10, color='#2196F3', edgecolor='black', alpha=0.7)
-            ax3.set_xlabel('Match Score')
-            ax3.set_ylabel('Count')
-            ax3.set_title('Claim Match Scores Distribution')
-            ax3.axvline(x=0.5, color='red', linestyle='--', alpha=0.5, label='Threshold (0.5)')
-            ax3.legend()
-        else:
-            ax3.text(0.5, 0.5, 'No match scores', ha='center', va='center')
-            ax3.set_title('No Match Scores')
-        
-        # 4. Google rating distribution
-        if found_count > 0:
-            rating_counts = verification_df['google_rating'].value_counts().head(10)
-            if len(rating_counts) > 0:
-                bars4 = ax4.bar(range(len(rating_counts)), rating_counts.values, 
-                               color='#9C27B0', edgecolor='black', alpha=0.7)
-                ax4.set_xlabel('Google Rating')
-                ax4.set_ylabel('Count')
-                ax4.set_title('Top 10 Google Ratings')
-                ax4.set_xticks(range(len(rating_counts)))
-                ax4.set_xticklabels(rating_counts.index, rotation=45, ha='right', fontsize=8)
-                
-                # Add count labels
-                for bar, count in zip(bars4, rating_counts.values):
-                    height = bar.get_height()
-                    ax4.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                            f'{count}', ha='center', va='bottom', fontsize=8)
-            else:
-                ax4.text(0.5, 0.5, 'No ratings', ha='center', va='center')
-                ax4.set_title('No Ratings Found')
-        else:
-            ax4.text(0.5, 0.5, 'No ratings', ha='center', va='center')
-            ax4.set_title('No Ratings Found')
-        
-        plt.tight_layout()
-        st.pyplot(fig)
+
+# --------------------------
+# ORIGINAL VISUALIZATION FUNCTION for Results & Analysis
+# --------------------------
+def show_training_results_visualization(df_results, selected_phase):
+    """Original visualization function for Results & Analysis page"""
+    if df_results.empty:
+        return
+    
+    # Create visualization
+    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+    
+    # 1. Bar chart for Accuracy
+    models = df_results['Model']
+    accuracy = df_results['Accuracy']
+    
+    bars1 = axes[0, 0].bar(models, accuracy, color=['#4CAF50', '#2196F3', '#FF9800', '#9C27B0'])
+    axes[0, 0].set_title('Model Accuracy Comparison', fontsize=14, fontweight='bold')
+    axes[0, 0].set_ylabel('Accuracy (%)', fontsize=12)
+    axes[0, 0].set_ylim([0, 100])
+    axes[0, 0].tick_params(axis='x', rotation=45)
+    
+    # Add value labels on bars
+    for bar, acc in zip(bars1, accuracy):
+        height = bar.get_height()
+        axes[0, 0].text(bar.get_x() + bar.get_width()/2., height + 1,
+                       f'{acc:.1f}%', ha='center', va='bottom', fontsize=10, fontweight='bold')
+    
+    # 2. Metrics comparison (F1, Precision, Recall)
+    metrics_data = df_results[['F1-Score', 'Precision', 'Recall']].values
+    x = np.arange(len(models))
+    width = 0.25
+    
+    bars2a = axes[0, 1].bar(x - width, metrics_data[:, 0], width, label='F1-Score', color='#4CAF50')
+    bars2b = axes[0, 1].bar(x, metrics_data[:, 1], width, label='Precision', color='#2196F3')
+    bars2c = axes[0, 1].bar(x + width, metrics_data[:, 2], width, label='Recall', color='#FF9800')
+    
+    axes[0, 1].set_title('Detailed Metrics Comparison', fontsize=14, fontweight='bold')
+    axes[0, 1].set_ylabel('Score', fontsize=12)
+    axes[0, 1].set_xticks(x)
+    axes[0, 1].set_xticklabels(models, rotation=45)
+    axes[0, 1].legend()
+    axes[0, 1].set_ylim([0, 1])
+    
+    # 3. Training Time comparison
+    train_times = df_results['Training Time (s)']
+    colors_time = ['#FF5722' if time == max(train_times) else '#607D8B' for time in train_times]
+    
+    bars3 = axes[1, 0].bar(models, train_times, color=colors_time)
+    axes[1, 0].set_title('Training Time Comparison', fontsize=14, fontweight='bold')
+    axes[1, 0].set_ylabel('Time (seconds)', fontsize=12)
+    axes[1, 0].tick_params(axis='x', rotation=45)
+    
+    # Add value labels
+    for bar, time in zip(bars3, train_times):
+        height = bar.get_height()
+        axes[1, 0].text(bar.get_x() + bar.get_width()/2., height + 0.05,
+                       f'{time:.2f}s', ha='center', va='bottom', fontsize=10)
+    
+    # 4. Radar chart for overall performance (simplified)
+    categories = ['Accuracy', 'F1-Score', 'Precision', 'Recall', 'Speed']
+    N = len(categories)
+    
+    # Normalize metrics for radar chart
+    acc_norm = accuracy / 100
+    f1_norm = df_results['F1-Score'].values
+    prec_norm = df_results['Precision'].values
+    rec_norm = df_results['Recall'].values
+    # Speed metric (inverse of training time)
+    speed_norm = 1 / (df_results['Training Time (s)'].values + 0.1)
+    speed_norm = speed_norm / max(speed_norm)
+    
+    angles = [n / float(N) * 2 * np.pi for n in range(N)]
+    angles += angles[:1]
+    
+    ax_radar = axes[1, 1]
+    ax_radar = fig.add_subplot(2, 2, 4, polar=True)
+    
+    # Plot each model
+    colors_radar = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0']
+    for i, model_name in enumerate(models):
+        values = [acc_norm[i], f1_norm[i], prec_norm[i], rec_norm[i], speed_norm[i]]
+        values += values[:1]
+        ax_radar.plot(angles, values, linewidth=2, linestyle='solid', label=model_name, color=colors_radar[i])
+        ax_radar.fill(angles, values, alpha=0.1, color=colors_radar[i])
+    
+    ax_radar.set_title('Overall Performance Radar', fontsize=14, fontweight='bold', pad=20)
+    ax_radar.set_xticks(angles[:-1])
+    ax_radar.set_xticklabels(categories, fontsize=10)
+    ax_radar.set_ylim([0, 1])
+    ax_radar.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0))
+    ax_radar.grid(True)
+    
+    plt.suptitle(f'Model Performance Analysis - {selected_phase} Features', fontsize=16, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    
+    return fig
 
 # --------------------------
 # STREAMLIT APP
@@ -1431,7 +1461,7 @@ def app():
             st.write("Upload a CSV file containing Politifact fact-checked claims.")
             
             # CSV format help
-            with st.expander("📋 CSV Format Help", expanded=False):
+            with st.expander("CSV Format Help", expanded=False):
                 st.write("Your CSV should have at minimum these columns:")
                 st.code("""
                 [text_column], [label_column], [date_column (optional)]
@@ -1713,16 +1743,12 @@ def app():
                                 max_verify = st.number_input("Max claims to verify", min_value=5, max_value=100, value=30, step=5, key="max_verify")
                             
                             if verify_checkbox:
-                                if 'GOOGLE_API_KEY' not in st.secrets:
-                                    st.error("Google API Key not found in secrets.toml")
-                                elif st.button("Run Google Verification", key="verify_btn", use_container_width=True, type="primary"):
+                                if st.button("Run Google Verification", key="verify_btn", use_container_width=True, type="primary"):
                                     with st.spinner("Verifying claims with Google API (this may take a while)..."):
-                                        api_key = st.secrets["GOOGLE_API_KEY"]
                                         # Use filtered data if available, otherwise use full data
                                         data_to_verify = st.session_state.get('filtered_df', processed_df)
                                         verification_df = verify_with_google_api(
                                             data_to_verify, 
-                                            api_key, 
                                             max_verifications=max_verify,
                                             text_column='statement'
                                         )
@@ -1902,7 +1928,7 @@ def app():
         st.markdown("<h1 class='main-header'>Model Training</h1>", unsafe_allow_html=True)
         
         # Debug: Show session state
-        with st.expander("🔍 Debug Info", expanded=False):
+        with st.expander("Debug Info", expanded=False):
             st.write("Session State Keys:", list(st.session_state.keys()))
             if 'scraped_df' in st.session_state:
                 st.write("Scraped DF shape:", st.session_state['scraped_df'].shape)
@@ -1919,14 +1945,14 @@ def app():
         training_df = st.session_state.get('filtered_df', st.session_state['scraped_df'])
         
         if training_df.empty:
-            st.warning("⚠️ Please collect data first from the Data Collection page!")
-            st.info("📊 You can:")
+            st.warning("Please collect data first from the Data Collection page!")
+            st.info("You can:")
             st.write("1. Upload a CSV file with claim statements and labels")
             st.write("2. Scrape data from Politifact website")
             st.write("3. Make sure your data has both 'statement' and 'label' columns")
             
             # Add test data button
-            if st.button("🚀 Load Test Data for Training Demo", key="test_data_btn", use_container_width=True):
+            if st.button("Load Test Data for Training Demo", key="test_data_btn", use_container_width=True):
                 # Create test data
                 test_data = pd.DataFrame({
                     'statement': [
@@ -1951,7 +1977,7 @@ def app():
                 st.session_state['selected_label_column'] = 'label'
                 st.session_state['csv_columns_selected'] = True
                 
-                st.success("✅ Test data loaded! You can now proceed with training.")
+                st.success("Test data loaded! You can now proceed with training.")
                 st.dataframe(test_data, use_container_width=True)
         else:
             # Show which columns are being used
@@ -1965,7 +1991,7 @@ def app():
                 verification_df = st.session_state.get('filtered_verification_df', st.session_state.get('verification_df', pd.DataFrame()))
                 if not verification_df.empty:
                     found_count = len(verification_df[verification_df['google_verification'] == 'Found'])
-                    st.success(f"✅ Google API Verification available: {found_count} verified claims")
+                    st.success(f"Google API Verification available: {found_count} verified claims")
             
             # Training configuration
             st.write("Configure and train machine learning models using different NLP feature extraction methods.")
@@ -1994,7 +2020,7 @@ def app():
                     st.warning("Google API verification was performed but no verified claims were found.")
             
             # Data preview
-            with st.expander("📊 Training Data Preview", expanded=False):
+            with st.expander("Training Data Preview", expanded=False):
                 if use_verified_data and st.session_state.get('verification_performed', False):
                     verification_df = st.session_state.get('filtered_verification_df', st.session_state.get('verification_df', pd.DataFrame()))
                     verified_claims = verification_df[verification_df['google_verification'] == 'Found']
@@ -2042,9 +2068,9 @@ def app():
                     st.pyplot(fig)
             
             # Training button with error handling
-            if st.button("🚀 Run Model Training", key="analyze_btn", use_container_width=True, type="primary"):
+            if st.button("Run Model Training", key="analyze_btn", use_container_width=True, type="primary"):
                 try:
-                    with st.spinner(f"🤖 Training 4 models with {selected_phase} features..."):
+                    with st.spinner(f"Training 4 models with {selected_phase} features..."):
                         # Select appropriate data source
                         if use_verified_data and st.session_state.get('verification_performed', False):
                             # Use verified data
@@ -2063,14 +2089,14 @@ def app():
                                 # Filter out unknown labels
                                 training_data = training_data[training_data['binary_label'] != -1]
                             
-                            st.info(f"✅ Using {len(training_data)} Google-verified claims for training")
+                            st.info(f"Using {len(training_data)} Google-verified claims for training")
                         else:
                             # Use original/filtered data
                             training_data = training_df.copy()
                         
                         # Check if we have data
                         if training_data.empty:
-                            st.error("❌ No data available for training!")
+                            st.error("No data available for training!")
                             return
                         
                         # Check if binary_label exists
@@ -2081,10 +2107,10 @@ def app():
                         # Check we have enough valid labels
                         valid_data = training_data[training_data['binary_label'] != -1]
                         if valid_data.empty:
-                            st.error("❌ No valid binary labels (0 or 1) found!")
+                            st.error("No valid binary labels (0 or 1) found!")
                             return
                         
-                        st.info(f"📊 Training on {len(valid_data)} claims with binary labels...")
+                        st.info(f"Training on {len(valid_data)} claims with binary labels...")
                         
                         # Run training
                         df_results, trained_models, trained_vectorizer = evaluate_models(
@@ -2103,25 +2129,25 @@ def app():
                             
                             # Count successfully trained models
                             successful_models = sum(1 for m in trained_models.values() if m is not None)
-                            st.success(f"✅ Training complete! {successful_models} out of 4 models trained and saved to disk.")
+                            st.success(f"Training complete! {successful_models} out of 4 models trained and saved to disk.")
                             
                             # Show immediate results
-                            st.subheader("📈 Training Results")
+                            st.subheader("Training Results")
                             st.dataframe(df_results, use_container_width=True)
                             
                             # Show best model
                             if not df_results.empty:
                                 best_model = df_results.loc[df_results['Accuracy'].idxmax()]
-                                st.info(f"🏆 **Best Model:** {best_model['Model']} with {best_model['Accuracy']:.2f}% accuracy")
+                                st.info(f"**Best Model:** {best_model['Model']} with {best_model['Accuracy']:.2f}% accuracy")
                         else:
-                            st.error("❌ Model training failed. Please check your data and try again.")
+                            st.error("Model training failed. Please check your data and try again.")
                             
                 except Exception as e:
-                    st.error(f"❌ Training failed with error: {str(e)}")
+                    st.error(f"Training failed with error: {str(e)}")
                     st.code(f"Error details: {str(e)}", language='text')
                     
                     # Provide troubleshooting tips
-                    st.subheader("🔧 Troubleshooting Tips:")
+                    st.subheader("Troubleshooting Tips:")
                     st.write("1. Check that your data has a 'binary_label' column with values 0 and 1")
                     st.write("2. Make sure you have at least 5 claims for training")
                     st.write("3. Try a simpler feature extraction method (Lexical & Morphological)")
@@ -2142,15 +2168,15 @@ def app():
             benchmark_source = st.radio("Benchmark data source:", ["Fetch from Google API", "Use Demo Data"], horizontal=True)
             
             if benchmark_source == "Fetch from Google API":
+                # Check if API key exists in secrets
                 if 'GOOGLE_API_KEY' not in st.secrets:
-                    st.error("Google API Key not found in secrets.toml. Please add it to run benchmark.")
+                    st.error("Google API Key not found in secrets.toml. Please add it to run Google API benchmark.")
                 else:
                     num_claims = st.slider("Number of claims to fetch from Google", 10, 200, 50)
                     
                     if st.button("Fetch Google Claims & Run Benchmark", key="benchmark_btn", use_container_width=True, type="primary"):
                         with st.spinner("Fetching Google Fact Check API data..."):
-                            api_key = st.secrets["GOOGLE_API_KEY"]
-                            google_claims = fetch_google_claims(api_key, num_claims)
+                            google_claims = fetch_google_claims(num_claims)
                             
                             if google_claims:
                                 google_df = process_and_map_google_claims(google_claims)
@@ -2174,11 +2200,12 @@ def app():
                                         
                                         # Show best model
                                         best_benchmark = benchmark_results.loc[benchmark_results['Accuracy'].idxmax()]
-                                        st.info(f"🏆 **Best Model on Google Data:** {best_benchmark['Model']} with {best_benchmark['Accuracy']:.2f}% accuracy")
+                                        st.info(f"**Best Model on Google Data:** {best_benchmark['Model']} with {best_benchmark['Accuracy']:.2f}% accuracy")
                             else:
                                 st.error("Failed to fetch Google claims.")
             
-            else:  # Use Demo Data
+            # Use Demo Data option
+            if benchmark_source == "Use Demo Data":
                 if st.button("Run Benchmark with Demo Data", key="demo_benchmark_btn", use_container_width=True):
                     demo_claims = get_demo_google_claims()
                     google_df = process_and_map_google_claims(demo_claims)
@@ -2208,25 +2235,32 @@ def app():
             st.warning("No training results found. Please train models first.")
         else:
             # Show training results
-            st.subheader("📊 Model Performance")
+            st.subheader("Model Performance")
             st.dataframe(st.session_state['df_results'], use_container_width=True)
+            
+            # Show visualization using ORIGINAL visualization function
+            st.subheader("Performance Visualization")
+            if not st.session_state['df_results'].empty and st.session_state['selected_phase_run']:
+                fig = show_training_results_visualization(st.session_state['df_results'], st.session_state['selected_phase_run'])
+                if fig:
+                    st.pyplot(fig)
             
             # Add humorous critique
             if not st.session_state['df_results'].empty and st.session_state['selected_phase_run']:
                 st.markdown("---")
-                st.subheader("🎭 AI Performance Review")
+                st.subheader("AI Performance Review")
                 critique = generate_humorous_critique(st.session_state['df_results'], st.session_state['selected_phase_run'])
                 st.markdown(critique)
             
             # Show benchmark results if available
             if not st.session_state['google_benchmark_results'].empty:
                 st.markdown("---")
-                st.subheader("📈 Google API Benchmark Results")
+                st.subheader("Google API Benchmark Results")
                 st.dataframe(st.session_state['google_benchmark_results'], use_container_width=True)
             
             # Real-time prediction
             st.markdown("---")
-            st.subheader("🔮 Real-time Claim Verification")
+            st.subheader("Real-time Claim Verification")
             
             claim_text = st.text_area("Enter a claim to verify:", 
                                      placeholder="e.g., 'The Earth is flat'", 
@@ -2260,11 +2294,11 @@ def app():
                                         else:
                                             prediction = result['prediction']
                                             if prediction == 1:
-                                                st.success(f"✅ {model_name}: TRUE")
+                                                st.success(f"{model_name}: TRUE")
                                             elif prediction == 0:
-                                                st.error(f"❌ {model_name}: FALSE")
+                                                st.error(f"{model_name}: FALSE")
                                             else:
-                                                st.warning(f"⚠️ {model_name}: UNKNOWN")
+                                                st.warning(f"{model_name}: UNKNOWN")
 
 if __name__ == '__main__':
     app()
