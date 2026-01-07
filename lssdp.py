@@ -265,12 +265,12 @@ def run_google_benchmark(google_df, trained_models, vectorizer, selected_phase):
 # --------------------------
 # GOOGLE API VERIFICATION FOR CSV DATA
 # --------------------------
-def verify_with_google_api(df, api_key, max_verifications=50):
+def verify_with_google_api(df, api_key, max_verifications=50, text_column='statement'):
     """
     Verify claims from CSV using Google Fact Check API
     Returns DataFrame with additional verification columns
     """
-    if df.empty or 'statement' not in df.columns:
+    if df.empty or text_column not in df.columns:
         return df
     
     verified_claims = []
@@ -287,7 +287,7 @@ def verify_with_google_api(df, api_key, max_verifications=50):
         status_text.text(f"Verifying claim {idx+1}/{sample_size}...")
         progress_bar.progress((idx + 1) / sample_size)
         
-        claim_text = str(row['statement'])
+        claim_text = str(row[text_column])
         result = {
             'original_statement': claim_text,
             'original_label': row.get('label', ''),
@@ -658,7 +658,7 @@ def predict_single_text(text, trained_models, vectorizer, selected_phase):
 # --------------------------
 # Improved Model training & evaluation with accuracy optimization
 # --------------------------
-def evaluate_models(df: pd.DataFrame, selected_phase: str, use_smote: bool = True):
+def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 'statement', label_column: str = 'label', use_smote: bool = True):
     REAL_LABELS = ["True", "No Flip", "Mostly True", "Half Flip", "Half True"]
     FAKE_LABELS = ["False", "Barely True", "Pants On Fire", "Full Flop"]
 
@@ -670,10 +670,10 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, use_smote: bool = Tru
         else:
             return np.nan
 
-    df['target_label'] = df['label'].apply(create_binary_target)
+    df['target_label'] = df[label_column].apply(create_binary_target)
     df = df.dropna(subset=['target_label'])
-    df = df[df['statement'].astype(str).str.len() > 10]
-    X_raw = df['statement'].astype(str)
+    df = df[df[text_column].astype(str).str.len() > 10]
+    X_raw = df[text_column].astype(str)
     y_raw = df['target_label'].astype(int)
     
     if len(np.unique(y_raw)) < 2:
@@ -1209,6 +1209,12 @@ def app():
         st.session_state['use_smote'] = True
     if 'verification_df' not in st.session_state:
         st.session_state['verification_df'] = pd.DataFrame()
+    if 'selected_text_column' not in st.session_state:
+        st.session_state['selected_text_column'] = 'statement'
+    if 'selected_label_column' not in st.session_state:
+        st.session_state['selected_label_column'] = 'label'
+    if 'csv_columns_selected' not in st.session_state:
+        st.session_state['csv_columns_selected'] = False
 
     # Attempt to load previously saved models on startup (only once)
     if 'models_loaded_attempted' not in st.session_state:
@@ -1301,16 +1307,15 @@ def app():
             
             # CSV format help
             with st.expander("📋 CSV Format Help", expanded=False):
-                st.write("Your CSV should have at minimum these columns:")
+                st.write("Your CSV should have at minimum two columns:")
                 st.code("""
-                statement,label
+                [text_column], [label_column]
                 "The Earth is flat","False"
                 "Vaccines are safe","True"
                 "Climate change is real","Mostly True"
                 """, language='text')
                 
-                st.write("Optional columns (recommended):")
-                st.code("date,source,author,url,rating,fact_checker", language='text')
+                st.write("You can name your columns anything you want. After uploading, you'll be asked to select which column contains the text and which contains the labels.")
                 
                 if st.button("Download Template CSV", key="template_btn"):
                     template_df = get_politifact_csv_template()
@@ -1330,127 +1335,182 @@ def app():
                     # Read the CSV file
                     scraped_df = pd.read_csv(uploaded_file)
                     
-                    # Validate required columns
-                    required_columns = ['statement', 'label']
-                    if all(col in scraped_df.columns for col in required_columns):
-                        st.session_state['scraped_df'] = scraped_df
-                        st.success(f"Successfully loaded {len(scraped_df)} claims from CSV!")
-                        
-                        # Show data preview
-                        with st.expander("Preview Uploaded Data", expanded=True):
-                            st.dataframe(st.session_state['scraped_df'].head(15), use_container_width=True)
-                            
-                            # Label Distribution visualization
-                            st.subheader("Label Distribution")
-                            label_counts = scraped_df['label'].value_counts()
-                            
-                            # Create a clear visualization
-                            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-                            
-                            # Bar chart - CLEAR and SIMPLE
-                            colors = plt.cm.Set3(np.linspace(0, 1, len(label_counts)))
-                            bars = ax1.bar(range(len(label_counts)), label_counts.values, color=colors, edgecolor='black', linewidth=1)
-                            ax1.set_xlabel('Labels')
-                            ax1.set_ylabel('Count')
-                            ax1.set_title('Label Distribution (Bar Chart)')
-                            ax1.set_xticks(range(len(label_counts)))
-                            ax1.set_xticklabels(label_counts.index, rotation=45, ha='right', fontsize=9)
-                            
-                            # Add count labels on bars
-                            for bar, count in zip(bars, label_counts.values):
-                                height = bar.get_height()
-                                ax1.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                                        f'{count}', ha='center', va='bottom', fontsize=9)
-                            
-                            # Pie chart - CLEAR and LEGIBLE
-                            wedges, texts, autotexts = ax2.pie(label_counts.values, 
-                                                              labels=label_counts.index, 
-                                                              autopct='%1.1f%%',
-                                                              startangle=90,
-                                                              colors=colors,
-                                                              textprops={'fontsize': 9})
-                            ax2.set_title('Label Distribution (Percentage)')
-                            
-                            # Improve pie chart text
-                            for autotext in autotexts:
-                                autotext.set_color('black')
-                                autotext.set_fontsize(9)
-                                autotext.set_fontweight('bold')
-                            
-                            plt.tight_layout()
-                            st.pyplot(fig)
-                            
-                            # Also show a clear table
-                            st.subheader("Label Counts Table")
-                            label_table = pd.DataFrame({
-                                'Label': label_counts.index,
-                                'Count': label_counts.values,
-                                'Percentage': (label_counts.values / label_counts.sum() * 100).round(1)
-                            })
-                            st.dataframe(label_table, use_container_width=True, hide_index=True)
-                            
-                        # Google API Verification section for CSV data
-                        st.markdown("---")
-                        st.subheader("Google API Verification")
-                        
-                        verify_col1, verify_col2 = st.columns([2, 1])
-                        
-                        with verify_col1:
-                            verify_checkbox = st.checkbox("Verify claims with Google Fact Check API", value=False, key="verify_checkbox")
-                        
-                        with verify_col2:
-                            max_verify = st.number_input("Max claims to verify", min_value=5, max_value=100, value=20, step=5, key="max_verify")
-                        
-                        if verify_checkbox:
-                            if 'GOOGLE_API_KEY' not in st.secrets:
-                                st.error("Google API Key not found in secrets.toml")
-                            elif st.button("Run Google Verification", key="verify_btn", use_container_width=True, type="primary"):
-                                with st.spinner("Verifying claims with Google API..."):
-                                    api_key = st.secrets["GOOGLE_API_KEY"]
-                                    verification_df = verify_with_google_api(
-                                        st.session_state['scraped_df'], 
-                                        api_key, 
-                                        max_verifications=max_verify
-                                    )
-                                    
-                                    if not verification_df.empty:
-                                        st.session_state['verification_df'] = verification_df
-                                        
-                                        # Show verification results
-                                        with st.expander("Verification Results", expanded=True):
-                                            st.dataframe(verification_df, use_container_width=True)
-                                            
-                                            # Visualization of verification results
-                                            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-                                            
-                                            # Pie chart: Found vs Not Found
-                                            found_count = len(verification_df[verification_df['google_verification'] == 'Found'])
-                                            not_found_count = len(verification_df) - found_count
-                                            
-                                            ax1.pie([found_count, not_found_count], 
-                                                   labels=['Verified', 'Not Found'], 
-                                                   autopct='%1.1f%%',
-                                                   colors=['#4CAF50', '#F44336'])
-                                            ax1.set_title('Google API Verification Results')
-                                            
-                                            # Bar chart: Match scores
-                                            if found_count > 0:
-                                                ax2.hist(verification_df['match_score'].dropna(), bins=10, 
-                                                        color='#2196F3', edgecolor='black')
-                                                ax2.set_xlabel('Match Score')
-                                                ax2.set_ylabel('Count')
-                                                ax2.set_title('Claim Match Scores')
-                                            else:
-                                                ax2.text(0.5, 0.5, 'No matches found', 
-                                                        ha='center', va='center')
-                                                ax2.set_title('No Verification Matches')
-                                            
-                                            plt.tight_layout()
-                                            st.pyplot(fig)
+                    # Show column selection interface
+                    st.subheader("Select Columns for Analysis")
+                    
+                    # Get all columns
+                    all_columns = scraped_df.columns.tolist()
+                    
+                    if not all_columns:
+                        st.error("CSV file has no columns!")
                     else:
-                        st.error(f"CSV file must contain these columns: {required_columns}")
-                        st.info(f"File columns: {list(scraped_df.columns)}")
+                        # Let user select text and label columns
+                        col1, col2 = st.columns(2)
                         
+                        with col1:
+                            text_column = st.selectbox(
+                                "Select column containing claim text:",
+                                all_columns,
+                                index=0 if 'statement' in all_columns else 0,
+                                key="text_column_select"
+                            )
+                        
+                        with col2:
+                            label_column = st.selectbox(
+                                "Select column containing labels/ratings:",
+                                all_columns,
+                                index=1 if 'label' in all_columns and len(all_columns) > 1 else (0 if len(all_columns) > 1 else 0),
+                                key="label_column_select"
+                            )
+                        
+                        # Show preview of selected columns
+                        st.write("Preview of selected columns:")
+                        preview_df = scraped_df[[text_column, label_column]].head(10)
+                        st.dataframe(preview_df, use_container_width=True)
+                        
+                        # Option to rename columns for internal use
+                        rename_cols = st.checkbox("Use standard column names internally (recommended)", value=True)
+                        
+                        if rename_cols:
+                            # Rename columns to standard names for internal processing
+                            processed_df = scraped_df.rename(columns={
+                                text_column: 'statement',
+                                label_column: 'label'
+                            })
+                            
+                            # Copy other columns as-is
+                            other_columns = [col for col in all_columns if col not in [text_column, label_column]]
+                            for col in other_columns:
+                                processed_df[col] = scraped_df[col]
+                        else:
+                            processed_df = scraped_df.copy()
+                            # Still need to set standard names for processing
+                            processed_df['statement'] = processed_df[text_column]
+                            processed_df['label'] = processed_df[label_column]
+                        
+                        # Save selections to session state
+                        st.session_state['selected_text_column'] = text_column
+                        st.session_state['selected_label_column'] = label_column
+                        st.session_state['csv_columns_selected'] = True
+                        
+                        # Load button
+                        if st.button("Load Data with Selected Columns", key="load_csv_btn", use_container_width=True, type="primary"):
+                            st.session_state['scraped_df'] = processed_df
+                            st.success(f"Successfully loaded {len(processed_df)} claims from CSV!")
+                            st.info(f"Using '{text_column}' as text column and '{label_column}' as label column.")
+                            
+                            # Show data preview
+                            with st.expander("Preview Loaded Data", expanded=True):
+                                st.dataframe(processed_df.head(15), use_container_width=True)
+                                
+                                # Label Distribution visualization
+                                st.subheader("Label Distribution")
+                                label_counts = processed_df['label'].value_counts()
+                                
+                                # Create a clear visualization
+                                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                                
+                                # Bar chart - CLEAR and SIMPLE
+                                colors = plt.cm.Set3(np.linspace(0, 1, len(label_counts)))
+                                bars = ax1.bar(range(len(label_counts)), label_counts.values, color=colors, edgecolor='black', linewidth=1)
+                                ax1.set_xlabel('Labels')
+                                ax1.set_ylabel('Count')
+                                ax1.set_title('Label Distribution (Bar Chart)')
+                                ax1.set_xticks(range(len(label_counts)))
+                                ax1.set_xticklabels(label_counts.index, rotation=45, ha='right', fontsize=9)
+                                
+                                # Add count labels on bars
+                                for bar, count in zip(bars, label_counts.values):
+                                    height = bar.get_height()
+                                    ax1.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                                            f'{count}', ha='center', va='bottom', fontsize=9)
+                                
+                                # Pie chart - CLEAR and LEGIBLE
+                                wedges, texts, autotexts = ax2.pie(label_counts.values, 
+                                                                  labels=label_counts.index, 
+                                                                  autopct='%1.1f%%',
+                                                                  startangle=90,
+                                                                  colors=colors,
+                                                                  textprops={'fontsize': 9})
+                                ax2.set_title('Label Distribution (Percentage)')
+                                
+                                # Improve pie chart text
+                                for autotext in autotexts:
+                                    autotext.set_color('black')
+                                    autotext.set_fontsize(9)
+                                    autotext.set_fontweight('bold')
+                                
+                                plt.tight_layout()
+                                st.pyplot(fig)
+                                
+                                # Also show a clear table
+                                st.subheader("Label Counts Table")
+                                label_table = pd.DataFrame({
+                                    'Label': label_counts.index,
+                                    'Count': label_counts.values,
+                                    'Percentage': (label_counts.values / label_counts.sum() * 100).round(1)
+                                })
+                                st.dataframe(label_table, use_container_width=True, hide_index=True)
+                            
+                            # Google API Verification section for CSV data
+                            st.markdown("---")
+                            st.subheader("Google API Verification")
+                            
+                            verify_col1, verify_col2 = st.columns([2, 1])
+                            
+                            with verify_col1:
+                                verify_checkbox = st.checkbox("Verify claims with Google Fact Check API", value=False, key="verify_checkbox")
+                            
+                            with verify_col2:
+                                max_verify = st.number_input("Max claims to verify", min_value=5, max_value=100, value=20, step=5, key="max_verify")
+                            
+                            if verify_checkbox:
+                                if 'GOOGLE_API_KEY' not in st.secrets:
+                                    st.error("Google API Key not found in secrets.toml")
+                                elif st.button("Run Google Verification", key="verify_btn", use_container_width=True, type="primary"):
+                                    with st.spinner("Verifying claims with Google API..."):
+                                        api_key = st.secrets["GOOGLE_API_KEY"]
+                                        verification_df = verify_with_google_api(
+                                            processed_df, 
+                                            api_key, 
+                                            max_verifications=max_verify,
+                                            text_column='statement'
+                                        )
+                                        
+                                        if not verification_df.empty:
+                                            st.session_state['verification_df'] = verification_df
+                                            
+                                            # Show verification results
+                                            with st.expander("Verification Results", expanded=True):
+                                                st.dataframe(verification_df, use_container_width=True)
+                                                
+                                                # Visualization of verification results
+                                                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                                                
+                                                # Pie chart: Found vs Not Found
+                                                found_count = len(verification_df[verification_df['google_verification'] == 'Found'])
+                                                not_found_count = len(verification_df) - found_count
+                                                
+                                                ax1.pie([found_count, not_found_count], 
+                                                       labels=['Verified', 'Not Found'], 
+                                                       autopct='%1.1f%%',
+                                                       colors=['#4CAF50', '#F44336'])
+                                                ax1.set_title('Google API Verification Results')
+                                                
+                                                # Bar chart: Match scores
+                                                if found_count > 0:
+                                                    ax2.hist(verification_df['match_score'].dropna(), bins=10, 
+                                                            color='#2196F3', edgecolor='black')
+                                                    ax2.set_xlabel('Match Score')
+                                                    ax2.set_ylabel('Count')
+                                                    ax2.set_title('Claim Match Scores')
+                                                else:
+                                                    ax2.text(0.5, 0.5, 'No matches found', 
+                                                            ha='center', va='center')
+                                                    ax2.set_title('No Verification Matches')
+                                                
+                                                plt.tight_layout()
+                                                st.pyplot(fig)
                 except Exception as e:
                     st.error(f"Error reading CSV file: {e}")
         
@@ -1479,6 +1539,9 @@ def app():
                     
                     if not scraped_df.empty:
                         st.session_state['scraped_df'] = scraped_df
+                        st.session_state['selected_text_column'] = 'statement'
+                        st.session_state['selected_label_column'] = 'label'
+                        st.session_state['csv_columns_selected'] = True
                         st.success(f"Successfully scraped {len(scraped_df)} claims!")
                         
                         # Show data preview
@@ -1540,6 +1603,11 @@ def app():
         if not st.session_state['scraped_df'].empty:
             st.markdown("---")
             st.subheader("Current Data Overview")
+            
+            # Show which columns are being used
+            if st.session_state.get('csv_columns_selected', False):
+                st.info(f"**Text Column:** '{st.session_state['selected_text_column']}' | **Label Column:** '{st.session_state['selected_label_column']}'")
+            
             st.dataframe(st.session_state['scraped_df'].head(10), use_container_width=True)
             
             # Statistics
@@ -1566,6 +1634,10 @@ def app():
             if st.button("Go to Data Collection", use_container_width=True):
                 st.switch_page("Data Collection")
         else:
+            # Show which columns are being used
+            if st.session_state.get('csv_columns_selected', False):
+                st.info(f"**Using:** Text from column '{st.session_state['selected_text_column']}' and Labels from column '{st.session_state['selected_label_column']}'")
+            
             # Training configuration
             st.write("Configure and train machine learning models using different NLP feature extraction methods.")
             
@@ -1655,7 +1727,11 @@ def app():
                         training_df = st.session_state['scraped_df']
                     
                     df_results, trained_models, trained_vectorizer = evaluate_models(
-                        training_df, selected_phase, use_smote=use_smote
+                        training_df, 
+                        selected_phase, 
+                        text_column='statement',
+                        label_column='label',
+                        use_smote=use_smote
                     )
                     
                     if not df_results.empty:
@@ -2040,6 +2116,10 @@ def app():
                     
                     # Feature set info
                     st.info(f"**Feature Set:** {st.session_state.get('selected_phase_run', 'Not specified')}")
+                    
+                    # Column info if available
+                    if st.session_state.get('csv_columns_selected', False):
+                        st.info(f"**Data Columns:** Text from '{st.session_state['selected_text_column']}', Labels from '{st.session_state['selected_label_column']}'")
                     
                     # Verification info if used
                     if 'verification_df' in st.session_state and not st.session_state['verification_df'].empty:
