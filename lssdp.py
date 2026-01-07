@@ -1354,24 +1354,54 @@ def show_verification_results(verification_df):
 # --------------------------
 def get_google_api_key():
     """
-    Get Google API key from secrets.toml
+    Get Google API key from secrets.toml in root directory
     """
-    if 'GOOGLE_API_KEY' in st.secrets:
-        return st.secrets["GOOGLE_API_KEY"]
-    else:
-        st.error("Google API Key not found in secrets.toml")
+    try:
+        # First try to read from root directory (where your secrets.toml is)
+        secrets_path = pathlib.Path("secrets.toml")
+        
+        if secrets_path.exists():
+            # Read the file directly
+            with open(secrets_path, 'r') as f:
+                content = f.read()
+                # Simple parsing for GOOGLE_API_KEY
+                import re
+                match = re.search(r'GOOGLE_API_KEY\s*=\s*"([^"]+)"', content)
+                if match:
+                    api_key = match.group(1)
+                    if api_key and api_key.strip() and api_key != "your_actual_api_key_here":
+                        st.success("✅ API Key loaded from secrets.toml")
+                        return api_key.strip()
+                    else:
+                        st.error("Invalid API key in secrets.toml. It's still using the placeholder value.")
+                else:
+                    st.error("GOOGLE_API_KEY not found in secrets.toml")
+        else:
+            st.error(f"secrets.toml not found at: {secrets_path.absolute()}")
+            
+        # If we get here, provide instructions
         st.info("""
-        To use Google Fact Check API, you need to:
+        To fix this:
         
-        1. Get a Google API key from Google Cloud Console
-        2. Enable the "Fact Check Tools API"
-        3. Add the API key to your secrets.toml file:
-        
-        ```
-        # secrets.toml
+        1. **Check your secrets.toml file** - Make sure it contains:
+        ```toml
         GOOGLE_API_KEY = "your_actual_api_key_here"
         ```
+        
+        2. **Move it to .streamlit/ folder** (Optional but recommended):
+        ```bash
+        mkdir -p .streamlit
+        mv secrets.toml .streamlit/
+        ```
+        
+        3. **Or keep it in root** - This modified code should work with it in root directory
+        
+        4. **Restart the app**
         """)
+        return None
+        
+    except Exception as e:
+        st.error(f"Error reading API key: {e}")
         return None
 
 # --------------------------
