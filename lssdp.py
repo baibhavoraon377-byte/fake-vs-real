@@ -1,5 +1,5 @@
 # lssdp.py
-# Complete Streamlit app with simplified Google API verification display
+# Complete Streamlit app with dedicated Google API verification section
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -121,7 +121,7 @@ def verify_single_claim_with_google(claim_text, max_results=3):
     try:
         params = {
             'key': api_key,
-            'query': claim_text[:300],
+            'query': claim_text[:300],  # Shorter query for better results
             'languageCode': 'en',
             'pageSize': max_results,
             'maxAgeDays': 365
@@ -132,6 +132,7 @@ def verify_single_claim_with_google(claim_text, max_results=3):
         if response.status_code == 200:
             data = response.json()
             if 'claims' in data and data['claims']:
+                # Find best matching claim
                 best_match = None
                 best_score = 0
                 
@@ -140,9 +141,11 @@ def verify_single_claim_with_google(claim_text, max_results=3):
                     if not google_text:
                         continue
                     
+                    # Calculate similarity score
                     original_lower = claim_text.lower()
                     google_lower = google_text.lower()
                     
+                    # Use multiple similarity measures
                     original_words = set(re.findall(r'\w+', original_lower))
                     google_words = set(re.findall(r'\w+', google_lower))
                     
@@ -151,14 +154,17 @@ def verify_single_claim_with_google(claim_text, max_results=3):
                         total = len(original_words.union(google_words))
                         word_score = overlap / total if total > 0 else 0
                         
+                        # Length similarity
                         len_similarity = 1 - abs(len(original_lower) - len(google_lower)) / max(len(original_lower), len(google_lower))
+                        
+                        # Combined score
                         combined_score = (word_score * 0.7) + (len_similarity * 0.3)
                         
                         if combined_score > best_score:
                             best_score = combined_score
                             best_match = claim_obj
                 
-                if best_match and best_score > 0.3:
+                if best_match and best_score > 0.3:  # Minimum threshold
                     claim_reviews = best_match.get('claimReview', [])
                     if claim_reviews:
                         review = claim_reviews[0]
@@ -188,6 +194,7 @@ def verify_batch_claims_with_google(df, text_column='statement', max_claims=20, 
         st.error("No data to verify")
         return pd.DataFrame()
     
+    # Limit number of claims to avoid rate limits
     sample_size = min(max_claims, len(df))
     df_sample = df.head(sample_size).copy()
     
@@ -212,6 +219,7 @@ def verify_batch_claims_with_google(df, text_column='statement', max_claims=20, 
             'verification_confidence': 'Low'
         }
         
+        # Call Google API
         api_result = verify_single_claim_with_google(claim_text)
         
         if 'error' not in api_result and api_result.get('found', False):
@@ -225,7 +233,7 @@ def verify_batch_claims_with_google(df, text_column='statement', max_claims=20, 
             })
         
         results.append(result)
-        time.sleep(delay)
+        time.sleep(delay)  # Delay to avoid rate limits
     
     progress_bar.empty()
     status_text.empty()
@@ -237,10 +245,10 @@ def verify_batch_claims_with_google(df, text_column='statement', max_claims=20, 
         return pd.DataFrame()
 
 # --------------------------
-# SIMPLIFIED VERIFICATION RESULTS DISPLAY
+# NEW VERIFICATION RESULTS DISPLAY
 # --------------------------
-def show_verification_results_simple(verification_df):
-    """Display verification results in simplified format"""
+def show_verification_results_new_format(verification_df):
+    """Display verification results in the requested format"""
     if verification_df.empty:
         st.warning("No verification results to display.")
         return
@@ -252,27 +260,37 @@ def show_verification_results_simple(verification_df):
     
     st.info(f"Summary: Found {found_count} out of {total_count} claims ({found_count/total_count*100:.1f}% verification rate)")
     
+    # Display each claim in the requested format
     for index, row in verification_df.iterrows():
+        # Create a card-like container for each claim
         with st.container():
             col1, col2 = st.columns([3, 1])
             
             with col1:
                 st.markdown(f"**Claim:** \"{row['original_statement'][:200]}{'...' if len(row['original_statement']) > 200 else ''}\"")
                 
+                # Display original label (make it readable)
                 original_label = str(row['original_label'])
                 label_display = original_label.title() if len(original_label) < 20 else original_label[:20] + "..."
                 st.markdown(f"**Your label:** {label_display}")
                 
+                # Display Google's result
                 if row['google_verification'] == 'Found':
                     google_rating = row['google_rating']
                     google_publisher = row['google_publisher']
                     st.markdown(f"**Google says:** {google_rating.upper()} (from {google_publisher})")
+                    
+                    # Determine match result
+                    result_text, result_icon, result_color = compare_labels(original_label, google_rating)
+                    
                 else:
                     st.markdown("**Google says:** NOT FOUND (No match in Google Fact Check database)")
+                    result_text = "UNVERIFIED - could not be checked"
+                    result_icon = ""
             
             with col2:
+                # Display result with appropriate styling
                 if row['google_verification'] == 'Found':
-                    result_text = compare_labels_simple(row['original_label'], row['google_rating'])
                     if "CORRECT" in result_text:
                         st.success(f"{result_text}")
                     elif "WRONG" in result_text:
@@ -280,37 +298,56 @@ def show_verification_results_simple(verification_df):
                     else:
                         st.info(f"{result_text}")
                 else:
-                    st.warning("UNVERIFIED")
+                    st.warning(f"{result_text}")
+            
+            # Show additional info in expander
+            with st.expander("View Details", expanded=False):
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.caption(f"**Full claim:** {row['original_statement']}")
+                    st.caption(f"**Original label:** {row['original_label']}")
+                    if 'original_binary_label' in row and row['original_binary_label'] != -1:
+                        st.caption(f"**Binary label:** {row['original_binary_label']}")
+                
+                with col_b:
+                    if row['google_verification'] == 'Found':
+                        st.caption(f"**Match confidence:** {row['match_score']:.1%}")
+                        st.caption(f"**Confidence level:** {row['verification_confidence']}")
+                        if row['verification_url']:
+                            st.caption(f"**Source:** [View]({row['verification_url']})")
             
             st.markdown("---")
 
-def compare_labels_simple(your_label, google_rating):
-    """Compare your label with Google's rating and return simple result"""
+def compare_labels(your_label, google_rating):
+    """Compare your label with Google's rating and return result"""
     your_label_lower = str(your_label).lower().strip()
     google_rating_lower = str(google_rating).lower().strip()
     
+    # Define truth values
     true_indicators = ['true', 'mostly true', 'accurate', 'correct', 'fact', 'real', '1', 'yes']
     false_indicators = ['false', 'mostly false', 'pants on fire', 'fake', 'incorrect', 'baseless', '0', 'no']
     
+    # Check what type of labels we have
     your_is_true = any(indicator in your_label_lower for indicator in true_indicators)
     your_is_false = any(indicator in your_label_lower for indicator in false_indicators)
     google_is_true = any(indicator in google_rating_lower for indicator in true_indicators)
     google_is_false = any(indicator in google_rating_lower for indicator in false_indicators)
     
+    # Determine result
     if your_is_true and google_is_true:
-        return "CORRECT"
+        return "CORRECT - good data", "✅", "green"
     elif your_is_false and google_is_false:
-        return "CORRECT"
+        return "CORRECT - good data", "✅", "green"
     elif your_is_true and google_is_false:
-        return "WRONG"
+        return "WRONG - fix your data", "❌", "red"
     elif your_is_false and google_is_true:
-        return "WRONG"
+        return "WRONG - fix your data", "❌", "red"
     elif not (your_is_true or your_is_false):
-        return "UNKNOWN LABEL"
+        return "UNKNOWN LABEL - check format", "", "blue"
     elif not (google_is_true or google_is_false):
-        return "AMBIGUOUS RATING"
+        return "AMBIGUOUS RATING - cannot compare", "", "blue"
     else:
-        return "CHECK NEEDED"
+        return "CHECK NEEDED - manual review", "", "orange"
 
 # --------------------------
 # DEMO DATA
@@ -335,25 +372,32 @@ def create_binary_label_column(df, label_column):
     
     df = df.copy()
     
+    # Define label mappings
     TRUE_LABELS = ["true", "mostly true", "accurate", "correct", "real", "fact", "1", "yes", "y"]
     FALSE_LABELS = ["false", "mostly false", "pants on fire", "fake", "incorrect", "baseless", "misleading", "0", "no", "n"]
     
-    df['binary_label'] = -1
+    # Initialize binary label column
+    df['binary_label'] = -1  # Default to unknown
     
     for idx, row in df.iterrows():
         label = str(row[label_column]).lower().strip()
         
+        # Check for True labels
         if any(true_label in label for true_label in TRUE_LABELS):
             df.at[idx, 'binary_label'] = 1
+        # Check for False labels
         elif any(false_label in label for false_label in FALSE_LABELS):
             df.at[idx, 'binary_label'] = 0
     
+    # Count statistics
     true_count = len(df[df['binary_label'] == 1])
     false_count = len(df[df['binary_label'] == 0])
     unknown_count = len(df[df['binary_label'] == -1])
     
     if true_count + false_count > 0:
         st.success(f"Created binary labels: {true_count} True (1), {false_count} False (0), {unknown_count} Unknown")
+        
+        # Create readable label column
         df['label_readable'] = df['binary_label'].map({1: 'True', 0: 'False', -1: 'Unknown'})
     else:
         st.warning("Could not automatically create binary labels from the selected column.")
@@ -367,11 +411,16 @@ def filter_by_date_range(df, date_column, start_date, end_date):
     
     df = df.copy()
     
+    # Convert date column to datetime
     try:
         df['date_parsed'] = pd.to_datetime(df[date_column], errors='coerce')
+        
+        # Filter by date range
         mask = (df['date_parsed'] >= pd.Timestamp(start_date)) & (df['date_parsed'] <= pd.Timestamp(end_date))
         filtered_df = df[mask].copy()
+        
         st.info(f"Filtered to {len(filtered_df)} claims from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+        
         return filtered_df
     except Exception as e:
         st.error(f"Error parsing dates: {e}")
@@ -449,26 +498,31 @@ def apply_feature_extraction(X, phase, vectorizer=None):
 
 def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 'statement', label_column: str = 'label', use_smote: bool = True):
     try:
+        # Check if dataframe is empty
         if df.empty:
             st.error("DataFrame is empty! Please load data first.")
             return pd.DataFrame(), {}, None
         
         st.info(f"Data shape: {df.shape[0]} rows, {df.shape[1]} columns")
         
+        # Check for required columns
         if text_column not in df.columns:
             st.error(f"Text column '{text_column}' not found in data!")
             st.info(f"Available columns: {list(df.columns)}")
             return pd.DataFrame(), {}, None
         
+        # Check if binary_label exists, otherwise create it
         if 'binary_label' not in df.columns:
             st.warning("'binary_label' column not found. Creating binary labels...")
             df = create_binary_label_column(df, label_column)
         
+        # Filter out unknown labels (-1) and check we have data
         df_clean = df[df['binary_label'] != -1].copy()
         if df_clean.empty:
             st.error("No valid binary labels (0 or 1) found after filtering!")
             return pd.DataFrame(), {}, None
         
+        # Check class distribution
         class_counts = df_clean['binary_label'].value_counts()
         st.info(f"Class distribution: {dict(class_counts)}")
         
@@ -476,9 +530,11 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
             st.error(f"Only one class found ({class_counts.index[0]}). Need at least 2 classes for training.")
             return pd.DataFrame(), {}, None
         
+        # Prepare data
         X_raw = df_clean[text_column].astype(str)
         y = df_clean['binary_label'].values.astype(int)
         
+        # Apply feature extraction
         st.info(f"Extracting {selected_phase} features...")
         X_features, vectorizer = apply_feature_extraction(X_raw, selected_phase)
         
@@ -486,6 +542,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
             st.error("Feature extraction failed!")
             return pd.DataFrame(), {}, None
         
+        # Define models
         models_config = {
             "Naive Bayes": MultinomialNB(alpha=0.1),
             "Decision Tree": DecisionTreeClassifier(random_state=42, max_depth=5),
@@ -496,21 +553,26 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
         results = []
         trained_models_final = {}
         
+        # Simple training
         for name, model in models_config.items():
             st.info(f"Training {name}...")
             
             try:
+                # Fit the model
                 start_time = time.time()
                 model.fit(X_features, y)
                 train_time = time.time() - start_time
                 
+                # Make predictions
                 y_pred = model.predict(X_features)
                 
+                # Calculate metrics
                 accuracy = accuracy_score(y, y_pred) * 100
                 f1 = f1_score(y, y_pred, average='weighted', zero_division=0)
                 precision = precision_score(y, y_pred, average='weighted', zero_division=0)
                 recall = recall_score(y, y_pred, average='weighted', zero_division=0)
                 
+                # Store results
                 results.append({
                     'Model': name,
                     'Accuracy': round(accuracy, 2),
@@ -537,8 +599,10 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
                 })
                 trained_models_final[name] = None
         
+        # Create results dataframe
         df_results = pd.DataFrame(results)
         
+        # Save models
         try:
             save_trained_models(trained_models_final, vectorizer, selected_phase)
         except Exception as e:
@@ -628,7 +692,7 @@ def verify_single_claim_ui():
         key="single_claim_input"
     )
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         user_label = st.selectbox(
             "Your label for this claim:",
@@ -641,6 +705,7 @@ def verify_single_claim_ui():
             st.error("Please enter a claim to verify")
             return
         
+        # Check API key
         api_key = get_google_api_key()
         if not api_key:
             st.error("Google API Key not found. Please add it to secrets.toml")
@@ -652,9 +717,11 @@ def verify_single_claim_ui():
             if 'error' in result:
                 st.error(f"Error: {result['error']}")
             else:
+                # Display results in the requested format
                 st.markdown("---")
                 st.subheader("Verification Results")
                 
+                # Create a results card
                 with st.container():
                     st.markdown(f"**Claim:** \"{claim_text}\"")
                     st.markdown(f"**Your label:** {user_label}")
@@ -664,17 +731,30 @@ def verify_single_claim_ui():
                         google_publisher = result['google_publisher']
                         st.markdown(f"**Google says:** {google_rating.upper()} (from {google_publisher})")
                         
-                        result_text = compare_labels_simple(user_label, google_rating)
+                        # Compare labels
+                        result_text, result_icon, _ = compare_labels(user_label, google_rating)
                         
-                        if result_text == "CORRECT":
+                        # Display result
+                        if "CORRECT" in result_text:
                             st.success(f"**Result:** {result_text}")
-                        elif result_text == "WRONG":
+                        elif "WRONG" in result_text:
                             st.error(f"**Result:** {result_text}")
                         else:
                             st.info(f"**Result:** {result_text}")
+                        
+                        # Additional details
+                        with st.expander("View Details", expanded=False):
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                st.caption(f"**Google's exact text:** {result.get('google_text', 'N/A')}")
+                                st.caption(f"**Match confidence:** {result.get('match_score', 0):.1%}")
+                            with col_b:
+                                st.caption(f"**Confidence level:** {result.get('confidence', 'N/A')}")
+                                if result.get('google_url'):
+                                    st.caption(f"**Source:** [View]({result['google_url']})")
                     else:
-                        st.markdown("**Google says:** NOT FOUND")
-                        st.warning("**Result:** UNVERIFIED")
+                        st.markdown("**Google says:** NOT FOUND (No match in Google Fact Check database)")
+                        st.warning("**Result:** UNVERIFIED - could not be checked")
 
 # --------------------------
 # BATCH VERIFICATION
@@ -683,22 +763,26 @@ def batch_verification_ui():
     """UI for batch verification of claims"""
     st.subheader("Batch Verify Your Data")
     
+    # Check if data is loaded
     if 'scraped_df' not in st.session_state or st.session_state['scraped_df'].empty:
         st.warning("Please load data first in the Data Collection section.")
         return
     
+    # Use filtered data if available, otherwise use all data
     data_to_verify = st.session_state.get('filtered_df', st.session_state['scraped_df'])
     
     st.info(f"Data ready for verification: {len(data_to_verify)} claims available")
     
+    # Verification settings
     col1, col2 = st.columns(2)
     with col1:
         max_claims = st.number_input(
-            "Max claims to verify:",
+            "Max claims to verify (API limits):",
             min_value=1,
             max_value=50,
             value=10,
-            step=5
+            step=5,
+            help="Google API has rate limits. Lower numbers are safer."
         )
     
     with col2:
@@ -709,12 +793,13 @@ def batch_verification_ui():
         )
     
     if st.button("Run Batch Verification", key="batch_verify_btn", type="primary"):
+        # Check API key
         api_key = get_google_api_key()
         if not api_key:
             st.error("Google API Key not found. Please add it to secrets.toml")
             return
         
-        with st.spinner(f"Verifying up to {max_claims} claims with Google API..."):
+        with st.spinner(f"Verifying up to {max_claims} claims with Google API (this may take a while)..."):
             verification_df = verify_batch_claims_with_google(
                 data_to_verify, 
                 text_column=text_column,
@@ -726,7 +811,8 @@ def batch_verification_ui():
                 st.session_state['verification_performed'] = True
                 st.success(f"Verification complete! Processed {len(verification_df)} claims.")
                 
-                show_verification_results_simple(verification_df)
+                # Show results in new format
+                show_verification_results_new_format(verification_df)
             else:
                 st.error("Verification failed or returned no results.")
 
@@ -740,7 +826,7 @@ def app():
         initial_sidebar_state='expanded'
     )
     
-    # Simple CSS
+    # Custom CSS
     st.markdown("""
     <style>
     .main-header {
@@ -755,6 +841,13 @@ def app():
     }
     .stButton button:hover {
         background-color: #0d47a1;
+    }
+    .verification-card {
+        background-color: #f5f5f5;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        border-left: 5px solid #1e88e5;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -803,7 +896,7 @@ def app():
                 st.session_state['selected_phase_run'] = selected_phase_loaded
         st.session_state['models_loaded_attempted'] = True
     
-    # Sidebar navigation
+    # Sidebar navigation - ADDED GOOGLE API VERIFICATION SECTION
     st.sidebar.markdown("<h1 style='text-align: center;'>FactChecker</h1>", unsafe_allow_html=True)
     page = st.sidebar.radio(
         "Navigation", 
@@ -836,7 +929,7 @@ def app():
                 verification_count = len(st.session_state['verification_df'])
             st.metric("Verified Claims", verification_count)
     
-    # Data Collection
+    # Data Collection (simplified for brevity)
     elif page == "Data Collection":
         st.markdown("<h1 class='main-header'>Data Collection</h1>", unsafe_allow_html=True)
         
@@ -849,8 +942,10 @@ def app():
                 df = pd.read_csv(uploaded_file)
                 st.success(f"Successfully loaded {len(df)} claims")
                 
+                # Show preview
                 st.dataframe(df.head(), use_container_width=True)
                 
+                # Store in session
                 st.session_state['scraped_df'] = df
                 st.session_state['filtered_df'] = df.copy()
                 st.session_state['csv_columns_selected'] = True
@@ -858,7 +953,7 @@ def app():
             except Exception as e:
                 st.error(f"Error loading file: {e}")
     
-    # Model Training
+    # Model Training (simplified for brevity)
     elif page == "Model Training":
         st.markdown("<h1 class='main-header'>Model Training</h1>", unsafe_allow_html=True)
         
@@ -884,19 +979,18 @@ def app():
                         st.success("Training complete!")
                         st.dataframe(df_results, use_container_width=True)
     
-    # Google API Verification Section
+    # NEW: Google API Verification Section
     elif page == "Google API Verification":
         st.markdown("<h1 class='main-header'>Google API Verification</h1>", unsafe_allow_html=True)
         
+        # Check API key first
         api_key = get_google_api_key()
         if not api_key:
             st.error("""
             Google API Key not found!
             
             Please create a `secrets.toml` file in your project directory with:
-            ```toml
             GOOGLE_API_KEY = "AIzaSyBOl5iIVor1xf1yz8SA0vDBAt7V6_nUV8M"
-            ```
             
             Then restart the Streamlit app.
             """)
@@ -904,6 +998,7 @@ def app():
         
         st.success("Google API Key found and ready to use!")
         
+        # Tabs for different verification modes
         tab1, tab2, tab3 = st.tabs(["Single Claim", "Batch Verify", "View Results"])
         
         with tab1:
@@ -915,7 +1010,7 @@ def app():
         with tab3:
             if 'verification_df' in st.session_state and not st.session_state['verification_df'].empty:
                 st.subheader("Previous Verification Results")
-                show_verification_results_simple(st.session_state['verification_df'])
+                show_verification_results_new_format(st.session_state['verification_df'])
             else:
                 st.info("No verification results available. Run a verification first.")
     
@@ -937,6 +1032,7 @@ def app():
         else:
             st.dataframe(st.session_state['df_results'], use_container_width=True)
             
+            # Show verification results if available
             if 'verification_df' in st.session_state and not st.session_state['verification_df'].empty:
                 st.markdown("---")
                 st.subheader("Verification Results Summary")
@@ -945,6 +1041,7 @@ def app():
                 found_df = verification_df[verification_df['google_verification'] == 'Found']
                 
                 if not found_df.empty:
+                    # Calculate accuracy
                     matches = 0
                     total_comparable = 0
                     
