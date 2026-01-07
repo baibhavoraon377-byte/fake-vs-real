@@ -1,5 +1,5 @@
 # lssdp.py
-# Updated Streamlit app with fixes for sparse array errors and improved sidebar styling.
+# Updated Streamlit app with CSV upload from Politifact and Google API verification
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -263,7 +263,120 @@ def run_google_benchmark(google_df, trained_models, vectorizer, selected_phase):
     return pd.DataFrame(results_list)
 
 # --------------------------
-# WEB SCRAPING (Politifact)
+# GOOGLE API VERIFICATION FOR CSV DATA
+# --------------------------
+def verify_with_google_api(df, api_key, max_verifications=50):
+    """
+    Verify claims from CSV using Google Fact Check API
+    Returns DataFrame with additional verification columns
+    """
+    if df.empty or 'statement' not in df.columns:
+        return df
+    
+    verified_claims = []
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    # Limit number of verifications to avoid rate limits
+    sample_size = min(max_verifications, len(df))
+    df_sample = df.head(sample_size).copy()
+    
+    base_url = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
+    
+    for idx, (_, row) in enumerate(df_sample.iterrows()):
+        status_text.text(f"Verifying claim {idx+1}/{sample_size}...")
+        progress_bar.progress((idx + 1) / sample_size)
+        
+        claim_text = str(row['statement'])
+        result = {
+            'original_statement': claim_text,
+            'original_label': row.get('label', ''),
+            'original_date': row.get('date', ''),
+            'original_source': row.get('source', ''),
+            'google_verification': 'Not Found',
+            'google_rating': '',
+            'match_score': 0.0,
+            'verification_url': '',
+            'google_claim_text': ''
+        }
+        
+        try:
+            # Call Google API
+            params = {
+                'key': api_key,
+                'query': claim_text[:500],  # Limit query length
+                'languageCode': 'en',
+                'pageSize': 1
+            }
+            
+            response = requests.get(base_url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'claims' in data and data['claims']:
+                    # Found matching claim
+                    google_claim = data['claims'][0]
+                    result['google_verification'] = 'Found'
+                    result['google_rating'] = google_claim.get('claimReview', [{}])[0].get('textualRating', '')
+                    result['verification_url'] = google_claim.get('claimReview', [{}])[0].get('url', '')
+                    result['google_claim_text'] = google_claim.get('text', '')
+                    
+                    # Calculate similarity score
+                    original_text = claim_text.lower()
+                    google_text = google_claim.get('text', '').lower()
+                    
+                    # Simple word overlap score
+                    original_words = set(re.findall(r'\w+', original_text))
+                    google_words = set(re.findall(r'\w+', google_text))
+                    if original_words and google_words:
+                        overlap = len(original_words.intersection(google_words))
+                        total = len(original_words.union(google_words))
+                        result['match_score'] = overlap / total if total > 0 else 0
+                    
+            elif response.status_code == 429:
+                st.warning("Rate limit reached. Pausing for 2 seconds...")
+                time.sleep(2)
+                continue
+                
+        except Exception as e:
+            if idx % 10 == 0:  # Log errors occasionally
+                st.warning(f"Error verifying claim {idx+1}: {str(e)[:100]}")
+            continue
+        
+        verified_claims.append(result)
+        time.sleep(0.2)  # Small delay to avoid rate limits
+    
+    progress_bar.empty()
+    status_text.empty()
+    
+    if verified_claims:
+        verification_df = pd.DataFrame(verified_claims)
+        
+        # Add verification summary
+        found_count = len(verification_df[verification_df['google_verification'] == 'Found'])
+        st.info(f"Google API Verification Complete: Found {found_count}/{sample_size} claims ({found_count/sample_size*100:.1f}%)")
+        
+        return verification_df
+    else:
+        return pd.DataFrame()
+
+# --------------------------
+# CSV TEMPLATE FUNCTION
+# --------------------------
+def get_politifact_csv_template():
+    """Generate a template CSV structure for Politifact data"""
+    template = {
+        'statement': 'The claim text goes here',
+        'label': 'True/False/Mostly True/etc',
+        'date': '2023-01-15',
+        'source': 'Politifact',
+        'author': 'Author Name',
+        'url': 'https://politifact.com/factchecks/...'
+    }
+    return pd.DataFrame([template])
+
+# --------------------------
+# WEB SCRAPING (Politifact) - KEEPING FOR DATE-WISE EXTRACTION
 # --------------------------
 def scrape_data_by_date_range(start_date: pd.Timestamp, end_date: pd.Timestamp):
     base_url = "https://www.politifact.com/factchecks/list/"
@@ -1094,6 +1207,8 @@ def app():
         st.session_state['selected_phase_run'] = None
     if 'use_smote' not in st.session_state:
         st.session_state['use_smote'] = True
+    if 'verification_df' not in st.session_state:
+        st.session_state['verification_df'] = pd.DataFrame()
 
     # Attempt to load previously saved models on startup (only once)
     if 'models_loaded_attempted' not in st.session_state:
@@ -1118,12 +1233,13 @@ def app():
         st.markdown("<h1 class='main-header'>FactChecker Dashboard</h1>", unsafe_allow_html=True)
         
         # Status cards
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
+        
         with col1:
             st.markdown(f'''
             <div style="background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--light-blue); margin-bottom: 15px;">
                 <h3 style="color: var(--accent-blue);">Data Overview</h3>
-                <p>Collect and manage training data from Politifact archives</p>
+                <p>Collect and manage training data</p>
                 <p style="font-size: 20px; font-weight: bold; color: var(--accent-blue);">
                     {len(st.session_state['scraped_df']) if not st.session_state['scraped_df'].empty else 0} claims
                 </p>
@@ -1131,24 +1247,45 @@ def app():
             ''', unsafe_allow_html=True)
         
         with col2:
+            trained_model_count = sum(1 for m in st.session_state['trained_models'].values() if m is not None)
             st.markdown(f'''
             <div style="background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--light-blue); margin-bottom: 15px;">
                 <h3 style="color: var(--accent-blue);">Model Training</h3>
                 <p>Advanced NLP feature extraction and ML training</p>
                 <p style="font-size: 20px; font-weight: bold; color: var(--accent-blue);">
-                    {sum(1 for m in st.session_state['trained_models'].values() if m is not None)} models ready
+                    {trained_model_count} models ready
                 </p>
             </div>
             ''', unsafe_allow_html=True)
         
         with col3:
+            google_claims_count = len(st.session_state['google_df']) if not st.session_state['google_df'].empty else 0
             st.markdown(f'''
             <div style="background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--light-blue); margin-bottom: 15px;">
                 <h3 style="color: var(--accent-blue);">Benchmark Testing</h3>
                 <p>Validate models with real-world data</p>
                 <p style="font-size: 20px; font-weight: bold; color: var(--accent-blue);">
-                    {len(st.session_state['google_df']) if not st.session_state['google_df'].empty else 0} benchmark claims
+                    {google_claims_count} benchmark claims
                 </p>
+            </div>
+            ''', unsafe_allow_html=True)
+        
+        with col4:
+            verification_count = len(st.session_state.get('verification_df', pd.DataFrame()))
+            verification_rate = 0
+            if verification_count > 0:
+                verified_df = st.session_state['verification_df']
+                verified_count = len(verified_df[verified_df['google_verification'] == 'Found'])
+                verification_rate = (verified_count / verification_count * 100) if verification_count > 0 else 0
+            
+            st.markdown(f'''
+            <div style="background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--light-blue); margin-bottom: 15px;">
+                <h3 style="color: var(--accent-blue);">API Verification</h3>
+                <p>Google API verification status</p>
+                <p style="font-size: 20px; font-weight: bold; color: var(--accent-blue);">
+                    {verification_rate:.1f}% verified
+                </p>
+                <p style="font-size: 12px; color: #666;">{verification_count} claims checked</p>
             </div>
             ''', unsafe_allow_html=True)
 
@@ -1156,85 +1293,248 @@ def app():
     elif page == "Data Collection":
         st.markdown("<h1 class='main-header'>Data Collection</h1>", unsafe_allow_html=True)
         
-        st.write("Collect political fact-check data from Politifact.com within a specific date range.")
+        # Choose data source
+        data_source = st.radio("Choose data source:", ["Upload CSV File", "Web Scrape Politifact"], horizontal=True)
         
-        min_date = pd.to_datetime('2007-01-01')
-        max_date = pd.to_datetime('today').normalize()
-        
-        date_col1, date_col2 = st.columns(2)
-        with date_col1:
-            start_date = st.date_input("Start Date", min_value=min_date, max_value=max_date, 
-                                      value=pd.to_datetime('2023-01-01'))
-        
-        with date_col2:
-            end_date = st.date_input("End Date", min_value=min_date, max_value=max_date, 
-                                    value=max_date)
-        
-        if st.button("Scrape Politifact Data", key="scrape_btn", use_container_width=True, type="primary"):
-            if start_date > end_date:
-                st.error("Start date must be before end date")
-            else:
-                with st.spinner("Scraping political claims from Politifact..."):
-                    scraped_df = scrape_data_by_date_range(pd.to_datetime(start_date), pd.to_datetime(end_date))
+        if data_source == "Upload CSV File":
+            st.write("Upload a CSV file containing Politifact fact-checked claims.")
+            
+            # CSV format help
+            with st.expander("📋 CSV Format Help", expanded=False):
+                st.write("Your CSV should have at minimum these columns:")
+                st.code("""
+                statement,label
+                "The Earth is flat","False"
+                "Vaccines are safe","True"
+                "Climate change is real","Mostly True"
+                """, language='text')
                 
-                if not scraped_df.empty:
-                    st.session_state['scraped_df'] = scraped_df
-                    st.success(f"Successfully scraped {len(scraped_df)} claims!")
+                st.write("Optional columns (recommended):")
+                st.code("date,source,author,url,rating,fact_checker", language='text')
+                
+                if st.button("Download Template CSV", key="template_btn"):
+                    template_df = get_politifact_csv_template()
+                    csv = template_df.to_csv(index=False)
+                    st.download_button(
+                        label="Download Template",
+                        data=csv,
+                        file_name="politifact_template.csv",
+                        mime="text/csv",
+                        key="download_template"
+                    )
+            
+            uploaded_file = st.file_uploader("Choose a Politifact CSV file", type="csv", key="csv_uploader")
+            
+            if uploaded_file is not None:
+                try:
+                    # Read the CSV file
+                    scraped_df = pd.read_csv(uploaded_file)
                     
-                    # Show data preview
-                    with st.expander("Preview Scraped Data", expanded=True):
-                        st.dataframe(st.session_state['scraped_df'].head(15), use_container_width=True)
+                    # Validate required columns
+                    required_columns = ['statement', 'label']
+                    if all(col in scraped_df.columns for col in required_columns):
+                        st.session_state['scraped_df'] = scraped_df
+                        st.success(f"Successfully loaded {len(scraped_df)} claims from CSV!")
                         
-                        # Improved Label Distribution visualization
-                        st.subheader("Label Distribution")
-                        label_counts = scraped_df['label'].value_counts()
+                        # Show data preview
+                        with st.expander("Preview Uploaded Data", expanded=True):
+                            st.dataframe(st.session_state['scraped_df'].head(15), use_container_width=True)
+                            
+                            # Label Distribution visualization
+                            st.subheader("Label Distribution")
+                            label_counts = scraped_df['label'].value_counts()
+                            
+                            # Create a clear visualization
+                            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                            
+                            # Bar chart - CLEAR and SIMPLE
+                            colors = plt.cm.Set3(np.linspace(0, 1, len(label_counts)))
+                            bars = ax1.bar(range(len(label_counts)), label_counts.values, color=colors, edgecolor='black', linewidth=1)
+                            ax1.set_xlabel('Labels')
+                            ax1.set_ylabel('Count')
+                            ax1.set_title('Label Distribution (Bar Chart)')
+                            ax1.set_xticks(range(len(label_counts)))
+                            ax1.set_xticklabels(label_counts.index, rotation=45, ha='right', fontsize=9)
+                            
+                            # Add count labels on bars
+                            for bar, count in zip(bars, label_counts.values):
+                                height = bar.get_height()
+                                ax1.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                                        f'{count}', ha='center', va='bottom', fontsize=9)
+                            
+                            # Pie chart - CLEAR and LEGIBLE
+                            wedges, texts, autotexts = ax2.pie(label_counts.values, 
+                                                              labels=label_counts.index, 
+                                                              autopct='%1.1f%%',
+                                                              startangle=90,
+                                                              colors=colors,
+                                                              textprops={'fontsize': 9})
+                            ax2.set_title('Label Distribution (Percentage)')
+                            
+                            # Improve pie chart text
+                            for autotext in autotexts:
+                                autotext.set_color('black')
+                                autotext.set_fontsize(9)
+                                autotext.set_fontweight('bold')
+                            
+                            plt.tight_layout()
+                            st.pyplot(fig)
+                            
+                            # Also show a clear table
+                            st.subheader("Label Counts Table")
+                            label_table = pd.DataFrame({
+                                'Label': label_counts.index,
+                                'Count': label_counts.values,
+                                'Percentage': (label_counts.values / label_counts.sum() * 100).round(1)
+                            })
+                            st.dataframe(label_table, use_container_width=True, hide_index=True)
+                            
+                        # Google API Verification section for CSV data
+                        st.markdown("---")
+                        st.subheader("Google API Verification")
                         
-                        # Create a clear visualization
-                        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                        verify_col1, verify_col2 = st.columns([2, 1])
                         
-                        # Bar chart - CLEAR and SIMPLE
-                        colors = plt.cm.Set3(np.linspace(0, 1, len(label_counts)))
-                        bars = ax1.bar(range(len(label_counts)), label_counts.values, color=colors, edgecolor='black', linewidth=1)
-                        ax1.set_xlabel('Labels')
-                        ax1.set_ylabel('Count')
-                        ax1.set_title('Label Distribution (Bar Chart)')
-                        ax1.set_xticks(range(len(label_counts)))
-                        ax1.set_xticklabels(label_counts.index, rotation=45, ha='right', fontsize=9)
+                        with verify_col1:
+                            verify_checkbox = st.checkbox("Verify claims with Google Fact Check API", value=False, key="verify_checkbox")
                         
-                        # Add count labels on bars
-                        for bar, count in zip(bars, label_counts.values):
-                            height = bar.get_height()
-                            ax1.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                                    f'{count}', ha='center', va='bottom', fontsize=9)
+                        with verify_col2:
+                            max_verify = st.number_input("Max claims to verify", min_value=5, max_value=100, value=20, step=5, key="max_verify")
                         
-                        # Pie chart - CLEAR and LEGIBLE
-                        wedges, texts, autotexts = ax2.pie(label_counts.values, 
-                                                          labels=label_counts.index, 
-                                                          autopct='%1.1f%%',
-                                                          startangle=90,
-                                                          colors=colors,
-                                                          textprops={'fontsize': 9})
-                        ax2.set_title('Label Distribution (Percentage)')
+                        if verify_checkbox:
+                            if 'GOOGLE_API_KEY' not in st.secrets:
+                                st.error("Google API Key not found in secrets.toml")
+                            elif st.button("Run Google Verification", key="verify_btn", use_container_width=True, type="primary"):
+                                with st.spinner("Verifying claims with Google API..."):
+                                    api_key = st.secrets["GOOGLE_API_KEY"]
+                                    verification_df = verify_with_google_api(
+                                        st.session_state['scraped_df'], 
+                                        api_key, 
+                                        max_verifications=max_verify
+                                    )
+                                    
+                                    if not verification_df.empty:
+                                        st.session_state['verification_df'] = verification_df
+                                        
+                                        # Show verification results
+                                        with st.expander("Verification Results", expanded=True):
+                                            st.dataframe(verification_df, use_container_width=True)
+                                            
+                                            # Visualization of verification results
+                                            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                                            
+                                            # Pie chart: Found vs Not Found
+                                            found_count = len(verification_df[verification_df['google_verification'] == 'Found'])
+                                            not_found_count = len(verification_df) - found_count
+                                            
+                                            ax1.pie([found_count, not_found_count], 
+                                                   labels=['Verified', 'Not Found'], 
+                                                   autopct='%1.1f%%',
+                                                   colors=['#4CAF50', '#F44336'])
+                                            ax1.set_title('Google API Verification Results')
+                                            
+                                            # Bar chart: Match scores
+                                            if found_count > 0:
+                                                ax2.hist(verification_df['match_score'].dropna(), bins=10, 
+                                                        color='#2196F3', edgecolor='black')
+                                                ax2.set_xlabel('Match Score')
+                                                ax2.set_ylabel('Count')
+                                                ax2.set_title('Claim Match Scores')
+                                            else:
+                                                ax2.text(0.5, 0.5, 'No matches found', 
+                                                        ha='center', va='center')
+                                                ax2.set_title('No Verification Matches')
+                                            
+                                            plt.tight_layout()
+                                            st.pyplot(fig)
+                    else:
+                        st.error(f"CSV file must contain these columns: {required_columns}")
+                        st.info(f"File columns: {list(scraped_df.columns)}")
                         
-                        # Improve pie chart text
-                        for autotext in autotexts:
-                            autotext.set_color('black')
-                            autotext.set_fontsize(9)
-                            autotext.set_fontweight('bold')
-                        
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                        
-                        # Also show a clear table
-                        st.subheader("Label Counts Table")
-                        label_table = pd.DataFrame({
-                            'Label': label_counts.index,
-                            'Count': label_counts.values,
-                            'Percentage': (label_counts.values / label_counts.sum() * 100).round(1)
-                        })
-                        st.dataframe(label_table, use_container_width=True, hide_index=True)
+                except Exception as e:
+                    st.error(f"Error reading CSV file: {e}")
+        
+        elif data_source == "Web Scrape Politifact":
+            # KEEPING THE ORIGINAL DATE-WISE EXTRACTION CODE
+            st.write("Collect political fact-check data from Politifact.com within a specific date range.")
+            
+            min_date = pd.to_datetime('2007-01-01')
+            max_date = pd.to_datetime('today').normalize()
+            
+            date_col1, date_col2 = st.columns(2)
+            with date_col1:
+                start_date = st.date_input("Start Date", min_value=min_date, max_value=max_date, 
+                                          value=pd.to_datetime('2023-01-01'), key="scrape_start_date")
+            
+            with date_col2:
+                end_date = st.date_input("End Date", min_value=min_date, max_value=max_date, 
+                                        value=max_date, key="scrape_end_date")
+            
+            if st.button("Scrape Politifact Data", key="scrape_btn", use_container_width=True, type="primary"):
+                if start_date > end_date:
+                    st.error("Start date must be before end date")
                 else:
-                    st.warning("No data found. Try adjusting date range.")
+                    with st.spinner("Scraping political claims from Politifact..."):
+                        scraped_df = scrape_data_by_date_range(pd.to_datetime(start_date), pd.to_datetime(end_date))
+                    
+                    if not scraped_df.empty:
+                        st.session_state['scraped_df'] = scraped_df
+                        st.success(f"Successfully scraped {len(scraped_df)} claims!")
+                        
+                        # Show data preview
+                        with st.expander("Preview Scraped Data", expanded=True):
+                            st.dataframe(st.session_state['scraped_df'].head(15), use_container_width=True)
+                            
+                            # Improved Label Distribution visualization
+                            st.subheader("Label Distribution")
+                            label_counts = scraped_df['label'].value_counts()
+                            
+                            # Create a clear visualization
+                            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                            
+                            # Bar chart - CLEAR and SIMPLE
+                            colors = plt.cm.Set3(np.linspace(0, 1, len(label_counts)))
+                            bars = ax1.bar(range(len(label_counts)), label_counts.values, color=colors, edgecolor='black', linewidth=1)
+                            ax1.set_xlabel('Labels')
+                            ax1.set_ylabel('Count')
+                            ax1.set_title('Label Distribution (Bar Chart)')
+                            ax1.set_xticks(range(len(label_counts)))
+                            ax1.set_xticklabels(label_counts.index, rotation=45, ha='right', fontsize=9)
+                            
+                            # Add count labels on bars
+                            for bar, count in zip(bars, label_counts.values):
+                                height = bar.get_height()
+                                ax1.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                                        f'{count}', ha='center', va='bottom', fontsize=9)
+                            
+                            # Pie chart - CLEAR and LEGIBLE
+                            wedges, texts, autotexts = ax2.pie(label_counts.values, 
+                                                              labels=label_counts.index, 
+                                                              autopct='%1.1f%%',
+                                                              startangle=90,
+                                                              colors=colors,
+                                                              textprops={'fontsize': 9})
+                            ax2.set_title('Label Distribution (Percentage)')
+                            
+                            # Improve pie chart text
+                            for autotext in autotexts:
+                                autotext.set_color('black')
+                                autotext.set_fontsize(9)
+                                autotext.set_fontweight('bold')
+                            
+                            plt.tight_layout()
+                            st.pyplot(fig)
+                            
+                            # Also show a clear table
+                            st.subheader("Label Counts Table")
+                            label_table = pd.DataFrame({
+                                'Label': label_counts.index,
+                                'Count': label_counts.values,
+                                'Percentage': (label_counts.values / label_counts.sum() * 100).round(1)
+                            })
+                            st.dataframe(label_table, use_container_width=True, hide_index=True)
+                    else:
+                        st.warning("No data found. Try adjusting date range.")
         
         # Show existing data if available
         if not st.session_state['scraped_df'].empty:
@@ -1250,8 +1550,12 @@ def app():
                 unique_labels = st.session_state['scraped_df']['label'].nunique()
                 st.metric("Unique Labels", unique_labels)
             with stats_col3:
-                date_range = pd.to_datetime(st.session_state['scraped_df']['date']).agg(['min', 'max'])
-                st.metric("Date Range", f"{date_range['min'].strftime('%Y-%m-%d')} to {date_range['max'].strftime('%Y-%m-%d')}")
+                if 'date' in st.session_state['scraped_df'].columns:
+                    try:
+                        date_range = pd.to_datetime(st.session_state['scraped_df']['date']).agg(['min', 'max'])
+                        st.metric("Date Range", f"{date_range['min'].strftime('%Y-%m-%d')} to {date_range['max'].strftime('%Y-%m-%d')}")
+                    except:
+                        st.metric("Date Info", "Not available")
 
     # --- MODEL TRAINING ---
     elif page == "Model Training":
@@ -1274,9 +1578,23 @@ def app():
                 use_smote = st.checkbox("Apply SMOTE for class balancing", value=True)
                 st.session_state['use_smote'] = use_smote
             
+            # Add option to use verified data if available
+            use_verified_data = False
+            if 'verification_df' in st.session_state and not st.session_state['verification_df'].empty:
+                verified_df = st.session_state['verification_df']
+                verified_count = len(verified_df[verified_df['google_verification'] == 'Found'])
+                if verified_count > 0:
+                    use_verified_data = st.checkbox(f"Use Google-verified claims only ({verified_count} available)", value=False)
+            
             # Data preview
             with st.expander("Training Data Preview", expanded=False):
-                st.dataframe(st.session_state['scraped_df'][['statement', 'label']].head(10), use_container_width=True)
+                if use_verified_data and 'verification_df' in st.session_state:
+                    verified_df = st.session_state['verification_df']
+                    verified_claims = verified_df[verified_df['google_verification'] == 'Found']
+                    st.info(f"Using {len(verified_claims)} Google-verified claims for training")
+                    st.dataframe(verified_claims[['original_statement', 'original_label', 'google_rating', 'match_score']].head(10), use_container_width=True)
+                else:
+                    st.dataframe(st.session_state['scraped_df'][['statement', 'label']].head(10), use_container_width=True)
                 
                 # Show clear binary class distribution
                 REAL_LABELS = ["True", "No Flip", "Mostly True", "Half Flip", "Half True"]
@@ -1290,8 +1608,13 @@ def app():
                     else:
                         return "Other"
                 
-                df_preview = st.session_state['scraped_df'].copy()
-                df_preview['binary_label'] = df_preview['label'].apply(create_binary_target)
+                if use_verified_data and 'verification_df' in st.session_state:
+                    df_preview = st.session_state['verification_df'][st.session_state['verification_df']['google_verification'] == 'Found'].copy()
+                    df_preview['binary_label'] = df_preview['original_label'].apply(create_binary_target)
+                else:
+                    df_preview = st.session_state['scraped_df'].copy()
+                    df_preview['binary_label'] = df_preview['label'].apply(create_binary_target)
+                
                 binary_counts = df_preview['binary_label'].value_counts()
                 
                 fig, ax = plt.subplots(figsize=(8, 5))
@@ -1315,8 +1638,24 @@ def app():
             
             if st.button("Run Model Analysis", key="analyze_btn", use_container_width=True, type="primary"):
                 with st.spinner(f"Training 4 models with {N_SPLITS}-Fold CV..."):
+                    # Select appropriate data source
+                    if use_verified_data and 'verification_df' in st.session_state:
+                        # Use verified data
+                        verified_df = st.session_state['verification_df']
+                        verified_df = verified_df[verified_df['google_verification'] == 'Found']
+                        
+                        # Create a DataFrame compatible with evaluate_models
+                        training_df = pd.DataFrame({
+                            'statement': verified_df['original_statement'],
+                            'label': verified_df['original_label']  # Assuming CSV has label column
+                        })
+                        st.info(f"Using {len(training_df)} Google-verified claims for training")
+                    else:
+                        # Use original scraped/uploaded data
+                        training_df = st.session_state['scraped_df']
+                    
                     df_results, trained_models, trained_vectorizer = evaluate_models(
-                        st.session_state['scraped_df'], selected_phase, use_smote=use_smote
+                        training_df, selected_phase, use_smote=use_smote
                     )
                     
                     if not df_results.empty:
@@ -1701,6 +2040,12 @@ def app():
                     
                     # Feature set info
                     st.info(f"**Feature Set:** {st.session_state.get('selected_phase_run', 'Not specified')}")
+                    
+                    # Verification info if used
+                    if 'verification_df' in st.session_state and not st.session_state['verification_df'].empty:
+                        verified_count = len(st.session_state['verification_df'][st.session_state['verification_df']['google_verification'] == 'Found'])
+                        if verified_count > 0:
+                            st.info(f"**Training Data:** {verified_count} Google-verified claims")
 
 if __name__ == '__main__':
     app()
