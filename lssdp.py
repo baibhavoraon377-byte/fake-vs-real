@@ -1,5 +1,3 @@
-# lssdp.py
-# Updated Streamlit app with CSV upload from Politifact and Google API verification
 import streamlit as st
 import pandas as pd
 import numpy as np
