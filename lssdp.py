@@ -901,6 +901,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
     elif imbalance_ratio >= 0.3 and use_smote:
         st.info(f"Classes are relatively balanced (ratio: {imbalance_ratio:.2f}). Proceeding with SMOTE as requested.")
 
+    # Use the correct function for feature extraction
     X_features_full, vectorizer = apply_feature_extraction(X_raw, selected_phase)
     if X_features_full is None:
         st.error("Feature extraction failed.")
@@ -979,20 +980,34 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
             
             if vectorizer is not None:
                 if 'Lexical' in selected_phase:
-                    X_train = vectorizer.transform(X_train_raw.apply(lexical_features))
-                    X_test = vectorizer.transform(X_test_raw.apply(lexical_features))
+                    X_train_processed = X_train_raw.apply(lexical_features)
+                    X_test_processed = X_test_raw.apply(lexical_features)
+                    X_train = vectorizer.transform(X_train_processed)
+                    X_test = vectorizer.transform(X_test_processed)
                 elif 'Syntactic' in selected_phase:
-                    X_train = vectorizer.transform(X_train_raw.apply(syntactic_features))
-                    X_test = vectorizer.transform(X_test_raw.apply(syntactic_features))
+                    X_train_processed = X_train_raw.apply(syntactic_features)
+                    X_test_processed = X_test_raw.apply(syntactic_features)
+                    X_train = vectorizer.transform(X_train_processed)
+                    X_test = vectorizer.transform(X_test_processed)
                 elif 'Discourse' in selected_phase:
-                    X_train = vectorizer.transform(X_train_raw.apply(discourse_features))
-                    X_test = vectorizer.transform(X_test_raw.apply(discourse_features))
+                    X_train_processed = X_train_raw.apply(discourse_features)
+                    X_test_processed = X_test_raw.apply(discourse_features)
+                    X_train = vectorizer.transform(X_train_processed)
+                    X_test = vectorizer.transform(X_test_processed)
                 else:
                     X_train = vectorizer.transform(X_train_raw)
                     X_test = vectorizer.transform(X_test_raw)
             else:
-                X_train, _ = apply_feature_extraction(X_train_raw, selected_phase)
-                X_test, _ = apply_feature_extraction(X_test_raw, selected_phase)
+                # For Semantic and Pragmatic phases
+                if selected_phase == "Semantic":
+                    X_train = pd.DataFrame(X_train_raw.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"]).values
+                    X_test = pd.DataFrame(X_test_raw.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"]).values
+                elif selected_phase == "Pragmatic":
+                    X_train = pd.DataFrame(X_train_raw.apply(pragmatic_features).tolist(), columns=pragmatic_words).values
+                    X_test = pd.DataFrame(X_test_raw.apply(pragmatic_features).tolist(), columns=pragmatic_words).values
+                else:
+                    X_train, _ = apply_feature_extraction(X_train_raw, selected_phase)
+                    X_test, _ = apply_feature_extraction(X_test_raw, selected_phase)
             
             # Convert sparse to dense for models that don't handle sparse well
             if hasattr(X_train, "toarray") and name in ["Naive Bayes", "Decision Tree"]:
@@ -1119,7 +1134,13 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
                     X_final_processed = X_raw
                 X_final = vectorizer.transform(X_final_processed)
             else:
-                X_final = X_features_full
+                # For Semantic and Pragmatic phases
+                if selected_phase == "Semantic":
+                    X_final = pd.DataFrame(X_raw.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"]).values
+                elif selected_phase == "Pragmatic":
+                    X_final = pd.DataFrame(X_raw.apply(pragmatic_features).tolist(), columns=pragmatic_words).values
+                else:
+                    X_final = X_features_full
             
             # Convert sparse to dense for models that don't handle sparse well
             if hasattr(X_final, "toarray") and name in ["Naive Bayes", "Decision Tree"]:
