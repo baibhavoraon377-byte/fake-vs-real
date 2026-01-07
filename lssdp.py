@@ -67,7 +67,7 @@ def load_spacy_model():
         try:
             import subprocess, sys
             st.info("Attempting to download spaCy model automatically...")
-            subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm")
+            subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
             return spacy.load("en_core_web_sm")
         except Exception as ee:
             st.error("Failed to download spaCy model. Please install manually:")
