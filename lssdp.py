@@ -1370,7 +1370,7 @@ def get_google_api_key():
                 if match:
                     api_key = match.group(1)
                     if api_key and api_key.strip() and api_key != "your_actual_api_key_here":
-                        st.success("✅ API Key loaded from secrets.toml")
+                        st.success("API Key loaded from secrets.toml")
                         return api_key.strip()
                     else:
                         st.error("Invalid API key in secrets.toml. It's still using the placeholder value.")
@@ -1614,9 +1614,9 @@ def app():
                 st.session_state['selected_phase_run'] = selected_phase_loaded
         st.session_state['models_loaded_attempted'] = True
 
-    # Sidebar and navigation with IMPROVED styling
+    # Sidebar and navigation with IMPROVED styling - REMOVED Benchmark Testing
     st.sidebar.markdown("<h1 class='main-header'>FactChecker</h1>", unsafe_allow_html=True)
-    page = st.sidebar.radio("", ["Dashboard", "Data Collection", "Google API Verification", "Model Training", "Benchmark Testing", "Results & Analysis"], 
+    page = st.sidebar.radio("", ["Dashboard", "Data Collection", "Google API Verification", "Model Training", "Results & Analysis"], 
                           key='navigation', label_visibility="collapsed")
 
     # --- DASHBOARD ---
@@ -1656,10 +1656,10 @@ def app():
             google_claims_count = len(st.session_state['google_df']) if not st.session_state['google_df'].empty else 0
             st.markdown(f'''
             <div style="background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--light-blue); margin-bottom: 15px;">
-                <h3 style="color: var(--accent-blue);">Benchmark Testing</h3>
-                <p>Validate models with real-world data</p>
+                <h3 style="color: var(--accent-blue);">External Data</h3>
+                <p>Access to external fact-checking sources</p>
                 <p style="font-size: 20px; font-weight: bold; color: var(--accent-blue);">
-                    {google_claims_count} benchmark claims
+                    {google_claims_count} external claims
                 </p>
             </div>
             ''', unsafe_allow_html=True)
@@ -1697,7 +1697,7 @@ def app():
             st.write("Upload a CSV file containing Politifact fact-checked claims.")
             
             # CSV format help
-            with st.expander("📋 CSV Format Help", expanded=False):
+            with st.expander("CSV Format Help", expanded=False):
                 st.write("Your CSV should have at minimum these columns:")
                 st.code("""
                 [text_column], [label_column], [date_column (optional)]
@@ -2132,14 +2132,14 @@ def app():
         st.info(f"Ready to verify {len(verification_data)} claims using Google Fact Check API")
         
         # Verification options in tabs
-        tab1, tab2 = st.tabs(["📊 Batch Verification", "🔍 Single Claim Verification"])
+        tab1, tab2 = st.tabs(["Batch Verification", "Single Claim Verification"])
         
         with tab1:
             st.subheader("Batch Verification")
             
             col1, col2 = st.columns([2, 1])
             with col1:
-                max_claims = st.slider("Maximum claims to verify", 10, 100, 30, 5, 
+                max_claims = st.slider("Maximum claims to verify", 10, 1000, 30, 5, 
                                       help="Limit the number of claims to avoid rate limiting")
             
             with col2:
@@ -2175,7 +2175,7 @@ def app():
                     display_cols.append('binary_label')
                 st.dataframe(filtered_for_verification[display_cols].head(10), use_container_width=True)
             
-            if st.button("🚀 Start Batch Verification", key="batch_verify_btn", use_container_width=True, type="primary"):
+            if st.button("Start Batch Verification", key="batch_verify_btn", use_container_width=True, type="primary"):
                 if len(filtered_for_verification) == 0:
                     st.error("No claims to verify with the selected mode")
                 else:
@@ -2196,7 +2196,7 @@ def app():
                             if 'filtered_df' in st.session_state and not st.session_state['filtered_df'].empty:
                                 st.session_state['filtered_verification_df'] = verification_df
                             
-                            st.success("✅ Google API verification completed!")
+                            st.success("Google API verification completed!")
                             
                             # Show verification results
                             show_verification_results(verification_df)
@@ -2229,7 +2229,7 @@ def app():
                             st.subheader("Verification Results")
                             
                             if result['verification_status'] == 'Found':
-                                st.success(f"✅ Claim verified!")
+                                st.success(f"Claim verified!")
                                 
                                 # Create a nice display
                                 col1, col2 = st.columns(2)
@@ -2256,9 +2256,9 @@ def app():
                                         st.write(f"**Review Date:** {result['google_review_date']}")
                                 
                             elif result['verification_status'] == 'Rate Limited':
-                                st.warning("⚠️ Rate limited. Please try again later.")
+                                st.warning("Rate limited. Please try again later.")
                             else:
-                                st.warning("🔍 Claim not found in Google Fact Check database.")
+                                st.warning("Claim not found in Google Fact Check database.")
             
             else:  # Select from dataset
                 if not verification_data.empty:
@@ -2277,7 +2277,7 @@ def app():
                             st.subheader("Verification Results")
                             
                             if result['verification_status'] == 'Found':
-                                st.success(f"✅ Claim verified!")
+                                st.success(f"Claim verified!")
                                 
                                 # Get original label for comparison
                                 original_row = verification_data[verification_data['statement'] == selected_claim].iloc[0]
@@ -2302,11 +2302,11 @@ def app():
                                 # Show agreement/disagreement
                                 if 'binary_label' in original_row and result['google_binary_label'] != -1:
                                     if original_row['binary_label'] == result['google_binary_label']:
-                                        st.success("🎯 Labels agree!")
+                                        st.success("Labels agree!")
                                     elif original_row['binary_label'] == -1:
-                                        st.info("ℹ️ Original label was unknown")
+                                        st.info("Original label was unknown")
                                     else:
-                                        st.warning("⚠️ Labels disagree!")
+                                        st.warning("Labels disagree!")
                                 
                                 # Show details
                                 with st.expander("Detailed Information"):
@@ -2318,9 +2318,9 @@ def app():
                                         st.write(f"**Publisher:** {result['google_publisher']}")
                             
                             elif result['verification_status'] == 'Rate Limited':
-                                st.warning("⚠️ Rate limited. Please try again later.")
+                                st.warning("Rate limited. Please try again later.")
                             else:
-                                st.warning("🔍 Claim not found in Google Fact Check database.")
+                                st.warning("Claim not found in Google Fact Check database.")
                 else:
                     st.info("No dataset available. Please load data first.")
         
@@ -2349,7 +2349,7 @@ def app():
                 show_verification_results(verification_df)
                 
                 # Export option
-                if st.button("📥 Export Verification Results", key="export_verify_btn"):
+                if st.button("Export Verification Results", key="export_verify_btn"):
                     csv = verification_df.to_csv(index=False)
                     st.download_button(
                         label="Download CSV",
@@ -2384,7 +2384,7 @@ def app():
                 verification_df = st.session_state.get('filtered_verification_df', st.session_state.get('verification_df', pd.DataFrame()))
                 if not verification_df.empty:
                     found_count = len(verification_df[verification_df['google_verification'] == 'Found'])
-                    st.success(f"✅ Google API Verification available: {found_count} verified claims")
+                    st.success(f"Google API Verification available: {found_count} verified claims")
             
             # Training configuration
             st.write("Configure and train machine learning models using different NLP feature extraction methods.")
@@ -2509,61 +2509,6 @@ def app():
                     else:
                         st.error("Model training failed. Please check your data and try again.")
 
-    # --- BENCHMARK TESTING ---
-    elif page == "Benchmark Testing":
-        st.markdown("<h1 class='main-header'>Benchmark Testing</h1>", unsafe_allow_html=True)
-        
-        if not st.session_state['trained_models']:
-            st.warning("No trained models found. Please train models first.")
-            if st.button("Go to Model Training", use_container_width=True):
-                st.switch_page("Model Training")
-        else:
-            st.write("Test your trained models against Google Fact Check API claims.")
-            
-            # Get Google API key
-            api_key = get_google_api_key()
-            if not api_key:
-                st.stop()
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                num_google_claims = st.slider("Number of Google claims to fetch", 10, 200, 50, 10)
-            
-            with col2:
-                if st.button("Fetch Google Claims", key="fetch_google_btn", use_container_width=True):
-                    with st.spinner(f"Fetching {num_google_claims} claims from Google Fact Check API..."):
-                        google_claims = fetch_google_claims(api_key, num_google_claims)
-                        if google_claims:
-                            google_df = process_and_map_google_claims(google_claims)
-                            st.session_state['google_df'] = google_df
-                            st.success(f"Fetched and processed {len(google_df)} Google claims")
-            
-            # Show existing Google claims
-            if not st.session_state['google_df'].empty:
-                st.subheader("Google Benchmark Claims")
-                st.dataframe(st.session_state['google_df'].head(10), use_container_width=True)
-                
-                # Run benchmark
-                if st.button("Run Benchmark Test", key="benchmark_btn", use_container_width=True, type="primary"):
-                    if st.session_state['selected_phase_run']:
-                        benchmark_results = run_google_benchmark(
-                            st.session_state['google_df'],
-                            st.session_state['trained_models'],
-                            st.session_state['trained_vectorizer'],
-                            st.session_state['selected_phase_run']
-                        )
-                        if not benchmark_results.empty:
-                            st.session_state['google_benchmark_results'] = benchmark_results
-                            st.subheader("Benchmark Results")
-                            st.dataframe(benchmark_results, use_container_width=True)
-                    else:
-                        st.error("No training phase information found. Please retrain models.")
-            
-            # Show existing benchmark results
-            if not st.session_state['google_benchmark_results'].empty:
-                st.subheader("Previous Benchmark Results")
-                st.dataframe(st.session_state['google_benchmark_results'], use_container_width=True)
-
     # --- RESULTS & ANALYSIS ---
     elif page == "Results & Analysis":
         st.markdown("<h1 class='main-header'>Results & Analysis</h1>", unsafe_allow_html=True)
@@ -2577,7 +2522,7 @@ def app():
             st.write("Analyze model performance and make predictions on new claims.")
             
             # Display results in tabs
-            tab1, tab2, tab3 = st.tabs(["📈 Performance Results", "🤖 Make Predictions", "📊 Benchmark Comparison"])
+            tab1, tab2 = st.tabs(["Performance Results", "Make Predictions"])
             
             with tab1:
                 st.subheader("Model Performance")
@@ -2671,7 +2616,7 @@ def app():
                                         st.write(result['error'])
                                     else:
                                         prediction = result['prediction']
-                                        label_text = "✅ True" if prediction == 1 else "❌ False" if prediction == 0 else "❓ Unknown"
+                                        label_text = "True" if prediction == 1 else "False" if prediction == 0 else "Unknown"
                                         color = "green" if prediction == 1 else "red" if prediction == 0 else "gray"
                                         
                                         st.markdown(f"""
@@ -2697,79 +2642,6 @@ def app():
                                     st.metric("Consensus", consensus)
                                 with col2:
                                     st.metric("Confidence", f"{confidence:.1f}%")
-            
-            with tab3:
-                st.subheader("Benchmark Comparison")
-                
-                if not st.session_state['google_benchmark_results'].empty:
-                    # Compare training results with benchmark results
-                    training_results = st.session_state['df_results'].copy()
-                    benchmark_results = st.session_state['google_benchmark_results'].copy()
-                    
-                    # Merge results
-                    comparison_df = pd.merge(
-                        training_results[['Model', 'Accuracy', 'F1-Score']],
-                        benchmark_results[['Model', 'Accuracy', 'F1-Score']],
-                        on='Model',
-                        suffixes=(' (Training)', ' (Google)')
-                    )
-                    
-                    st.dataframe(comparison_df, use_container_width=True)
-                    
-                    # Visualization
-                    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-                    
-                    # Accuracy comparison
-                    models = comparison_df['Model']
-                    x = range(len(models))
-                    width = 0.35
-                    
-                    axes[0].bar([i - width/2 for i in x], comparison_df['Accuracy (Training)'], width, label='Training', color='#2196F3')
-                    axes[0].bar([i + width/2 for i in x], comparison_df['Accuracy (Google)'], width, label='Google Benchmark', color='#4CAF50')
-                    axes[0].set_title('Accuracy Comparison: Training vs Google Benchmark')
-                    axes[0].set_xlabel('Model')
-                    axes[0].set_ylabel('Accuracy %')
-                    axes[0].set_xticks(x)
-                    axes[0].set_xticklabels(models, rotation=45)
-                    axes[0].legend()
-                    axes[0].grid(True, alpha=0.3)
-                    
-                    # F1-Score comparison
-                    axes[1].bar([i - width/2 for i in x], comparison_df['F1-Score (Training)'], width, label='Training', color='#2196F3')
-                    axes[1].bar([i + width/2 for i in x], comparison_df['F1-Score (Google)'], width, label='Google Benchmark', color='#4CAF50')
-                    axes[1].set_title('F1-Score Comparison: Training vs Google Benchmark')
-                    axes[1].set_xlabel('Model')
-                    axes[1].set_ylabel('F1-Score')
-                    axes[1].set_xticks(x)
-                    axes[1].set_xticklabels(models, rotation=45)
-                    axes[1].legend()
-                    axes[1].grid(True, alpha=0.3)
-                    
-                    plt.tight_layout()
-                    st.pyplot(fig)
-                    
-                    # Performance degradation analysis
-                    st.subheader("Performance Analysis")
-                    
-                    comparison_df['Accuracy Drop'] = comparison_df['Accuracy (Training)'] - comparison_df['Accuracy (Google)']
-                    comparison_df['F1 Drop'] = comparison_df['F1-Score (Training)'] - comparison_df['F1-Score (Google)']
-                    
-                    # Find best performing model on benchmark
-                    best_benchmark_idx = comparison_df['Accuracy (Google)'].idxmax()
-                    best_model = comparison_df.loc[best_benchmark_idx, 'Model']
-                    best_accuracy = comparison_df.loc[best_benchmark_idx, 'Accuracy (Google)']
-                    
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        avg_drop = comparison_df['Accuracy Drop'].mean()
-                        st.metric("Average Accuracy Drop", f"{avg_drop:.1f}%")
-                    with col2:
-                        best_drop = comparison_df['Accuracy Drop'].min()
-                        st.metric("Best Model Drop", f"{best_drop:.1f}%")
-                    with col3:
-                        st.metric("Best on Benchmark", f"{best_model}: {best_accuracy:.1f}%")
-                else:
-                    st.info("No benchmark results available. Run benchmark testing first.")
 
 if __name__ == '__main__':
     app()
