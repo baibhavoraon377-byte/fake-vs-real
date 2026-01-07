@@ -1371,9 +1371,6 @@ def get_google_api_key():
         # secrets.toml
         GOOGLE_API_KEY = "your_actual_api_key_here"
         ```
-        
-        For local development, create a `.streamlit/secrets.toml` file.
-        For deployment, add the secret in your deployment platform.
         """)
         return None
 
