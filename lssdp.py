@@ -34,6 +34,17 @@ from joblib import dump, load
 import json
 import pathlib
 
+# --- Try to install spaCy model if not present ---
+try:
+    import subprocess
+    import sys
+    import spacy
+    spacy.load("en_core_web_sm")
+    print("spaCy model loaded successfully")
+except OSError:
+    print("Downloading spaCy model...")
+    subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
+
 # --- Configuration ---
 SCRAPED_DATA_PATH = 'politifact_data.csv'
 N_SPLITS = 5
@@ -48,28 +59,24 @@ GOOGLE_FALSE_RATINGS = ["False", "Mostly False", "Pants on Fire", "Pants on Fire
 @st.cache_resource
 def load_spacy_model():
     try:
-        return spacy.load("en_core_web_sm")
+        nlp = spacy.load("en_core_web_sm")
+        print("spaCy model loaded successfully via @st.cache_resource")
+        return nlp
     except OSError as e:
-        st.error("SpaCy model 'en_core_web_sm' not found. Ensure it's in requirements (or add the wheel URL) and that the model is installed.")
-        st.code("""
-# Example to place in requirements.txt:
-https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
-""", language='text')
-        # try to auto-download
+        st.error("SpaCy model 'en_core_web_sm' not found.")
         try:
             import subprocess, sys
             st.info("Attempting to download spaCy model automatically...")
             subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
             return spacy.load("en_core_web_sm")
         except Exception as ee:
-            st.error("Automatic spaCy model download failed. Please install manually.")
-            raise e
+            st.error("Failed to download spaCy model. Please install manually:")
+            st.code("python -m spacy download en_core_web_sm")
+            return None
 
-NLP_MODEL = None
-try:
-    NLP_MODEL = load_spacy_model()
-except Exception:
-    # If model couldn't be loaded, stop the app (it won't function properly).
+NLP_MODEL = load_spacy_model()
+if NLP_MODEL is None:
+    st.error("CRITICAL: Could not load spaCy model. The app cannot function properly.")
     st.stop()
 
 stop_words = STOP_WORDS
@@ -667,28 +674,32 @@ def get_classifier(name):
     return None
 
 def apply_feature_extraction(X, phase, vectorizer=None):
-    if phase == "Lexical & Morphological":
-        X_processed = X.apply(lexical_features)
-        vectorizer = vectorizer if vectorizer else CountVectorizer(binary=True, ngram_range=(1,2))
-        X_features = vectorizer.fit_transform(X_processed)
-        return X_features, vectorizer
-    elif phase == "Syntactic":
-        X_processed = X.apply(syntactic_features)
-        vectorizer = vectorizer if vectorizer else TfidfVectorizer(max_features=5000)
-        X_features = vectorizer.fit_transform(X_processed)
-        return X_features, vectorizer
-    elif phase == "Semantic":
-        X_features = pd.DataFrame(X.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"])
-        return X_features, None
-    elif phase == "Discourse":
-        X_processed = X.apply(discourse_features)
-        vectorizer = vectorizer if vectorizer else CountVectorizer(ngram_range=(1,2), max_features=5000)
-        X_features = vectorizer.fit_transform(X_processed)
-        return X_features, vectorizer
-    elif phase == "Pragmatic":
-        X_features = pd.DataFrame(X.apply(pragmatic_features).tolist(), columns=pragmatic_words)
-        return X_features, None
-    return None, None
+    try:
+        if phase == "Lexical & Morphological":
+            X_processed = X.apply(lexical_features)
+            vectorizer = vectorizer if vectorizer else CountVectorizer(binary=True, ngram_range=(1,2), max_features=1000)
+            X_features = vectorizer.fit_transform(X_processed)
+            return X_features, vectorizer
+        elif phase == "Syntactic":
+            X_processed = X.apply(syntactic_features)
+            vectorizer = vectorizer if vectorizer else TfidfVectorizer(max_features=500)
+            X_features = vectorizer.fit_transform(X_processed)
+            return X_features, vectorizer
+        elif phase == "Semantic":
+            X_features = pd.DataFrame(X.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"])
+            return X_features.values, None
+        elif phase == "Discourse":
+            X_processed = X.apply(discourse_features)
+            vectorizer = vectorizer if vectorizer else CountVectorizer(ngram_range=(1,2), max_features=500)
+            X_features = vectorizer.fit_transform(X_processed)
+            return X_features, vectorizer
+        elif phase == "Pragmatic":
+            X_features = pd.DataFrame(X.apply(pragmatic_features).tolist(), columns=pragmatic_words)
+            return X_features.values, None
+        return None, None
+    except Exception as e:
+        st.error(f"Error in apply_feature_extraction: {e}")
+        return None, None
 
 # --------------------------
 # Save & Load trained models (joblib)
@@ -702,12 +713,14 @@ def save_trained_models(trained_models: dict, vectorizer, selected_phase):
                 path = MODELS_DIR / f"{name.replace(' ', '_')}.joblib"
                 try:
                     dump(model, path)
+                    print(f"Saved model: {name}")
                 except Exception as e:
                     st.warning(f"Failed to save {name}: {e}")
         # save vectorizer if present
         if vectorizer is not None:
             try:
                 dump(vectorizer, MODELS_DIR / "vectorizer.joblib")
+                print(f"Saved vectorizer")
             except Exception as e:
                 st.warning(f"Failed to save vectorizer: {e}")
         # save metadata (selected phase)
@@ -834,350 +847,138 @@ def predict_single_text(text, trained_models, vectorizer, selected_phase):
     return results
 
 # --------------------------
-# Improved Model training & evaluation with accuracy optimization
+# FIXED Model training & evaluation with error handling
 # --------------------------
 def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 'statement', label_column: str = 'label', use_smote: bool = True):
-    # Use binary_label column if it exists, otherwise use label column
-    if 'binary_label' in df.columns:
-        label_col_to_use = 'binary_label'
-        # Filter out unknown labels (-1)
-        df = df[df['binary_label'] != -1].copy()
-    else:
-        label_col_to_use = label_column
-    
-    # Map labels to binary if needed
-    REAL_LABELS = ["true", "mostly true", "accurate", "correct", "real", "fact", "1"]
-    FAKE_LABELS = ["false", "mostly false", "pants on fire", "fake", "incorrect", "baseless", "misleading", "0"]
-
-    def create_binary_target(label):
-        if pd.isna(label):
-            return np.nan
-        label_str = str(label).lower().strip()
-        if any(true_label in label_str for true_label in REAL_LABELS):
-            return 1
-        elif any(false_label in label_str for false_label in FAKE_LABELS):
-            return 0
-        elif label_str.isdigit():
-            num_label = int(label_str)
-            if num_label == 1:
-                return 1
-            elif num_label == 0:
-                return 0
-        return np.nan
-
-    if label_col_to_use != 'binary_label':
-        df['target_label'] = df[label_col_to_use].apply(create_binary_target)
-    else:
-        df['target_label'] = df[label_col_to_use]
-    
-    df = df.dropna(subset=['target_label'])
-    df = df[df[text_column].astype(str).str.len() > 10]
-    X_raw = df[text_column].astype(str)
-    y_raw = df['target_label'].astype(int)
-    
-    if len(np.unique(y_raw)) < 2:
-        st.error("After binary mapping, only one class remains (all Real or all Fake). Cannot train classifier.")
-        return pd.DataFrame(), {}, None
-
-    # Check class distribution for SMOTE decision
-    class_counts = y_raw.value_counts()
-    imbalance_ratio = min(class_counts) / max(class_counts)
-    
-    # Auto-adjust SMOTE usage based on imbalance
-    if imbalance_ratio < 0.3 and use_smote:
-        st.info(f"Class imbalance detected (ratio: {imbalance_ratio:.2f}). Using SMOTE for better accuracy.")
-    elif imbalance_ratio >= 0.3 and use_smote:
-        st.info(f"Classes are relatively balanced (ratio: {imbalance_ratio:.2f}). Proceeding with SMOTE as requested.")
-
-    X_features_full, vectorizer = apply_feature_extraction(X_raw, selected_phase)
-    if X_features_full is None:
-        st.error("Feature extraction failed.")
-        return pd.DataFrame(), {}, None
-    
-    # Convert sparse matrix to dense if needed for certain phases
-    if hasattr(X_features_full, "toarray") and selected_phase in ["Semantic", "Pragmatic"]:
-        X_features_full = X_features_full.toarray()
-    
-    if isinstance(X_features_full, pd.DataFrame):
-        X_features_full = X_features_full.values
-    y = y_raw.values
-    
-    # Adjust hyperparameters based on feature phase for better accuracy
-    model_params = {
-        "Naive Bayes": {
-            "alpha": 0.1 if selected_phase in ["Lexical & Morphological", "Syntactic"] else 0.5,
-            "fit_prior": True
-        },
-        "Decision Tree": {
-            "max_depth": 20 if selected_phase in ["Semantic", "Pragmatic"] else 15,
-            "min_samples_split": 5,
-            "min_samples_leaf": 2,
-            "max_features": 'sqrt' if selected_phase in ["Lexical & Morphological", "Discourse"] else None
-        },
-        "Logistic Regression": {
-            "C": 1.0 if selected_phase in ["Semantic", "Pragmatic"] else 0.5,
-            "penalty": 'l2',
-            "solver": 'liblinear',
-            "max_iter": 2000
-        },
-        "SVM": {
-            "C": 0.5 if selected_phase in ["Lexical & Morphological", "Syntactic"] else 1.0,
-            "kernel": 'linear',
-            "gamma": 'scale'
-        }
-    }
-    
-    models_to_run = {
-        "Naive Bayes": MultinomialNB(**model_params["Naive Bayes"]),
-        "Decision Tree": DecisionTreeClassifier(
-            random_state=42, 
-            class_weight='balanced',
-            **{k: v for k, v in model_params["Decision Tree"].items() if k != 'max_features'}
-        ),
-        "Logistic Regression": LogisticRegression(
-            max_iter=model_params["Logistic Regression"]["max_iter"],
-            solver=model_params["Logistic Regression"]["solver"],
-            random_state=42, 
-            class_weight='balanced',
-            C=model_params["Logistic Regression"]["C"],
-            penalty=model_params["Logistic Regression"]["penalty"]
-        ),
-        "SVM": SVC(
-            kernel=model_params["SVM"]["kernel"],
-            C=model_params["SVM"]["C"],
-            random_state=42, 
-            class_weight='balanced',
-            gamma=model_params["SVM"]["gamma"]
-        )
-    }
-    
-    skf = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=42)
-    model_metrics = {name: [] for name in models_to_run.keys()}
-    X_raw_list = X_raw.tolist()
-
-    for name, model in models_to_run.items():
-        st.caption(f"Training {name} with {N_SPLITS}-Fold CV and optimized parameters...")
-        fold_metrics = {'accuracy': [], 'f1': [], 'precision': [], 'recall': [], 'train_time': [], 'inference_time': []}
+    try:
+        # Check if dataframe is empty
+        if df.empty:
+            st.error("DataFrame is empty! Please load data first.")
+            return pd.DataFrame(), {}, None
         
-        for fold, (train_index, test_index) in enumerate(skf.split(X_features_full, y)):
-            X_train_raw = pd.Series([X_raw_list[i] for i in train_index])
-            X_test_raw = pd.Series([X_raw_list[i] for i in test_index])
-            y_train = y[train_index]
-            y_test = y[test_index]
+        st.info(f"📊 Data shape: {df.shape[0]} rows, {df.shape[1]} columns")
+        
+        # Check for required columns
+        if text_column not in df.columns:
+            st.error(f"Text column '{text_column}' not found in data!")
+            st.info(f"Available columns: {list(df.columns)}")
+            return pd.DataFrame(), {}, None
+        
+        # Check if binary_label exists, otherwise create it
+        if 'binary_label' not in df.columns:
+            st.warning("'binary_label' column not found. Creating binary labels...")
+            df = create_binary_label_column(df, label_column)
+        
+        # Filter out unknown labels (-1) and check we have data
+        df_clean = df[df['binary_label'] != -1].copy()
+        if df_clean.empty:
+            st.error("No valid binary labels (0 or 1) found after filtering!")
+            return pd.DataFrame(), {}, None
+        
+        # Check class distribution
+        class_counts = df_clean['binary_label'].value_counts()
+        st.info(f"✅ Class distribution: {dict(class_counts)}")
+        
+        if len(class_counts) < 2:
+            st.error(f"Only one class found ({class_counts.index[0]}). Need at least 2 classes for training.")
+            return pd.DataFrame(), {}, None
+        
+        # Prepare data
+        X_raw = df_clean[text_column].astype(str)
+        y = df_clean['binary_label'].values.astype(int)
+        
+        # Debug info
+        st.info(f"📝 Sample claims: {list(X_raw.head(3))}")
+        st.info(f"🎯 Sample labels: {list(y[:3])}")
+        
+        # Apply feature extraction
+        st.info(f"🔧 Extracting {selected_phase} features...")
+        X_features, vectorizer = apply_feature_extraction(X_raw, selected_phase)
+        
+        if X_features is None:
+            st.error("Feature extraction failed!")
+            return pd.DataFrame(), {}, None
+        
+        # Convert to dense if sparse and small dataset
+        if hasattr(X_features, "shape"):
+            st.info(f"✅ Features shape: {X_features.shape}")
+            if X_features.shape[0] < 100:  # Small dataset
+                if hasattr(X_features, "toarray"):
+                    X_features = X_features.toarray()
+        
+        # Define models with SIMPLE parameters
+        models_config = {
+            "Naive Bayes": MultinomialNB(alpha=0.1),
+            "Decision Tree": DecisionTreeClassifier(random_state=42, max_depth=5),
+            "Logistic Regression": LogisticRegression(max_iter=1000, random_state=42, solver='liblinear'),
+            "SVM": SVC(kernel='linear', random_state=42, probability=True, max_iter=1000)
+        }
+        
+        results = []
+        trained_models_final = {}
+        
+        # Simple training without cross-validation for debugging
+        for name, model in models_config.items():
+            st.info(f"🤖 Training {name}...")
             
-            if vectorizer is not None:
-                if 'Lexical' in selected_phase:
-                    X_train = vectorizer.transform(X_train_raw.apply(lexical_features))
-                    X_test = vectorizer.transform(X_test_raw.apply(lexical_features))
-                elif 'Syntactic' in selected_phase:
-                    X_train = vectorizer.transform(X_train_raw.apply(syntactic_features))
-                    X_test = vectorizer.transform(X_test_raw.apply(syntactic_features))
-                elif 'Discourse' in selected_phase:
-                    X_train = vectorizer.transform(X_train_raw.apply(discourse_features))
-                    X_test = vectorizer.transform(X_test_raw.apply(discourse_features))
-                else:
-                    X_train = vectorizer.transform(X_train_raw)
-                    X_test = vectorizer.transform(X_test_raw)
-            else:
-                X_train, _ = apply_feature_extraction(X_train_raw, selected_phase)
-                X_test, _ = apply_feature_extraction(X_test_raw, selected_phase)
-            
-            # Convert sparse to dense for models that don't handle sparse well
-            if hasattr(X_train, "toarray") and name in ["Naive Bayes", "Decision Tree"]:
-                X_train = X_train.toarray()
-                X_test = X_test.toarray()
-            
-            start_time = time.time()
             try:
-                if name == "Naive Bayes":
-                    X_train_final = np.abs(X_train).astype(float)
-                    clf = model
-                    clf.fit(X_train_final, y_train)
-                else:
-                    if use_smote:
-                        # Ensure we have enough samples for SMOTE
-                        min_class_count = np.min(np.bincount(y_train))
-                        k_neighbors = min(3, min_class_count - 1) if min_class_count > 1 else 1
-                        
-                        smote_pipeline = ImbPipeline([
-                            ('sampler', SMOTE(random_state=42, k_neighbors=k_neighbors)), 
-                            ('classifier', model)
-                        ])
-                        smote_pipeline.fit(X_train, y_train)
-                        clf = smote_pipeline
-                    else:
-                        clf = model
-                        clf.fit(X_train, y_train)
-                
+                # Fit the model
+                start_time = time.time()
+                model.fit(X_features, y)
                 train_time = time.time() - start_time
-                start_inference = time.time()
-                y_pred = clf.predict(X_test)
-                inference_time = (time.time() - start_inference) * 1000
                 
-                fold_metrics['accuracy'].append(accuracy_score(y_test, y_pred))
-                fold_metrics['f1'].append(f1_score(y_test, y_pred, average='weighted', zero_division=0))
-                fold_metrics['precision'].append(precision_score(y_test, y_pred, average='weighted', zero_division=0))
-                fold_metrics['recall'].append(recall_score(y_test, y_pred, average='weighted', zero_division=0))
-                fold_metrics['train_time'].append(train_time)
-                fold_metrics['inference_time'].append(inference_time)
+                # Make predictions
+                y_pred = model.predict(X_features)
+                
+                # Calculate metrics
+                accuracy = accuracy_score(y, y_pred) * 100
+                f1 = f1_score(y, y_pred, average='weighted', zero_division=0)
+                precision = precision_score(y, y_pred, average='weighted', zero_division=0)
+                recall = recall_score(y, y_pred, average='weighted', zero_division=0)
+                
+                # Store results
+                results.append({
+                    'Model': name,
+                    'Accuracy': round(accuracy, 2),
+                    'F1-Score': round(f1, 4),
+                    'Precision': round(precision, 4),
+                    'Recall': round(recall, 4),
+                    'Training Time (s)': round(train_time, 2),
+                    'Inference Latency (ms)': 0
+                })
+                
+                trained_models_final[name] = model
+                st.success(f"✅ {name} trained successfully! Accuracy: {accuracy:.2f}%")
                 
             except Exception as e:
-                st.warning(f"Fold {fold+1} failed for {name}: {e}")
-                # Use simpler model as fallback
-                try:
-                    if name != "Naive Bayes":
-                        fallback_model = LogisticRegression(max_iter=1000, random_state=42)
-                        fallback_model.fit(X_train, y_train)
-                        y_pred = fallback_model.predict(X_test)
-                        
-                        fold_metrics['accuracy'].append(accuracy_score(y_test, y_pred))
-                        fold_metrics['f1'].append(f1_score(y_test, y_pred, average='weighted', zero_division=0))
-                        fold_metrics['precision'].append(precision_score(y_test, y_pred, average='weighted', zero_division=0))
-                        fold_metrics['recall'].append(recall_score(y_test, y_pred, average='weighted', zero_division=0))
-                        fold_metrics['train_time'].append(time.time() - start_time)
-                        fold_metrics['inference_time'].append((time.time() - start_inference) * 1000)
-                    else:
-                        for key in fold_metrics:
-                            fold_metrics[key].append(0)
-                except:
-                    for key in fold_metrics:
-                        fold_metrics[key].append(0)
-        
-        if fold_metrics['accuracy'] and any(acc > 0 for acc in fold_metrics['accuracy']):
-            # Calculate weighted metrics, giving more weight to better performing folds
-            weights = np.array(fold_metrics['accuracy']) / sum(fold_metrics['accuracy'])
-            
-            model_metrics[name] = {
-                "Model": name,
-                "Accuracy": np.average(fold_metrics['accuracy'], weights=weights) * 100,
-                "F1-Score": np.average(fold_metrics['f1'], weights=weights),
-                "Precision": np.average(fold_metrics['precision'], weights=weights),
-                "Recall": np.average(fold_metrics['recall'], weights=weights),
-                "Training Time (s)": round(np.mean(fold_metrics['train_time']), 2),
-                "Inference Latency (ms)": round(np.mean(fold_metrics['inference_time']), 2),
-            }
-        else:
-            st.error(f"{name} failed across all folds.")
-            model_metrics[name] = {
-                "Model": name, "Accuracy": 0, "F1-Score": 0, "Precision": 0, "Recall": 0,
-                "Training Time (s)": 0, "Inference Latency (ms)": 9999,
-            }
-
-    # Train final models on full dataset with optimized parameters
-    st.caption("Training final models on complete dataset with optimized parameters...")
-    trained_models_final = {}
-    
-    for name in models_to_run.keys():
-        try:
-            # Use optimized parameters for final training
-            if name == "Naive Bayes":
-                final_model = MultinomialNB(**model_params["Naive Bayes"])
-            elif name == "Decision Tree":
-                final_model = DecisionTreeClassifier(
-                    random_state=42, 
-                    class_weight='balanced',
-                    **{k: v for k, v in model_params["Decision Tree"].items() if k != 'max_features'}
-                )
-            elif name == "Logistic Regression":
-                final_model = LogisticRegression(
-                    max_iter=model_params["Logistic Regression"]["max_iter"],
-                    solver=model_params["Logistic Regression"]["solver"],
-                    random_state=42, 
-                    class_weight='balanced',
-                    C=model_params["Logistic Regression"]["C"],
-                    penalty=model_params["Logistic Regression"]["penalty"]
-                )
-            elif name == "SVM":
-                final_model = SVC(
-                    kernel=model_params["SVM"]["kernel"],
-                    C=model_params["SVM"]["C"],
-                    random_state=42, 
-                    class_weight='balanced',
-                    gamma=model_params["SVM"]["gamma"]
-                )
-            
-            if vectorizer is not None:
-                if 'Lexical' in selected_phase:
-                    X_final_processed = X_raw.apply(lexical_features)
-                elif 'Syntactic' in selected_phase:
-                    X_final_processed = X_raw.apply(syntactic_features)
-                elif 'Discourse' in selected_phase:
-                    X_final_processed = X_raw.apply(discourse_features)
-                else:
-                    X_final_processed = X_raw
-                X_final = vectorizer.transform(X_final_processed)
-            else:
-                X_final = X_features_full
-            
-            # Convert sparse to dense for models that don't handle sparse well
-            if hasattr(X_final, "toarray") and name in ["Naive Bayes", "Decision Tree"]:
-                X_final = X_final.toarray()
-            
-            if name == "Naive Bayes":
-                X_final_train = np.abs(X_final).astype(float)
-                final_model.fit(X_final_train, y)
-                trained_models_final[name] = final_model
-            else:
-                if use_smote:
-                    # Ensure we have enough samples for SMOTE
-                    min_class_count = np.min(np.bincount(y))
-                    k_neighbors = min(3, min_class_count - 1) if min_class_count > 1 else 1
-                    
-                    smote_pipeline_final = ImbPipeline([
-                        ('sampler', SMOTE(random_state=42, k_neighbors=k_neighbors)), 
-                        ('classifier', final_model)
-                    ])
-                    smote_pipeline_final.fit(X_final, y)
-                    trained_models_final[name] = smote_pipeline_final
-                else:
-                    final_model.fit(X_final, y)
-                    trained_models_final[name] = final_model
-            
-            # Validate final model
-            if hasattr(final_model, 'predict'):
-                try:
-                    if hasattr(X_final, "shape"):
-                        sample_size = min(100, X_final.shape[0])
-                        X_sample = X_final[:sample_size]
-                        y_sample = y[:sample_size]
-                    else:
-                        sample_size = min(100, len(X_final))
-                        X_sample = X_final[:sample_size]
-                        y_sample = y[:sample_size]
-                    
-                    y_pred_final = final_model.predict(X_sample)
-                    accuracy_final = accuracy_score(y_sample, y_pred_final)
-                    if accuracy_final < 0.5:
-                        st.warning(f"Final {name} model shows low accuracy ({accuracy_final:.2%}) on training sample")
-                except:
-                    pass  # Skip validation if it fails
-                    
-        except Exception as e:
-            st.error(f"Failed to train final {name} model: {str(e)[:100]}...")  # Show truncated error
-            # Try a simpler approach as fallback
-            try:
-                st.info(f"Trying fallback training for {name}...")
-                if hasattr(X_final, "toarray"):
-                    X_final_dense = X_final.toarray()
-                else:
-                    X_final_dense = X_final
-                
-                fallback_model = LogisticRegression(max_iter=1000, random_state=42)
-                fallback_model.fit(X_final_dense, y)
-                trained_models_final[name] = fallback_model
-                st.success(f"Fallback training successful for {name}")
-            except Exception as fallback_e:
-                st.error(f"Fallback also failed for {name}: {str(fallback_e)[:100]}...")
+                st.error(f"❌ Failed to train {name}: {str(e)[:200]}")
+                results.append({
+                    'Model': name,
+                    'Accuracy': 0,
+                    'F1-Score': 0,
+                    'Precision': 0,
+                    'Recall': 0,
+                    'Training Time (s)': 0,
+                    'Inference Latency (ms)': 0
+                })
                 trained_models_final[name] = None
-
-    # Save trained models & vectorizer
-    try:
-        save_trained_models(trained_models_final, vectorizer, selected_phase)
+        
+        # Create results dataframe
+        df_results = pd.DataFrame(results)
+        
+        # Save models
+        try:
+            save_trained_models(trained_models_final, vectorizer, selected_phase)
+        except Exception as e:
+            st.warning(f"Could not save models: {e}")
+        
+        return df_results, trained_models_final, vectorizer
+        
     except Exception as e:
-        st.warning(f"Saving after training failed: {e}")
-
-    results_list = list(model_metrics.values())
-    return pd.DataFrame(results_list), trained_models_final, vectorizer
+        st.error(f"❌ CRITICAL ERROR in evaluate_models: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
+        return pd.DataFrame(), {}, None
 
 # --------------------------
 # Humor & critique functions
@@ -1224,6 +1025,118 @@ def generate_humorous_critique(df_results: pd.DataFrame, selected_phase: str) ->
         f"*(Disclaimer: All models were equally confused by the 'Mostly True' label, which they collectively deemed an existential threat.)*"
     )
     return summary + roast
+
+# --------------------------
+# Helper function to show verification results
+# --------------------------
+def show_verification_results(verification_df):
+    """Helper function to display verification results"""
+    if verification_df.empty:
+        st.warning("No verification results to display.")
+        return
+    
+    with st.expander("Verification Results", expanded=True):
+        # Show summary statistics
+        found_df = verification_df[verification_df['google_verification'] == 'Found']
+        if not found_df.empty:
+            # Calculate accuracy if we have original binary labels
+            if 'binary_label' in found_df.columns and 'google_binary_label' in found_df.columns:
+                # Filter only where both labels exist
+                valid_comparisons = found_df.dropna(subset=['binary_label', 'google_binary_label'])
+                valid_comparisons = valid_comparisons[valid_comparisons['google_binary_label'] != -1]
+                
+                if len(valid_comparisons) > 0:
+                    matches = (valid_comparisons['binary_label'] == valid_comparisons['google_binary_label']).sum()
+                    accuracy = matches / len(valid_comparisons) * 100
+                    st.info(f"Google API vs Original Labels Accuracy: {accuracy:.1f}% ({matches}/{len(valid_comparisons)} matches)")
+        
+        # Show detailed results
+        display_cols = ['original_statement', 'original_label', 'google_verification', 
+                       'google_rating', 'match_score', 'verification_confidence']
+        if 'google_binary_label' in verification_df.columns:
+            display_cols.append('google_binary_label')
+        
+        st.dataframe(verification_df[display_cols], use_container_width=True)
+        
+        # Visualization of verification results
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(14, 10))
+        
+        # 1. Pie chart: Found vs Not Found
+        found_count = len(verification_df[verification_df['google_verification'] == 'Found'])
+        not_found_count = len(verification_df) - found_count
+        
+        if found_count + not_found_count > 0:
+            ax1.pie([found_count, not_found_count], 
+                   labels=['Verified', 'Not Found'], 
+                   autopct='%1.1f%%',
+                   colors=['#4CAF50', '#F44336'])
+            ax1.set_title('Google API Verification Results')
+        else:
+            ax1.text(0.5, 0.5, 'No data', ha='center', va='center')
+            ax1.set_title('No Verification Data')
+        
+        # 2. Bar chart: Confidence levels
+        if found_count > 0:
+            conf_counts = verification_df['verification_confidence'].value_counts()
+            colors_conf = {'High': '#4CAF50', 'Medium': '#FF9800', 'Low': '#F44336'}
+            conf_colors = [colors_conf.get(conf, '#9E9E9E') for conf in conf_counts.index]
+            
+            bars = ax2.bar(range(len(conf_counts)), conf_counts.values, 
+                          color=conf_colors, edgecolor='black')
+            ax2.set_xlabel('Confidence Level')
+            ax2.set_ylabel('Count')
+            ax2.set_title('Verification Confidence Levels')
+            ax2.set_xticks(range(len(conf_counts)))
+            ax2.set_xticklabels(conf_counts.index, fontsize=9)
+            
+            # Add count labels
+            for bar, count in zip(bars, conf_counts.values):
+                height = bar.get_height()
+                ax2.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                        f'{count}', ha='center', va='bottom', fontsize=9)
+        else:
+            ax2.text(0.5, 0.5, 'No matches found', ha='center', va='center')
+            ax2.set_title('No Verification Matches')
+        
+        # 3. Histogram: Match scores
+        if found_count > 0:
+            match_scores = verification_df['match_score'].dropna()
+            ax3.hist(match_scores, bins=10, color='#2196F3', edgecolor='black', alpha=0.7)
+            ax3.set_xlabel('Match Score')
+            ax3.set_ylabel('Count')
+            ax3.set_title('Claim Match Scores Distribution')
+            ax3.axvline(x=0.5, color='red', linestyle='--', alpha=0.5, label='Threshold (0.5)')
+            ax3.legend()
+        else:
+            ax3.text(0.5, 0.5, 'No match scores', ha='center', va='center')
+            ax3.set_title('No Match Scores')
+        
+        # 4. Google rating distribution
+        if found_count > 0:
+            rating_counts = verification_df['google_rating'].value_counts().head(10)
+            if len(rating_counts) > 0:
+                bars4 = ax4.bar(range(len(rating_counts)), rating_counts.values, 
+                               color='#9C27B0', edgecolor='black', alpha=0.7)
+                ax4.set_xlabel('Google Rating')
+                ax4.set_ylabel('Count')
+                ax4.set_title('Top 10 Google Ratings')
+                ax4.set_xticks(range(len(rating_counts)))
+                ax4.set_xticklabels(rating_counts.index, rotation=45, ha='right', fontsize=8)
+                
+                # Add count labels
+                for bar, count in zip(bars4, rating_counts.values):
+                    height = bar.get_height()
+                    ax4.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                            f'{count}', ha='center', va='bottom', fontsize=8)
+            else:
+                ax4.text(0.5, 0.5, 'No ratings', ha='center', va='center')
+                ax4.set_title('No Ratings Found')
+        else:
+            ax4.text(0.5, 0.5, 'No ratings', ha='center', va='center')
+            ax4.set_title('No Ratings Found')
+        
+        plt.tight_layout()
+        st.pyplot(fig)
 
 # --------------------------
 # STREAMLIT APP
@@ -1988,13 +1901,58 @@ def app():
     elif page == "Model Training":
         st.markdown("<h1 class='main-header'>Model Training</h1>", unsafe_allow_html=True)
         
+        # Debug: Show session state
+        with st.expander("🔍 Debug Info", expanded=False):
+            st.write("Session State Keys:", list(st.session_state.keys()))
+            if 'scraped_df' in st.session_state:
+                st.write("Scraped DF shape:", st.session_state['scraped_df'].shape)
+            if 'filtered_df' in st.session_state:
+                st.write("Filtered DF shape:", st.session_state['filtered_df'].shape)
+            if st.session_state.get('csv_columns_selected', False):
+                st.write("Selected columns:")
+                st.write(f"- Text: {st.session_state['selected_text_column']}")
+                st.write(f"- Label: {st.session_state['selected_label_column']}")
+                if st.session_state['selected_date_column']:
+                    st.write(f"- Date: {st.session_state['selected_date_column']}")
+        
         # Use filtered data if available, otherwise use scraped data
         training_df = st.session_state.get('filtered_df', st.session_state['scraped_df'])
         
         if training_df.empty:
-            st.warning("Please collect data first from the Data Collection page!")
-            if st.button("Go to Data Collection", use_container_width=True):
-                st.switch_page("Data Collection")
+            st.warning("⚠️ Please collect data first from the Data Collection page!")
+            st.info("📊 You can:")
+            st.write("1. Upload a CSV file with claim statements and labels")
+            st.write("2. Scrape data from Politifact website")
+            st.write("3. Make sure your data has both 'statement' and 'label' columns")
+            
+            # Add test data button
+            if st.button("🚀 Load Test Data for Training Demo", key="test_data_btn", use_container_width=True):
+                # Create test data
+                test_data = pd.DataFrame({
+                    'statement': [
+                        'The earth is flat and NASA is hiding the truth from us.',
+                        'Vaccines are completely safe and effective for 95% of the population.',
+                        'The moon landing was filmed in a Hollywood studio in 1969.',
+                        'Climate change is primarily caused by human activities and carbon emissions.',
+                        'You can cure COVID-19 by drinking bleach and taking horse medication.',
+                        'Regular exercise improves cardiovascular health.',
+                        'Sugar is bad for your health in large quantities.',
+                        'Drinking 8 glasses of water per day is essential.',
+                        'COVID-19 vaccines cause autism.',
+                        'The government is putting microchips in vaccines.'
+                    ],
+                    'binary_label': [0, 1, 0, 1, 0, 1, 1, 1, 0, 0],
+                    'label': ['False', 'True', 'False', 'True', 'False', 'True', 'True', 'True', 'False', 'False']
+                })
+                
+                st.session_state['scraped_df'] = test_data
+                st.session_state['filtered_df'] = test_data
+                st.session_state['selected_text_column'] = 'statement'
+                st.session_state['selected_label_column'] = 'label'
+                st.session_state['csv_columns_selected'] = True
+                
+                st.success("✅ Test data loaded! You can now proceed with training.")
+                st.dataframe(test_data, use_container_width=True)
         else:
             # Show which columns are being used
             if st.session_state.get('csv_columns_selected', False):
@@ -2036,7 +1994,7 @@ def app():
                     st.warning("Google API verification was performed but no verified claims were found.")
             
             # Data preview
-            with st.expander("Training Data Preview", expanded=False):
+            with st.expander("📊 Training Data Preview", expanded=False):
                 if use_verified_data and st.session_state.get('verification_performed', False):
                     verification_df = st.session_state.get('filtered_verification_df', st.session_state.get('verification_df', pd.DataFrame()))
                     verified_claims = verification_df[verification_df['google_verification'] == 'Found']
@@ -2083,166 +2041,230 @@ def app():
                     plt.tight_layout()
                     st.pyplot(fig)
             
-            if st.button("Run Model Analysis", key="analyze_btn", use_container_width=True, type="primary"):
-                with st.spinner(f"Training 4 models with {N_SPLITS}-Fold CV..."):
-                    # Select appropriate data source
-                    if use_verified_data and st.session_state.get('verification_performed', False):
-                        # Use verified data
-                        verification_df = st.session_state.get('filtered_verification_df', st.session_state.get('verification_df', pd.DataFrame()))
-                        verified_df = verification_df[verification_df['google_verification'] == 'Found']
+            # Training button with error handling
+            if st.button("🚀 Run Model Training", key="analyze_btn", use_container_width=True, type="primary"):
+                try:
+                    with st.spinner(f"🤖 Training 4 models with {selected_phase} features..."):
+                        # Select appropriate data source
+                        if use_verified_data and st.session_state.get('verification_performed', False):
+                            # Use verified data
+                            verification_df = st.session_state.get('filtered_verification_df', st.session_state.get('verification_df', pd.DataFrame()))
+                            verified_df = verification_df[verification_df['google_verification'] == 'Found']
+                            
+                            # Create a DataFrame compatible with evaluate_models
+                            training_data = pd.DataFrame({
+                                'statement': verified_df['original_statement'],
+                                'label': verified_df['original_label']
+                            })
+                            
+                            # Try to get binary labels from Google verification
+                            if 'google_binary_label' in verified_df.columns:
+                                training_data['binary_label'] = verified_df['google_binary_label']
+                                # Filter out unknown labels
+                                training_data = training_data[training_data['binary_label'] != -1]
+                            
+                            st.info(f"✅ Using {len(training_data)} Google-verified claims for training")
+                        else:
+                            # Use original/filtered data
+                            training_data = training_df.copy()
                         
-                        # Create a DataFrame compatible with evaluate_models
-                        training_data = pd.DataFrame({
-                            'statement': verified_df['original_statement'],
-                            'label': verified_df['original_label']
-                        })
+                        # Check if we have data
+                        if training_data.empty:
+                            st.error("❌ No data available for training!")
+                            return
                         
-                        # Try to get binary labels from Google verification
-                        if 'google_binary_label' in verified_df.columns:
-                            training_data['binary_label'] = verified_df['google_binary_label']
-                            # Filter out unknown labels
-                            training_data = training_data[training_data['binary_label'] != -1]
+                        # Check if binary_label exists
+                        if 'binary_label' not in training_data.columns:
+                            st.warning("Creating binary labels from text labels...")
+                            training_data = create_binary_label_column(training_data, 'label')
                         
-                        st.info(f"Using {len(training_data)} Google-verified claims for training")
-                    else:
-                        # Use original/filtered data
-                        training_data = training_df.copy()
+                        # Check we have enough valid labels
+                        valid_data = training_data[training_data['binary_label'] != -1]
+                        if valid_data.empty:
+                            st.error("❌ No valid binary labels (0 or 1) found!")
+                            return
+                        
+                        st.info(f"📊 Training on {len(valid_data)} claims with binary labels...")
+                        
+                        # Run training
+                        df_results, trained_models, trained_vectorizer = evaluate_models(
+                            training_data, 
+                            selected_phase, 
+                            text_column='statement',
+                            label_column='label',
+                            use_smote=use_smote
+                        )
+                        
+                        if not df_results.empty:
+                            st.session_state['df_results'] = df_results
+                            st.session_state['trained_models'] = trained_models
+                            st.session_state['trained_vectorizer'] = trained_vectorizer
+                            st.session_state['selected_phase_run'] = selected_phase
+                            
+                            # Count successfully trained models
+                            successful_models = sum(1 for m in trained_models.values() if m is not None)
+                            st.success(f"✅ Training complete! {successful_models} out of 4 models trained and saved to disk.")
+                            
+                            # Show immediate results
+                            st.subheader("📈 Training Results")
+                            st.dataframe(df_results, use_container_width=True)
+                            
+                            # Show best model
+                            if not df_results.empty:
+                                best_model = df_results.loc[df_results['Accuracy'].idxmax()]
+                                st.info(f"🏆 **Best Model:** {best_model['Model']} with {best_model['Accuracy']:.2f}% accuracy")
+                        else:
+                            st.error("❌ Model training failed. Please check your data and try again.")
+                            
+                except Exception as e:
+                    st.error(f"❌ Training failed with error: {str(e)}")
+                    st.code(f"Error details: {str(e)}", language='text')
                     
-                    df_results, trained_models, trained_vectorizer = evaluate_models(
-                        training_data, 
-                        selected_phase, 
-                        text_column='statement',
-                        label_column='label',
-                        use_smote=use_smote
+                    # Provide troubleshooting tips
+                    st.subheader("🔧 Troubleshooting Tips:")
+                    st.write("1. Check that your data has a 'binary_label' column with values 0 and 1")
+                    st.write("2. Make sure you have at least 5 claims for training")
+                    st.write("3. Try a simpler feature extraction method (Lexical & Morphological)")
+                    st.write("4. Check the Debug Info expander above for data details")
+
+    # --- BENCHMARK TESTING ---
+    elif page == "Benchmark Testing":
+        st.markdown("<h1 class='main-header'>Benchmark Testing</h1>", unsafe_allow_html=True)
+        
+        st.write("Test your trained models against Google Fact Check API data.")
+        
+        if not st.session_state['trained_models'] or all(v is None for v in st.session_state['trained_models'].values()):
+            st.warning("No trained models found. Please train models first on the Model Training page.")
+        else:
+            st.success(f"Found {sum(1 for m in st.session_state['trained_models'].values() if m is not None)} trained models.")
+            
+            # Benchmark options
+            benchmark_source = st.radio("Benchmark data source:", ["Fetch from Google API", "Use Demo Data"], horizontal=True)
+            
+            if benchmark_source == "Fetch from Google API":
+                if 'GOOGLE_API_KEY' not in st.secrets:
+                    st.error("Google API Key not found in secrets.toml. Please add it to run benchmark.")
+                else:
+                    num_claims = st.slider("Number of claims to fetch from Google", 10, 200, 50)
+                    
+                    if st.button("Fetch Google Claims & Run Benchmark", key="benchmark_btn", use_container_width=True, type="primary"):
+                        with st.spinner("Fetching Google Fact Check API data..."):
+                            api_key = st.secrets["GOOGLE_API_KEY"]
+                            google_claims = fetch_google_claims(api_key, num_claims)
+                            
+                            if google_claims:
+                                google_df = process_and_map_google_claims(google_claims)
+                                st.session_state['google_df'] = google_df
+                                
+                                if not google_df.empty:
+                                    st.success(f"Fetched {len(google_df)} claims from Google API")
+                                    
+                                    # Run benchmark
+                                    benchmark_results = run_google_benchmark(
+                                        google_df, 
+                                        st.session_state['trained_models'], 
+                                        st.session_state['trained_vectorizer'], 
+                                        st.session_state['selected_phase_run']
+                                    )
+                                    
+                                    if not benchmark_results.empty:
+                                        st.session_state['google_benchmark_results'] = benchmark_results
+                                        st.subheader("Benchmark Results")
+                                        st.dataframe(benchmark_results, use_container_width=True)
+                                        
+                                        # Show best model
+                                        best_benchmark = benchmark_results.loc[benchmark_results['Accuracy'].idxmax()]
+                                        st.info(f"🏆 **Best Model on Google Data:** {best_benchmark['Model']} with {best_benchmark['Accuracy']:.2f}% accuracy")
+                            else:
+                                st.error("Failed to fetch Google claims.")
+            
+            else:  # Use Demo Data
+                if st.button("Run Benchmark with Demo Data", key="demo_benchmark_btn", use_container_width=True):
+                    demo_claims = get_demo_google_claims()
+                    google_df = process_and_map_google_claims(demo_claims)
+                    st.session_state['google_df'] = google_df
+                    
+                    st.success(f"Using {len(google_df)} demo claims for benchmark")
+                    
+                    # Run benchmark
+                    benchmark_results = run_google_benchmark(
+                        google_df, 
+                        st.session_state['trained_models'], 
+                        st.session_state['trained_vectorizer'], 
+                        st.session_state['selected_phase_run']
                     )
                     
-                    if not df_results.empty:
-                        st.session_state['df_results'] = df_results
-                        st.session_state['trained_models'] = trained_models
-                        st.session_state['trained_vectorizer'] = trained_vectorizer
-                        st.session_state['selected_phase_run'] = selected_phase
-                        
-                        # Count successfully trained models
-                        successful_models = sum(1 for m in trained_models.values() if m is not None)
-                        st.success(f"Analysis complete! {successful_models} out of 4 models trained and saved to disk.")
-                        
-                        # Show immediate results
-                        st.subheader("Training Results")
-                        st.dataframe(df_results, use_container_width=True)
-                    else:
-                        st.error("Model training failed. Please check your data and try again.")
+                    if not benchmark_results.empty:
+                        st.session_state['google_benchmark_results'] = benchmark_results
+                        st.subheader("Benchmark Results (Demo Data)")
+                        st.dataframe(benchmark_results, use_container_width=True)
 
-def show_verification_results(verification_df):
-    """Helper function to display verification results"""
-    if verification_df.empty:
-        st.warning("No verification results to display.")
-        return
-    
-    with st.expander("Verification Results", expanded=True):
-        # Show summary statistics
-        found_df = verification_df[verification_df['google_verification'] == 'Found']
-        if not found_df.empty:
-            # Calculate accuracy if we have original binary labels
-            if 'binary_label' in found_df.columns and 'google_binary_label' in found_df.columns:
-                # Filter only where both labels exist
-                valid_comparisons = found_df.dropna(subset=['binary_label', 'google_binary_label'])
-                valid_comparisons = valid_comparisons[valid_comparisons['google_binary_label'] != -1]
-                
-                if len(valid_comparisons) > 0:
-                    matches = (valid_comparisons['binary_label'] == valid_comparisons['google_binary_label']).sum()
-                    accuracy = matches / len(valid_comparisons) * 100
-                    st.info(f"Google API vs Original Labels Accuracy: {accuracy:.1f}% ({matches}/{len(valid_comparisons)} matches)")
+    # --- RESULTS & ANALYSIS ---
+    elif page == "Results & Analysis":
+        st.markdown("<h1 class='main-header'>Results & Analysis</h1>", unsafe_allow_html=True)
         
-        # Show detailed results
-        display_cols = ['original_statement', 'original_label', 'google_verification', 
-                       'google_rating', 'match_score', 'verification_confidence']
-        if 'google_binary_label' in verification_df.columns:
-            display_cols.append('google_binary_label')
-        
-        st.dataframe(verification_df[display_cols], use_container_width=True)
-        
-        # Visualization of verification results
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(14, 10))
-        
-        # 1. Pie chart: Found vs Not Found
-        found_count = len(verification_df[verification_df['google_verification'] == 'Found'])
-        not_found_count = len(verification_df) - found_count
-        
-        if found_count + not_found_count > 0:
-            ax1.pie([found_count, not_found_count], 
-                   labels=['Verified', 'Not Found'], 
-                   autopct='%1.1f%%',
-                   colors=['#4CAF50', '#F44336'])
-            ax1.set_title('Google API Verification Results')
+        # Check if we have results
+        if st.session_state['df_results'].empty:
+            st.warning("No training results found. Please train models first.")
         else:
-            ax1.text(0.5, 0.5, 'No data', ha='center', va='center')
-            ax1.set_title('No Verification Data')
-        
-        # 2. Bar chart: Confidence levels
-        if found_count > 0:
-            conf_counts = verification_df['verification_confidence'].value_counts()
-            colors_conf = {'High': '#4CAF50', 'Medium': '#FF9800', 'Low': '#F44336'}
-            conf_colors = [colors_conf.get(conf, '#9E9E9E') for conf in conf_counts.index]
+            # Show training results
+            st.subheader("📊 Model Performance")
+            st.dataframe(st.session_state['df_results'], use_container_width=True)
             
-            bars = ax2.bar(range(len(conf_counts)), conf_counts.values, 
-                          color=conf_colors, edgecolor='black')
-            ax2.set_xlabel('Confidence Level')
-            ax2.set_ylabel('Count')
-            ax2.set_title('Verification Confidence Levels')
-            ax2.set_xticks(range(len(conf_counts)))
-            ax2.set_xticklabels(conf_counts.index, fontsize=9)
+            # Add humorous critique
+            if not st.session_state['df_results'].empty and st.session_state['selected_phase_run']:
+                st.markdown("---")
+                st.subheader("🎭 AI Performance Review")
+                critique = generate_humorous_critique(st.session_state['df_results'], st.session_state['selected_phase_run'])
+                st.markdown(critique)
             
-            # Add count labels
-            for bar, count in zip(bars, conf_counts.values):
-                height = bar.get_height()
-                ax2.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                        f'{count}', ha='center', va='bottom', fontsize=9)
-        else:
-            ax2.text(0.5, 0.5, 'No matches found', ha='center', va='center')
-            ax2.set_title('No Verification Matches')
-        
-        # 3. Histogram: Match scores
-        if found_count > 0:
-            match_scores = verification_df['match_score'].dropna()
-            ax3.hist(match_scores, bins=10, color='#2196F3', edgecolor='black', alpha=0.7)
-            ax3.set_xlabel('Match Score')
-            ax3.set_ylabel('Count')
-            ax3.set_title('Claim Match Scores Distribution')
-            ax3.axvline(x=0.5, color='red', linestyle='--', alpha=0.5, label='Threshold (0.5)')
-            ax3.legend()
-        else:
-            ax3.text(0.5, 0.5, 'No match scores', ha='center', va='center')
-            ax3.set_title('No Match Scores')
-        
-        # 4. Google rating distribution
-        if found_count > 0:
-            rating_counts = verification_df['google_rating'].value_counts().head(10)
-            if len(rating_counts) > 0:
-                bars4 = ax4.bar(range(len(rating_counts)), rating_counts.values, 
-                               color='#9C27B0', edgecolor='black', alpha=0.7)
-                ax4.set_xlabel('Google Rating')
-                ax4.set_ylabel('Count')
-                ax4.set_title('Top 10 Google Ratings')
-                ax4.set_xticks(range(len(rating_counts)))
-                ax4.set_xticklabels(rating_counts.index, rotation=45, ha='right', fontsize=8)
-                
-                # Add count labels
-                for bar, count in zip(bars4, rating_counts.values):
-                    height = bar.get_height()
-                    ax4.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                            f'{count}', ha='center', va='bottom', fontsize=8)
-            else:
-                ax4.text(0.5, 0.5, 'No ratings', ha='center', va='center')
-                ax4.set_title('No Ratings Found')
-        else:
-            ax4.text(0.5, 0.5, 'No ratings', ha='center', va='center')
-            ax4.set_title('No Ratings Found')
-        
-        plt.tight_layout()
-        st.pyplot(fig)
-
-# The rest of the code (BENCHMARK TESTING and RESULTS & ANALYSIS sections remain the same)
-# ... [Rest of the code continues with Benchmark Testing and Results & Analysis sections]
+            # Show benchmark results if available
+            if not st.session_state['google_benchmark_results'].empty:
+                st.markdown("---")
+                st.subheader("📈 Google API Benchmark Results")
+                st.dataframe(st.session_state['google_benchmark_results'], use_container_width=True)
+            
+            # Real-time prediction
+            st.markdown("---")
+            st.subheader("🔮 Real-time Claim Verification")
+            
+            claim_text = st.text_area("Enter a claim to verify:", 
+                                     placeholder="e.g., 'The Earth is flat'", 
+                                     height=100)
+            
+            if claim_text:
+                if not st.session_state['trained_models']:
+                    st.error("No trained models available. Please train models first.")
+                else:
+                    if st.button("Analyze Claim", key="predict_btn", use_container_width=True):
+                        with st.spinner("Analyzing claim..."):
+                            results = predict_single_text(
+                                claim_text, 
+                                st.session_state['trained_models'], 
+                                st.session_state['trained_vectorizer'], 
+                                st.session_state['selected_phase_run']
+                            )
+                            
+                            if 'error' in results:
+                                st.error(results['error'])
+                            else:
+                                st.subheader("Prediction Results")
+                                
+                                # Create results display
+                                result_cols = st.columns(4)
+                                for idx, (model_name, result) in enumerate(results.items()):
+                                    col_idx = idx % 4
+                                    with result_cols[col_idx]:
+                                        if 'error' in result:
+                                            st.error(f"{model_name}: Error")
+                                        else:
+                                            prediction = result['prediction']
+                                            if prediction == 1:
+                                                st.success(f"✅ {model_name}: TRUE")
+                                            elif prediction == 0:
+                                                st.error(f"❌ {model_name}: FALSE")
+                                            else:
+                                                st.warning(f"⚠️ {model_name}: UNKNOWN")
 
 if __name__ == '__main__':
     app()
