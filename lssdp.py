@@ -1,5 +1,5 @@
 # lssdp.py
-# Updated Streamlit app with dedicated Google API verification section
+# Updated Streamlit app with Google API verification via secrets.toml
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -109,7 +109,7 @@ def fetch_google_claims(api_key, num_claims=100):
             placeholder.text(f"Fetching Google claims... {len(collected_claims)} collected so far")
             response = requests.get(base_url, params=params, timeout=15)
             if response.status_code == 401:
-                st.error("Invalid API key. Please check your GOOGLE_API_KEY in .streamlit/secrets.toml")
+                st.error("Invalid API key. Please check your GOOGLE_API_KEY in secrets.toml")
                 return []
             elif response.status_code == 403:
                 st.error("API access forbidden. Ensure 'Fact Check Tools API' is enabled in Google Cloud Console.")
@@ -1350,6 +1350,34 @@ def show_verification_results(verification_df):
         st.pyplot(fig)
 
 # --------------------------
+# GOOGLE API KEY MANAGEMENT
+# --------------------------
+def get_google_api_key():
+    """
+    Get Google API key from secrets.toml
+    """
+    if 'GOOGLE_API_KEY' in st.secrets:
+        return st.secrets["GOOGLE_API_KEY"]
+    else:
+        st.error("Google API Key not found in secrets.toml")
+        st.info("""
+        To use Google Fact Check API, you need to:
+        
+        1. Get a Google API key from Google Cloud Console
+        2. Enable the "Fact Check Tools API"
+        3. Add the API key to your secrets.toml file:
+        
+        ```
+        # secrets.toml
+        GOOGLE_API_KEY = "your_actual_api_key_here"
+        ```
+        
+        For local development, create a `.streamlit/secrets.toml` file.
+        For deployment, add the secret in your deployment platform.
+        """)
+        return None
+
+# --------------------------
 # STREAMLIT APP
 # --------------------------
 def app():
@@ -2059,17 +2087,10 @@ def app():
     elif page == "Google API Verification":
         st.markdown("<h1 class='main-header'>Google API Verification</h1>", unsafe_allow_html=True)
         
-        # Check if Google API key is available
-        if 'GOOGLE_API_KEY' not in st.secrets:
-            st.error("⚠️ Google API Key not found in secrets.toml")
-            st.info("Please add your Google API key to `.streamlit/secrets.toml`:")
-            st.code("""
-            # .streamlit/secrets.toml
-            GOOGLE_API_KEY = "your_google_api_key_here"
-            """, language='toml')
+        # Get Google API key
+        api_key = get_google_api_key()
+        if not api_key:
             st.stop()
-        
-        api_key = st.secrets["GOOGLE_API_KEY"]
         
         # Check if we have data to verify
         if st.session_state['scraped_df'].empty:
@@ -2472,10 +2493,10 @@ def app():
         else:
             st.write("Test your trained models against Google Fact Check API claims.")
             
-            # Fetch Google claims
-            if 'GOOGLE_API_KEY' not in st.secrets:
-                st.error("Google API Key not found in secrets.toml")
-                return
+            # Get Google API key
+            api_key = get_google_api_key()
+            if not api_key:
+                st.stop()
             
             col1, col2 = st.columns(2)
             with col1:
@@ -2484,7 +2505,6 @@ def app():
             with col2:
                 if st.button("Fetch Google Claims", key="fetch_google_btn", use_container_width=True):
                     with st.spinner(f"Fetching {num_google_claims} claims from Google Fact Check API..."):
-                        api_key = st.secrets["GOOGLE_API_KEY"]
                         google_claims = fetch_google_claims(api_key, num_google_claims)
                         if google_claims:
                             google_df = process_and_map_google_claims(google_claims)
