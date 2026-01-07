@@ -1,3 +1,5 @@
+# lssdp.py
+# Updated Streamlit app with CSV upload from Politifact and Google API verification
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,6 +13,7 @@ import random
 import matplotlib.pyplot as plt
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
+from datetime import datetime, timedelta
 
 # NLP & ML
 import spacy
@@ -261,12 +264,12 @@ def run_google_benchmark(google_df, trained_models, vectorizer, selected_phase):
     return pd.DataFrame(results_list)
 
 # --------------------------
-# GOOGLE API VERIFICATION FOR CSV DATA
+# GOOGLE API VERIFICATION FOR CSV DATA (ENHANCED)
 # --------------------------
-def verify_with_google_api(df, api_key, max_verifications=50, text_column='statement'):
+def verify_with_google_api_enhanced(df, api_key, max_verifications=50, text_column='statement'):
     """
-    Verify claims from CSV using Google Fact Check API
-    Returns DataFrame with additional verification columns
+    Enhanced Google API verification that also extracts additional information
+    Returns DataFrame with comprehensive verification columns
     """
     if df.empty or text_column not in df.columns:
         return df
@@ -289,47 +292,102 @@ def verify_with_google_api(df, api_key, max_verifications=50, text_column='state
         result = {
             'original_statement': claim_text,
             'original_label': row.get('label', ''),
+            'original_binary_label': row.get('binary_label', ''),
             'original_date': row.get('date', ''),
             'original_source': row.get('source', ''),
             'google_verification': 'Not Found',
             'google_rating': '',
+            'google_rating_normalized': '',
             'match_score': 0.0,
             'verification_url': '',
-            'google_claim_text': ''
+            'google_claim_text': '',
+            'google_publisher': '',
+            'google_claim_date': '',
+            'google_review_date': '',
+            'verification_confidence': 'Low'
         }
         
         try:
-            # Call Google API
+            # Call Google API with better query
             params = {
                 'key': api_key,
-                'query': claim_text[:500],  # Limit query length
+                'query': claim_text[:300],  # Shorter query for better results
                 'languageCode': 'en',
-                'pageSize': 1
+                'pageSize': 3,  # Get more results for better matching
+                'maxAgeDays': 365  # Limit to recent claims
             }
             
-            response = requests.get(base_url, params=params, timeout=10)
+            response = requests.get(base_url, params=params, timeout=15)
             
             if response.status_code == 200:
                 data = response.json()
                 if 'claims' in data and data['claims']:
-                    # Found matching claim
-                    google_claim = data['claims'][0]
-                    result['google_verification'] = 'Found'
-                    result['google_rating'] = google_claim.get('claimReview', [{}])[0].get('textualRating', '')
-                    result['verification_url'] = google_claim.get('claimReview', [{}])[0].get('url', '')
-                    result['google_claim_text'] = google_claim.get('text', '')
+                    # Find best matching claim
+                    best_match = None
+                    best_score = 0
                     
-                    # Calculate similarity score
-                    original_text = claim_text.lower()
-                    google_text = google_claim.get('text', '').lower()
+                    for claim_obj in data['claims'][:3]:  # Check top 3 results
+                        google_text = claim_obj.get('text', '')
+                        if not google_text:
+                            continue
+                        
+                        # Calculate similarity score
+                        original_lower = claim_text.lower()
+                        google_lower = google_text.lower()
+                        
+                        # Use multiple similarity measures
+                        # 1. Word overlap
+                        original_words = set(re.findall(r'\w+', original_lower))
+                        google_words = set(re.findall(r'\w+', google_lower))
+                        
+                        if original_words and google_words:
+                            overlap = len(original_words.intersection(google_words))
+                            total = len(original_words.union(google_words))
+                            word_score = overlap / total if total > 0 else 0
+                            
+                            # 2. Length similarity
+                            len_similarity = 1 - abs(len(original_lower) - len(google_lower)) / max(len(original_lower), len(google_lower))
+                            
+                            # 3. Combined score
+                            combined_score = (word_score * 0.7) + (len_similarity * 0.3)
+                            
+                            if combined_score > best_score:
+                                best_score = combined_score
+                                best_match = claim_obj
                     
-                    # Simple word overlap score
-                    original_words = set(re.findall(r'\w+', original_text))
-                    google_words = set(re.findall(r'\w+', google_text))
-                    if original_words and google_words:
-                        overlap = len(original_words.intersection(google_words))
-                        total = len(original_words.union(google_words))
-                        result['match_score'] = overlap / total if total > 0 else 0
+                    if best_match and best_score > 0.3:  # Minimum threshold
+                        claim_reviews = best_match.get('claimReview', [])
+                        if claim_reviews:
+                            review = claim_reviews[0]
+                            result['google_verification'] = 'Found'
+                            result['google_rating'] = review.get('textualRating', '')
+                            result['google_rating_normalized'] = result['google_rating'].lower().strip().rstrip('!').rstrip('?')
+                            result['match_score'] = best_score
+                            result['verification_url'] = review.get('url', '')
+                            result['google_claim_text'] = best_match.get('text', '')
+                            result['google_publisher'] = review.get('publisher', {}).get('name', '')
+                            result['google_claim_date'] = best_match.get('claimDate', '')
+                            result['google_review_date'] = review.get('reviewDate', '')
+                            
+                            # Set confidence level based on match score
+                            if best_score >= 0.7:
+                                result['verification_confidence'] = 'High'
+                            elif best_score >= 0.5:
+                                result['verification_confidence'] = 'Medium'
+                            else:
+                                result['verification_confidence'] = 'Low'
+                            
+                            # Extract binary label from Google rating
+                            rating_normalized = result['google_rating_normalized']
+                            is_true = any(rating_normalized == r.lower() for r in GOOGLE_TRUE_RATINGS)
+                            is_false = any(rating_normalized == r.lower() for r in GOOGLE_FALSE_RATINGS)
+                            
+                            if is_true:
+                                result['google_binary_label'] = 1
+                            elif is_false:
+                                result['google_binary_label'] = 0
+                            else:
+                                result['google_binary_label'] = -1  # Unknown
                     
             elif response.status_code == 429:
                 st.warning("Rate limit reached. Pausing for 2 seconds...")
@@ -342,7 +400,7 @@ def verify_with_google_api(df, api_key, max_verifications=50, text_column='state
             continue
         
         verified_claims.append(result)
-        time.sleep(0.2)  # Small delay to avoid rate limits
+        time.sleep(0.3)  # Increased delay to avoid rate limits
     
     progress_bar.empty()
     status_text.empty()
@@ -352,11 +410,102 @@ def verify_with_google_api(df, api_key, max_verifications=50, text_column='state
         
         # Add verification summary
         found_count = len(verification_df[verification_df['google_verification'] == 'Found'])
-        st.info(f"Google API Verification Complete: Found {found_count}/{sample_size} claims ({found_count/sample_size*100:.1f}%)")
+        if found_count > 0:
+            high_conf = len(verification_df[(verification_df['google_verification'] == 'Found') & 
+                                           (verification_df['verification_confidence'] == 'High')])
+            medium_conf = len(verification_df[(verification_df['google_verification'] == 'Found') & 
+                                             (verification_df['verification_confidence'] == 'Medium')])
+            
+            st.info(f"Google API Verification Complete: Found {found_count}/{sample_size} claims ({found_count/sample_size*100:.1f}%)")
+            st.info(f"Confidence Levels: High: {high_conf}, Medium: {medium_conf}, Low: {found_count-high_conf-medium_conf}")
+        else:
+            st.warning("No matches found with Google API.")
         
         return verification_df
     else:
         return pd.DataFrame()
+
+# --------------------------
+# CSV PROCESSING FUNCTIONS
+# --------------------------
+def create_binary_label_column(df, label_column):
+    """
+    Automatically create binary labels (0/1) from various label formats
+    """
+    if df.empty or label_column not in df.columns:
+        return df
+    
+    df = df.copy()
+    
+    # Define label mappings
+    TRUE_LABELS = ["true", "mostly true", "accurate", "correct", "real", "fact", "1", "yes", "y"]
+    FALSE_LABELS = ["false", "mostly false", "pants on fire", "fake", "incorrect", "baseless", "misleading", "0", "no", "n"]
+    
+    # Initialize binary label column
+    df['binary_label'] = -1  # Default to unknown
+    
+    for idx, row in df.iterrows():
+        label = str(row[label_column]).lower().strip()
+        
+        # Check for True labels
+        if any(true_label in label for true_label in TRUE_LABELS):
+            df.at[idx, 'binary_label'] = 1
+        # Check for False labels
+        elif any(false_label in label for false_label in FALSE_LABELS):
+            df.at[idx, 'binary_label'] = 0
+        # Check for numeric labels
+        elif label.isdigit():
+            num_label = int(label)
+            if num_label == 1:
+                df.at[idx, 'binary_label'] = 1
+            elif num_label == 0:
+                df.at[idx, 'binary_label'] = 0
+    
+    # Count statistics
+    true_count = len(df[df['binary_label'] == 1])
+    false_count = len(df[df['binary_label'] == 0])
+    unknown_count = len(df[df['binary_label'] == -1])
+    
+    if true_count + false_count > 0:
+        st.success(f"Created binary labels: {true_count} True (1), {false_count} False (0), {unknown_count} Unknown")
+        
+        # Create readable label column
+        df['label_readable'] = df['binary_label'].map({1: 'True', 0: 'False', -1: 'Unknown'})
+        
+        # For training, we'll use binary_label (0/1) and filter out unknowns
+        # For display, we'll use label_readable
+    else:
+        st.warning("Could not automatically create binary labels from the selected column.")
+        # Fallback: Create random binary labels for testing (remove in production)
+        # df['binary_label'] = np.random.randint(0, 2, len(df))
+        # df['label_readable'] = df['binary_label'].map({1: 'True', 0: 'False'})
+        # st.info("Created random binary labels for testing purposes.")
+    
+    return df
+
+def filter_by_date_range(df, date_column, start_date, end_date):
+    """
+    Filter DataFrame by date range
+    """
+    if df.empty or date_column not in df.columns:
+        return df
+    
+    df = df.copy()
+    
+    # Convert date column to datetime
+    try:
+        df['date_parsed'] = pd.to_datetime(df[date_column], errors='coerce')
+        
+        # Filter by date range
+        mask = (df['date_parsed'] >= pd.Timestamp(start_date)) & (df['date_parsed'] <= pd.Timestamp(end_date))
+        filtered_df = df[mask].copy()
+        
+        st.info(f"Filtered to {len(filtered_df)} claims from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+        
+        return filtered_df
+    except Exception as e:
+        st.error(f"Error parsing dates: {e}")
+        return df
 
 # --------------------------
 # CSV TEMPLATE FUNCTION
@@ -365,7 +514,8 @@ def get_politifact_csv_template():
     """Generate a template CSV structure for Politifact data"""
     template = {
         'statement': 'The claim text goes here',
-        'label': 'True/False/Mostly True/etc',
+        'rating': 'False',  # Can be True/False/Mostly True/etc
+        'binary_rating': 0,  # 0 for False, 1 for True
         'date': '2023-01-15',
         'source': 'Politifact',
         'author': 'Author Name',
@@ -657,18 +807,39 @@ def predict_single_text(text, trained_models, vectorizer, selected_phase):
 # Improved Model training & evaluation with accuracy optimization
 # --------------------------
 def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 'statement', label_column: str = 'label', use_smote: bool = True):
-    REAL_LABELS = ["True", "No Flip", "Mostly True", "Half Flip", "Half True"]
-    FAKE_LABELS = ["False", "Barely True", "Pants On Fire", "Full Flop"]
+    # Use binary_label column if it exists, otherwise use label column
+    if 'binary_label' in df.columns:
+        label_col_to_use = 'binary_label'
+        # Filter out unknown labels (-1)
+        df = df[df['binary_label'] != -1].copy()
+    else:
+        label_col_to_use = label_column
+    
+    # Map labels to binary if needed
+    REAL_LABELS = ["true", "mostly true", "accurate", "correct", "real", "fact", "1"]
+    FAKE_LABELS = ["false", "mostly false", "pants on fire", "fake", "incorrect", "baseless", "misleading", "0"]
 
     def create_binary_target(label):
-        if label in REAL_LABELS:
-            return 1
-        elif label in FAKE_LABELS:
-            return 0
-        else:
+        if pd.isna(label):
             return np.nan
+        label_str = str(label).lower().strip()
+        if any(true_label in label_str for true_label in REAL_LABELS):
+            return 1
+        elif any(false_label in label_str for false_label in FAKE_LABELS):
+            return 0
+        elif label_str.isdigit():
+            num_label = int(label_str)
+            if num_label == 1:
+                return 1
+            elif num_label == 0:
+                return 0
+        return np.nan
 
-    df['target_label'] = df[label_column].apply(create_binary_target)
+    if label_col_to_use != 'binary_label':
+        df['target_label'] = df[label_col_to_use].apply(create_binary_target)
+    else:
+        df['target_label'] = df[label_col_to_use]
+    
     df = df.dropna(subset=['target_label'])
     df = df[df[text_column].astype(str).str.len() > 10]
     X_raw = df[text_column].astype(str)
@@ -1211,8 +1382,12 @@ def app():
         st.session_state['selected_text_column'] = 'statement'
     if 'selected_label_column' not in st.session_state:
         st.session_state['selected_label_column'] = 'label'
+    if 'selected_date_column' not in st.session_state:
+        st.session_state['selected_date_column'] = 'date'
     if 'csv_columns_selected' not in st.session_state:
         st.session_state['csv_columns_selected'] = False
+    if 'filtered_df' not in st.session_state:
+        st.session_state['filtered_df'] = pd.DataFrame()
 
     # Attempt to load previously saved models on startup (only once)
     if 'models_loaded_attempted' not in st.session_state:
@@ -1240,12 +1415,15 @@ def app():
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
+            total_claims = len(st.session_state.get('filtered_df', pd.DataFrame()))
+            if total_claims == 0:
+                total_claims = len(st.session_state['scraped_df']) if not st.session_state['scraped_df'].empty else 0
             st.markdown(f'''
             <div style="background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--light-blue); margin-bottom: 15px;">
                 <h3 style="color: var(--accent-blue);">Data Overview</h3>
                 <p>Collect and manage training data</p>
                 <p style="font-size: 20px; font-weight: bold; color: var(--accent-blue);">
-                    {len(st.session_state['scraped_df']) if not st.session_state['scraped_df'].empty else 0} claims
+                    {total_claims} claims
                 </p>
             </div>
             ''', unsafe_allow_html=True)
@@ -1279,8 +1457,9 @@ def app():
             verification_rate = 0
             if verification_count > 0:
                 verified_df = st.session_state['verification_df']
-                verified_count = len(verified_df[verified_df['google_verification'] == 'Found'])
-                verification_rate = (verified_count / verification_count * 100) if verification_count > 0 else 0
+                found_verified = verified_df[verified_df['google_verification'] == 'Found']
+                found_count = len(found_verified)
+                verification_rate = (found_count / verification_count * 100) if verification_count > 0 else 0
             
             st.markdown(f'''
             <div style="background: var(--white); padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--light-blue); margin-bottom: 15px;">
@@ -1305,15 +1484,18 @@ def app():
             
             # CSV format help
             with st.expander("📋 CSV Format Help", expanded=False):
-                st.write("Your CSV should have at minimum two columns:")
+                st.write("Your CSV should have at minimum these columns:")
                 st.code("""
-                [text_column], [label_column]
-                "The Earth is flat","False"
-                "Vaccines are safe","True"
-                "Climate change is real","Mostly True"
+                [text_column], [label_column], [date_column (optional)]
+                "The Earth is flat","False","2023-01-15"
+                "Vaccines are safe","True","2023-02-20"
+                "Climate change is real","Mostly True","2023-03-10"
                 """, language='text')
                 
-                st.write("You can name your columns anything you want. After uploading, you'll be asked to select which column contains the text and which contains the labels.")
+                st.write("Label column can contain:")
+                st.write("- Text labels: 'True', 'False', 'Mostly True', etc.")
+                st.write("- Binary labels: '1' for True, '0' for False")
+                st.write("- Numeric labels: 1 for True, 0 for False")
                 
                 if st.button("Download Template CSV", key="template_btn"):
                     template_df = get_politifact_csv_template()
@@ -1342,14 +1524,14 @@ def app():
                     if not all_columns:
                         st.error("CSV file has no columns!")
                     else:
-                        # Let user select text and label columns
-                        col1, col2 = st.columns(2)
+                        # Let user select text, label, and date columns
+                        col1, col2, col3 = st.columns(3)
                         
                         with col1:
                             text_column = st.selectbox(
                                 "Select column containing claim text:",
                                 all_columns,
-                                index=0 if 'statement' in all_columns else 0,
+                                index=0,
                                 key="text_column_select"
                             )
                         
@@ -1357,102 +1539,204 @@ def app():
                             label_column = st.selectbox(
                                 "Select column containing labels/ratings:",
                                 all_columns,
-                                index=1 if 'label' in all_columns and len(all_columns) > 1 else (0 if len(all_columns) > 1 else 0),
+                                index=1 if len(all_columns) > 1 else 0,
                                 key="label_column_select"
                             )
                         
+                        with col3:
+                            # Find date columns
+                            date_candidates = [col for col in all_columns if any(date_word in col.lower() for date_word in ['date', 'time', 'year', 'month', 'day'])]
+                            if date_candidates:
+                                default_date_idx = all_columns.index(date_candidates[0])
+                            else:
+                                default_date_idx = 2 if len(all_columns) > 2 else (1 if len(all_columns) > 1 else 0)
+                            
+                            date_column = st.selectbox(
+                                "Select date column (optional):",
+                                ['None'] + all_columns,
+                                index=0,
+                                key="date_column_select"
+                            )
+                            if date_column == 'None':
+                                date_column = None
+                        
                         # Show preview of selected columns
                         st.write("Preview of selected columns:")
-                        preview_df = scraped_df[[text_column, label_column]].head(10)
+                        preview_cols = [text_column, label_column]
+                        if date_column:
+                            preview_cols.append(date_column)
+                        preview_df = scraped_df[preview_cols].head(10)
                         st.dataframe(preview_df, use_container_width=True)
                         
-                        # Option to rename columns for internal use
-                        rename_cols = st.checkbox("Use standard column names internally (recommended)", value=True)
-                        
-                        if rename_cols:
-                            # Rename columns to standard names for internal processing
-                            processed_df = scraped_df.rename(columns={
+                        # Load button
+                        if st.button("Load Data with Selected Columns", key="load_csv_btn", use_container_width=True, type="primary"):
+                            processed_df = scraped_df.copy()
+                            
+                            # Save selections to session state
+                            st.session_state['selected_text_column'] = text_column
+                            st.session_state['selected_label_column'] = label_column
+                            st.session_state['selected_date_column'] = date_column
+                            
+                            # Rename columns for internal processing
+                            processed_df = processed_df.rename(columns={
                                 text_column: 'statement',
                                 label_column: 'label'
                             })
                             
-                            # Copy other columns as-is
-                            other_columns = [col for col in all_columns if col not in [text_column, label_column]]
-                            for col in other_columns:
-                                processed_df[col] = scraped_df[col]
-                        else:
-                            processed_df = scraped_df.copy()
-                            # Still need to set standard names for processing
-                            processed_df['statement'] = processed_df[text_column]
-                            processed_df['label'] = processed_df[label_column]
-                        
-                        # Save selections to session state
-                        st.session_state['selected_text_column'] = text_column
-                        st.session_state['selected_label_column'] = label_column
-                        st.session_state['csv_columns_selected'] = True
-                        
-                        # Load button
-                        if st.button("Load Data with Selected Columns", key="load_csv_btn", use_container_width=True, type="primary"):
+                            if date_column:
+                                processed_df['date'] = scraped_df[date_column]
+                            
+                            # Automatically create binary labels (0/1)
+                            st.info("Creating binary labels (0/1) from selected label column...")
+                            processed_df = create_binary_label_column(processed_df, 'label')
+                            
+                            # Store in session state
                             st.session_state['scraped_df'] = processed_df
+                            st.session_state['csv_columns_selected'] = True
+                            st.session_state['filtered_df'] = processed_df.copy()  # Initially no filter
+                            
                             st.success(f"Successfully loaded {len(processed_df)} claims from CSV!")
                             st.info(f"Using '{text_column}' as text column and '{label_column}' as label column.")
+                            if date_column:
+                                st.info(f"Using '{date_column}' as date column.")
                             
                             # Show data preview
                             with st.expander("Preview Loaded Data", expanded=True):
-                                st.dataframe(processed_df.head(15), use_container_width=True)
+                                display_cols = ['statement', 'label', 'binary_label', 'label_readable']
+                                if 'date' in processed_df.columns:
+                                    display_cols.append('date')
+                                st.dataframe(processed_df[display_cols].head(15), use_container_width=True)
                                 
                                 # Label Distribution visualization
                                 st.subheader("Label Distribution")
-                                label_counts = processed_df['label'].value_counts()
                                 
-                                # Create a clear visualization
-                                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                                # Show binary label distribution
+                                if 'binary_label' in processed_df.columns:
+                                    binary_counts = processed_df['binary_label'].value_counts()
+                                    readable_counts = processed_df['label_readable'].value_counts()
+                                    
+                                    # Create visualization
+                                    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                                    
+                                    # Bar chart for binary labels
+                                    colors_binary = ['#F44336', '#4CAF50', '#9E9E9E']  # Red, Green, Gray
+                                    binary_labels = ['False (0)', 'True (1)', 'Unknown']
+                                    binary_values = [
+                                        binary_counts.get(0, 0),
+                                        binary_counts.get(1, 0),
+                                        binary_counts.get(-1, 0)
+                                    ]
+                                    
+                                    bars1 = ax1.bar(range(len(binary_values)), binary_values, 
+                                                   color=colors_binary[:len(binary_values)], 
+                                                   edgecolor='black', linewidth=1)
+                                    ax1.set_xlabel('Binary Labels')
+                                    ax1.set_ylabel('Count')
+                                    ax1.set_title('Binary Label Distribution (0/1)')
+                                    ax1.set_xticks(range(len(binary_labels)))
+                                    ax1.set_xticklabels(binary_labels, fontsize=9)
+                                    
+                                    # Add count labels on bars
+                                    for bar, count in zip(bars1, binary_values):
+                                        height = bar.get_height()
+                                        ax1.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                                                f'{count}', ha='center', va='bottom', fontsize=9)
+                                    
+                                    # Pie chart for readable labels
+                                    if len(readable_counts) > 0:
+                                        colors_pie = plt.cm.Set3(np.linspace(0, 1, len(readable_counts)))
+                                        wedges, texts, autotexts = ax2.pie(readable_counts.values, 
+                                                                          labels=readable_counts.index, 
+                                                                          autopct='%1.1f%%',
+                                                                          startangle=90,
+                                                                          colors=colors_pie,
+                                                                          textprops={'fontsize': 9})
+                                        ax2.set_title('Readable Label Distribution')
+                                        
+                                        # Improve pie chart text
+                                        for autotext in autotexts:
+                                            autotext.set_color('black')
+                                            autotext.set_fontsize(9)
+                                            autotext.set_fontweight('bold')
+                                    else:
+                                        ax2.text(0.5, 0.5, 'No labels found', 
+                                                ha='center', va='center')
+                                        ax2.set_title('No Label Data')
+                                    
+                                    plt.tight_layout()
+                                    st.pyplot(fig)
+                                    
+                                    # Show statistics
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.metric("True Claims (1)", binary_counts.get(1, 0))
+                                    with col2:
+                                        st.metric("False Claims (0)", binary_counts.get(0, 0))
+                                    with col3:
+                                        st.metric("Unknown Claims", binary_counts.get(-1, 0))
+                            
+                            # Date-wise filtering section
+                            if date_column and 'date' in processed_df.columns:
+                                st.markdown("---")
+                                st.subheader("Date-wise Filtering")
                                 
-                                # Bar chart - CLEAR and SIMPLE
-                                colors = plt.cm.Set3(np.linspace(0, 1, len(label_counts)))
-                                bars = ax1.bar(range(len(label_counts)), label_counts.values, color=colors, edgecolor='black', linewidth=1)
-                                ax1.set_xlabel('Labels')
-                                ax1.set_ylabel('Count')
-                                ax1.set_title('Label Distribution (Bar Chart)')
-                                ax1.set_xticks(range(len(label_counts)))
-                                ax1.set_xticklabels(label_counts.index, rotation=45, ha='right', fontsize=9)
-                                
-                                # Add count labels on bars
-                                for bar, count in zip(bars, label_counts.values):
-                                    height = bar.get_height()
-                                    ax1.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                                            f'{count}', ha='center', va='bottom', fontsize=9)
-                                
-                                # Pie chart - CLEAR and LEGIBLE
-                                wedges, texts, autotexts = ax2.pie(label_counts.values, 
-                                                                  labels=label_counts.index, 
-                                                                  autopct='%1.1f%%',
-                                                                  startangle=90,
-                                                                  colors=colors,
-                                                                  textprops={'fontsize': 9})
-                                ax2.set_title('Label Distribution (Percentage)')
-                                
-                                # Improve pie chart text
-                                for autotext in autotexts:
-                                    autotext.set_color('black')
-                                    autotext.set_fontsize(9)
-                                    autotext.set_fontweight('bold')
-                                
-                                plt.tight_layout()
-                                st.pyplot(fig)
-                                
-                                # Also show a clear table
-                                st.subheader("Label Counts Table")
-                                label_table = pd.DataFrame({
-                                    'Label': label_counts.index,
-                                    'Count': label_counts.values,
-                                    'Percentage': (label_counts.values / label_counts.sum() * 100).round(1)
-                                })
-                                st.dataframe(label_table, use_container_width=True, hide_index=True)
+                                # Try to parse dates
+                                try:
+                                    processed_df['date_parsed'] = pd.to_datetime(processed_df['date'], errors='coerce')
+                                    valid_dates = processed_df['date_parsed'].notna().sum()
+                                    
+                                    if valid_dates > 0:
+                                        min_date = processed_df['date_parsed'].min().date()
+                                        max_date = processed_df['date_parsed'].max().date()
+                                        
+                                        date_col1, date_col2 = st.columns(2)
+                                        with date_col1:
+                                            filter_start_date = st.date_input(
+                                                "Filter Start Date",
+                                                value=min_date,
+                                                min_value=min_date,
+                                                max_value=max_date,
+                                                key="filter_start_date"
+                                            )
+                                        
+                                        with date_col2:
+                                            filter_end_date = st.date_input(
+                                                "Filter End Date",
+                                                value=max_date,
+                                                min_value=min_date,
+                                                max_value=max_date,
+                                                key="filter_end_date"
+                                            )
+                                        
+                                        if st.button("Apply Date Filter", key="apply_date_filter", use_container_width=True):
+                                            if filter_start_date > filter_end_date:
+                                                st.error("Start date must be before end date")
+                                            else:
+                                                filtered_df = filter_by_date_range(
+                                                    processed_df,
+                                                    'date',
+                                                    filter_start_date,
+                                                    filter_end_date
+                                                )
+                                                
+                                                if not filtered_df.empty:
+                                                    st.session_state['filtered_df'] = filtered_df
+                                                    st.success(f"Filtered to {len(filtered_df)} claims from {filter_start_date} to {filter_end_date}")
+                                                    
+                                                    # Show filtered data preview
+                                                    with st.expander("Preview Filtered Data", expanded=False):
+                                                        display_cols = ['statement', 'label', 'binary_label', 'label_readable', 'date']
+                                                        st.dataframe(filtered_df[display_cols].head(10), use_container_width=True)
+                                                else:
+                                                    st.warning("No claims found in the selected date range.")
+                                    else:
+                                        st.warning("No valid dates found in the date column.")
+                                except Exception as e:
+                                    st.warning(f"Could not parse dates: {e}")
                             
                             # Google API Verification section for CSV data
                             st.markdown("---")
-                            st.subheader("Google API Verification")
+                            st.subheader("Enhanced Google API Verification")
                             
                             verify_col1, verify_col2 = st.columns([2, 1])
                             
@@ -1460,16 +1744,18 @@ def app():
                                 verify_checkbox = st.checkbox("Verify claims with Google Fact Check API", value=False, key="verify_checkbox")
                             
                             with verify_col2:
-                                max_verify = st.number_input("Max claims to verify", min_value=5, max_value=100, value=20, step=5, key="max_verify")
+                                max_verify = st.number_input("Max claims to verify", min_value=5, max_value=100, value=30, step=5, key="max_verify")
                             
                             if verify_checkbox:
                                 if 'GOOGLE_API_KEY' not in st.secrets:
                                     st.error("Google API Key not found in secrets.toml")
-                                elif st.button("Run Google Verification", key="verify_btn", use_container_width=True, type="primary"):
-                                    with st.spinner("Verifying claims with Google API..."):
+                                elif st.button("Run Enhanced Google Verification", key="verify_btn", use_container_width=True, type="primary"):
+                                    with st.spinner("Verifying claims with Google API (this may take a while)..."):
                                         api_key = st.secrets["GOOGLE_API_KEY"]
-                                        verification_df = verify_with_google_api(
-                                            processed_df, 
+                                        # Use filtered data if available, otherwise use full data
+                                        data_to_verify = st.session_state.get('filtered_df', processed_df)
+                                        verification_df = verify_with_google_api_enhanced(
+                                            data_to_verify, 
                                             api_key, 
                                             max_verifications=max_verify,
                                             text_column='statement'
@@ -1480,37 +1766,110 @@ def app():
                                             
                                             # Show verification results
                                             with st.expander("Verification Results", expanded=True):
-                                                st.dataframe(verification_df, use_container_width=True)
+                                                # Show summary statistics
+                                                found_df = verification_df[verification_df['google_verification'] == 'Found']
+                                                if not found_df.empty:
+                                                    # Calculate accuracy if we have original binary labels
+                                                    if 'binary_label' in found_df.columns and 'google_binary_label' in found_df.columns:
+                                                        # Filter only where both labels exist
+                                                        valid_comparisons = found_df.dropna(subset=['binary_label', 'google_binary_label'])
+                                                        valid_comparisons = valid_comparisons[valid_comparisons['google_binary_label'] != -1]
+                                                        
+                                                        if len(valid_comparisons) > 0:
+                                                            matches = (valid_comparisons['binary_label'] == valid_comparisons['google_binary_label']).sum()
+                                                            accuracy = matches / len(valid_comparisons) * 100
+                                                            st.info(f"Google API vs Original Labels Accuracy: {accuracy:.1f}% ({matches}/{len(valid_comparisons)} matches)")
+                                                
+                                                # Show detailed results
+                                                display_cols = ['original_statement', 'original_label', 'google_verification', 
+                                                               'google_rating', 'match_score', 'verification_confidence']
+                                                if 'google_binary_label' in verification_df.columns:
+                                                    display_cols.append('google_binary_label')
+                                                
+                                                st.dataframe(verification_df[display_cols], use_container_width=True)
                                                 
                                                 # Visualization of verification results
-                                                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                                                fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(14, 10))
                                                 
-                                                # Pie chart: Found vs Not Found
+                                                # 1. Pie chart: Found vs Not Found
                                                 found_count = len(verification_df[verification_df['google_verification'] == 'Found'])
                                                 not_found_count = len(verification_df) - found_count
                                                 
-                                                ax1.pie([found_count, not_found_count], 
-                                                       labels=['Verified', 'Not Found'], 
-                                                       autopct='%1.1f%%',
-                                                       colors=['#4CAF50', '#F44336'])
-                                                ax1.set_title('Google API Verification Results')
-                                                
-                                                # Bar chart: Match scores
-                                                if found_count > 0:
-                                                    ax2.hist(verification_df['match_score'].dropna(), bins=10, 
-                                                            color='#2196F3', edgecolor='black')
-                                                    ax2.set_xlabel('Match Score')
-                                                    ax2.set_ylabel('Count')
-                                                    ax2.set_title('Claim Match Scores')
+                                                if found_count + not_found_count > 0:
+                                                    ax1.pie([found_count, not_found_count], 
+                                                           labels=['Verified', 'Not Found'], 
+                                                           autopct='%1.1f%%',
+                                                           colors=['#4CAF50', '#F44336'])
+                                                    ax1.set_title('Google API Verification Results')
                                                 else:
-                                                    ax2.text(0.5, 0.5, 'No matches found', 
-                                                            ha='center', va='center')
+                                                    ax1.text(0.5, 0.5, 'No data', ha='center', va='center')
+                                                    ax1.set_title('No Verification Data')
+                                                
+                                                # 2. Bar chart: Confidence levels
+                                                if found_count > 0:
+                                                    conf_counts = verification_df['verification_confidence'].value_counts()
+                                                    colors_conf = {'High': '#4CAF50', 'Medium': '#FF9800', 'Low': '#F44336'}
+                                                    conf_colors = [colors_conf.get(conf, '#9E9E9E') for conf in conf_counts.index]
+                                                    
+                                                    bars = ax2.bar(range(len(conf_counts)), conf_counts.values, 
+                                                                  color=conf_colors, edgecolor='black')
+                                                    ax2.set_xlabel('Confidence Level')
+                                                    ax2.set_ylabel('Count')
+                                                    ax2.set_title('Verification Confidence Levels')
+                                                    ax2.set_xticks(range(len(conf_counts)))
+                                                    ax2.set_xticklabels(conf_counts.index, fontsize=9)
+                                                    
+                                                    # Add count labels
+                                                    for bar, count in zip(bars, conf_counts.values):
+                                                        height = bar.get_height()
+                                                        ax2.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                                                                f'{count}', ha='center', va='bottom', fontsize=9)
+                                                else:
+                                                    ax2.text(0.5, 0.5, 'No matches found', ha='center', va='center')
                                                     ax2.set_title('No Verification Matches')
+                                                
+                                                # 3. Histogram: Match scores
+                                                if found_count > 0:
+                                                    match_scores = verification_df['match_score'].dropna()
+                                                    ax3.hist(match_scores, bins=10, color='#2196F3', edgecolor='black', alpha=0.7)
+                                                    ax3.set_xlabel('Match Score')
+                                                    ax3.set_ylabel('Count')
+                                                    ax3.set_title('Claim Match Scores Distribution')
+                                                    ax3.axvline(x=0.5, color='red', linestyle='--', alpha=0.5, label='Threshold (0.5)')
+                                                    ax3.legend()
+                                                else:
+                                                    ax3.text(0.5, 0.5, 'No match scores', ha='center', va='center')
+                                                    ax3.set_title('No Match Scores')
+                                                
+                                                # 4. Google rating distribution
+                                                if found_count > 0:
+                                                    rating_counts = verification_df['google_rating'].value_counts().head(10)
+                                                    if len(rating_counts) > 0:
+                                                        bars4 = ax4.bar(range(len(rating_counts)), rating_counts.values, 
+                                                                       color='#9C27B0', edgecolor='black', alpha=0.7)
+                                                        ax4.set_xlabel('Google Rating')
+                                                        ax4.set_ylabel('Count')
+                                                        ax4.set_title('Top 10 Google Ratings')
+                                                        ax4.set_xticks(range(len(rating_counts)))
+                                                        ax4.set_xticklabels(rating_counts.index, rotation=45, ha='right', fontsize=8)
+                                                        
+                                                        # Add count labels
+                                                        for bar, count in zip(bars4, rating_counts.values):
+                                                            height = bar.get_height()
+                                                            ax4.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                                                                    f'{count}', ha='center', va='bottom', fontsize=8)
+                                                    else:
+                                                        ax4.text(0.5, 0.5, 'No ratings', ha='center', va='center')
+                                                        ax4.set_title('No Ratings Found')
+                                                else:
+                                                    ax4.text(0.5, 0.5, 'No ratings', ha='center', va='center')
+                                                    ax4.set_title('No Ratings Found')
                                                 
                                                 plt.tight_layout()
                                                 st.pyplot(fig)
                 except Exception as e:
                     st.error(f"Error reading CSV file: {e}")
+                    st.exception(e)
         
         elif data_source == "Web Scrape Politifact":
             # KEEPING THE ORIGINAL DATE-WISE EXTRACTION CODE
@@ -1536,64 +1895,79 @@ def app():
                         scraped_df = scrape_data_by_date_range(pd.to_datetime(start_date), pd.to_datetime(end_date))
                     
                     if not scraped_df.empty:
+                        # Automatically create binary labels for scraped data too
+                        scraped_df = create_binary_label_column(scraped_df, 'label')
+                        
                         st.session_state['scraped_df'] = scraped_df
+                        st.session_state['filtered_df'] = scraped_df.copy()
                         st.session_state['selected_text_column'] = 'statement'
                         st.session_state['selected_label_column'] = 'label'
+                        st.session_state['selected_date_column'] = 'date'
                         st.session_state['csv_columns_selected'] = True
                         st.success(f"Successfully scraped {len(scraped_df)} claims!")
                         
                         # Show data preview
                         with st.expander("Preview Scraped Data", expanded=True):
-                            st.dataframe(st.session_state['scraped_df'].head(15), use_container_width=True)
+                            display_cols = ['statement', 'label', 'binary_label', 'label_readable', 'date']
+                            st.dataframe(scraped_df[display_cols].head(15), use_container_width=True)
                             
                             # Improved Label Distribution visualization
                             st.subheader("Label Distribution")
-                            label_counts = scraped_df['label'].value_counts()
                             
-                            # Create a clear visualization
-                            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-                            
-                            # Bar chart - CLEAR and SIMPLE
-                            colors = plt.cm.Set3(np.linspace(0, 1, len(label_counts)))
-                            bars = ax1.bar(range(len(label_counts)), label_counts.values, color=colors, edgecolor='black', linewidth=1)
-                            ax1.set_xlabel('Labels')
-                            ax1.set_ylabel('Count')
-                            ax1.set_title('Label Distribution (Bar Chart)')
-                            ax1.set_xticks(range(len(label_counts)))
-                            ax1.set_xticklabels(label_counts.index, rotation=45, ha='right', fontsize=9)
-                            
-                            # Add count labels on bars
-                            for bar, count in zip(bars, label_counts.values):
-                                height = bar.get_height()
-                                ax1.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                                        f'{count}', ha='center', va='bottom', fontsize=9)
-                            
-                            # Pie chart - CLEAR and LEGIBLE
-                            wedges, texts, autotexts = ax2.pie(label_counts.values, 
-                                                              labels=label_counts.index, 
-                                                              autopct='%1.1f%%',
-                                                              startangle=90,
-                                                              colors=colors,
-                                                              textprops={'fontsize': 9})
-                            ax2.set_title('Label Distribution (Percentage)')
-                            
-                            # Improve pie chart text
-                            for autotext in autotexts:
-                                autotext.set_color('black')
-                                autotext.set_fontsize(9)
-                                autotext.set_fontweight('bold')
-                            
-                            plt.tight_layout()
-                            st.pyplot(fig)
-                            
-                            # Also show a clear table
-                            st.subheader("Label Counts Table")
-                            label_table = pd.DataFrame({
-                                'Label': label_counts.index,
-                                'Count': label_counts.values,
-                                'Percentage': (label_counts.values / label_counts.sum() * 100).round(1)
-                            })
-                            st.dataframe(label_table, use_container_width=True, hide_index=True)
+                            # Show binary label distribution
+                            if 'binary_label' in scraped_df.columns:
+                                binary_counts = scraped_df['binary_label'].value_counts()
+                                readable_counts = scraped_df['label_readable'].value_counts()
+                                
+                                # Create visualization
+                                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                                
+                                # Bar chart for binary labels
+                                colors_binary = ['#F44336', '#4CAF50', '#9E9E9E']
+                                binary_labels = ['False (0)', 'True (1)', 'Unknown']
+                                binary_values = [
+                                    binary_counts.get(0, 0),
+                                    binary_counts.get(1, 0),
+                                    binary_counts.get(-1, 0)
+                                ]
+                                
+                                bars1 = ax1.bar(range(len(binary_values)), binary_values, 
+                                               color=colors_binary[:len(binary_values)], 
+                                               edgecolor='black', linewidth=1)
+                                ax1.set_xlabel('Binary Labels')
+                                ax1.set_ylabel('Count')
+                                ax1.set_title('Binary Label Distribution (0/1)')
+                                ax1.set_xticks(range(len(binary_labels)))
+                                ax1.set_xticklabels(binary_labels, fontsize=9)
+                                
+                                # Add count labels on bars
+                                for bar, count in zip(bars1, binary_values):
+                                    height = bar.get_height()
+                                    ax1.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                                            f'{count}', ha='center', va='bottom', fontsize=9)
+                                
+                                # Pie chart for readable labels
+                                if len(readable_counts) > 0:
+                                    colors_pie = plt.cm.Set3(np.linspace(0, 1, len(readable_counts)))
+                                    wedges, texts, autotexts = ax2.pie(readable_counts.values, 
+                                                                      labels=readable_counts.index, 
+                                                                      autopct='%1.1f%%',
+                                                                      startangle=90,
+                                                                      colors=colors_pie,
+                                                                      textprops={'fontsize': 9})
+                                    ax2.set_title('Original Label Distribution')
+                                    
+                                    for autotext in autotexts:
+                                        autotext.set_color('black')
+                                        autotext.set_fontsize(9)
+                                        autotext.set_fontweight('bold')
+                                else:
+                                    ax2.text(0.5, 0.5, 'No labels found', 
+                                            ha='center', va='center')
+                                    ax2.set_title('No Label Data')
+                                
+                                plt.tight_layout()
+                                st.pyplot(fig)
                     else:
                         st.warning("No data found. Try adjusting date range.")
         
@@ -1605,21 +1979,36 @@ def app():
             # Show which columns are being used
             if st.session_state.get('csv_columns_selected', False):
                 st.info(f"**Text Column:** '{st.session_state['selected_text_column']}' | **Label Column:** '{st.session_state['selected_label_column']}'")
+                if st.session_state.get('selected_date_column'):
+                    st.info(f"**Date Column:** '{st.session_state['selected_date_column']}'")
             
-            st.dataframe(st.session_state['scraped_df'].head(10), use_container_width=True)
+            # Show filtered data if available, otherwise show all data
+            display_df = st.session_state.get('filtered_df', st.session_state['scraped_df'])
+            
+            st.dataframe(display_df.head(10), use_container_width=True)
             
             # Statistics
             stats_col1, stats_col2, stats_col3 = st.columns(3)
             with stats_col1:
-                st.metric("Total Claims", len(st.session_state['scraped_df']))
+                st.metric("Total Claims", len(display_df))
             with stats_col2:
-                unique_labels = st.session_state['scraped_df']['label'].nunique()
-                st.metric("Unique Labels", unique_labels)
+                if 'binary_label' in display_df.columns:
+                    true_count = len(display_df[display_df['binary_label'] == 1])
+                    false_count = len(display_df[display_df['binary_label'] == 0])
+                    st.metric("True/False Ratio", f"{true_count}/{false_count}")
+                else:
+                    unique_labels = display_df['label'].nunique()
+                    st.metric("Unique Labels", unique_labels)
             with stats_col3:
-                if 'date' in st.session_state['scraped_df'].columns:
+                if 'date' in display_df.columns:
                     try:
-                        date_range = pd.to_datetime(st.session_state['scraped_df']['date']).agg(['min', 'max'])
-                        st.metric("Date Range", f"{date_range['min'].strftime('%Y-%m-%d')} to {date_range['max'].strftime('%Y-%m-%d')}")
+                        dates = pd.to_datetime(display_df['date'], errors='coerce')
+                        valid_dates = dates.dropna()
+                        if len(valid_dates) > 0:
+                            date_range = valid_dates.agg(['min', 'max'])
+                            st.metric("Date Range", f"{date_range['min'].strftime('%Y-%m-%d')} to {date_range['max'].strftime('%Y-%m-%d')}")
+                        else:
+                            st.metric("Date Info", "Invalid dates")
                     except:
                         st.metric("Date Info", "Not available")
 
@@ -1627,7 +2016,10 @@ def app():
     elif page == "Model Training":
         st.markdown("<h1 class='main-header'>Model Training</h1>", unsafe_allow_html=True)
         
-        if st.session_state['scraped_df'].empty:
+        # Use filtered data if available, otherwise use scraped data
+        training_df = st.session_state.get('filtered_df', st.session_state['scraped_df'])
+        
+        if training_df.empty:
             st.warning("Please collect data first from the Data Collection page!")
             if st.button("Go to Data Collection", use_container_width=True):
                 st.switch_page("Data Collection")
@@ -1635,6 +2027,8 @@ def app():
             # Show which columns are being used
             if st.session_state.get('csv_columns_selected', False):
                 st.info(f"**Using:** Text from column '{st.session_state['selected_text_column']}' and Labels from column '{st.session_state['selected_label_column']}'")
+                if len(training_df) != len(st.session_state['scraped_df']):
+                    st.info(f"**Note:** Using filtered data ({len(training_df)} claims) instead of full dataset ({len(st.session_state['scraped_df'])} claims)")
             
             # Training configuration
             st.write("Configure and train machine learning models using different NLP feature extraction methods.")
@@ -1662,49 +2056,47 @@ def app():
                     verified_df = st.session_state['verification_df']
                     verified_claims = verified_df[verified_df['google_verification'] == 'Found']
                     st.info(f"Using {len(verified_claims)} Google-verified claims for training")
-                    st.dataframe(verified_claims[['original_statement', 'original_label', 'google_rating', 'match_score']].head(10), use_container_width=True)
+                    display_cols = ['original_statement', 'original_label', 'google_rating', 'match_score', 'verification_confidence']
+                    st.dataframe(verified_claims[display_cols].head(10), use_container_width=True)
                 else:
-                    st.dataframe(st.session_state['scraped_df'][['statement', 'label']].head(10), use_container_width=True)
+                    display_cols = ['statement', 'label']
+                    if 'binary_label' in training_df.columns:
+                        display_cols.append('binary_label')
+                    if 'label_readable' in training_df.columns:
+                        display_cols.append('label_readable')
+                    st.dataframe(training_df[display_cols].head(10), use_container_width=True)
                 
                 # Show clear binary class distribution
-                REAL_LABELS = ["True", "No Flip", "Mostly True", "Half Flip", "Half True"]
-                FAKE_LABELS = ["False", "Barely True", "Pants On Fire", "Full Flop"]
-                
-                def create_binary_target(label):
-                    if label in REAL_LABELS:
-                        return "Real"
-                    elif label in FAKE_LABELS:
-                        return "Fake"
-                    else:
-                        return "Other"
-                
-                if use_verified_data and 'verification_df' in st.session_state:
-                    df_preview = st.session_state['verification_df'][st.session_state['verification_df']['google_verification'] == 'Found'].copy()
-                    df_preview['binary_label'] = df_preview['original_label'].apply(create_binary_target)
-                else:
-                    df_preview = st.session_state['scraped_df'].copy()
-                    df_preview['binary_label'] = df_preview['label'].apply(create_binary_target)
-                
-                binary_counts = df_preview['binary_label'].value_counts()
-                
-                fig, ax = plt.subplots(figsize=(8, 5))
-                
-                # Simple bar chart for binary labels
-                colors = ['#4CAF50', '#F44336', '#9E9E9E']  # Green, Red, Gray
-                bars = ax.bar(binary_counts.index, binary_counts.values, color=colors[:len(binary_counts)], 
-                            edgecolor='black', linewidth=1)
-                ax.set_title('Binary Label Distribution for Model Training', fontsize=12)
-                ax.set_ylabel('Count', fontsize=10)
-                ax.set_xlabel('Binary Label', fontsize=10)
-                
-                # Add count labels
-                for bar, count in zip(bars, binary_counts.values):
-                    height = bar.get_height()
-                    ax.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                           f'{count}', ha='center', va='bottom', fontsize=10)
-                
-                plt.tight_layout()
-                st.pyplot(fig)
+                if 'binary_label' in training_df.columns:
+                    binary_counts = training_df['binary_label'].value_counts()
+                    
+                    fig, ax = plt.subplots(figsize=(8, 5))
+                    
+                    # Simple bar chart for binary labels
+                    colors = ['#F44336', '#4CAF50', '#9E9E9E']  # Red (False), Green (True), Gray (Unknown)
+                    labels = ['False (0)', 'True (1)', 'Unknown']
+                    values = [
+                        binary_counts.get(0, 0),
+                        binary_counts.get(1, 0),
+                        binary_counts.get(-1, 0)
+                    ]
+                    
+                    bars = ax.bar(range(len(values)), values, color=colors[:len(values)], 
+                                edgecolor='black', linewidth=1)
+                    ax.set_title('Binary Label Distribution for Model Training', fontsize=12)
+                    ax.set_ylabel('Count', fontsize=10)
+                    ax.set_xlabel('Binary Label', fontsize=10)
+                    ax.set_xticks(range(len(labels)))
+                    ax.set_xticklabels(labels, fontsize=10)
+                    
+                    # Add count labels
+                    for bar, count in zip(bars, values):
+                        height = bar.get_height()
+                        ax.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                               f'{count}', ha='center', va='bottom', fontsize=10)
+                    
+                    plt.tight_layout()
+                    st.pyplot(fig)
             
             if st.button("Run Model Analysis", key="analyze_btn", use_container_width=True, type="primary"):
                 with st.spinner(f"Training 4 models with {N_SPLITS}-Fold CV..."):
@@ -1715,17 +2107,24 @@ def app():
                         verified_df = verified_df[verified_df['google_verification'] == 'Found']
                         
                         # Create a DataFrame compatible with evaluate_models
-                        training_df = pd.DataFrame({
+                        training_data = pd.DataFrame({
                             'statement': verified_df['original_statement'],
-                            'label': verified_df['original_label']  # Assuming CSV has label column
+                            'label': verified_df['original_label']
                         })
-                        st.info(f"Using {len(training_df)} Google-verified claims for training")
+                        
+                        # Try to get binary labels from Google verification
+                        if 'google_binary_label' in verified_df.columns:
+                            training_data['binary_label'] = verified_df['google_binary_label']
+                            # Filter out unknown labels
+                            training_data = training_data[training_data['binary_label'] != -1]
+                        
+                        st.info(f"Using {len(training_data)} Google-verified claims for training")
                     else:
-                        # Use original scraped/uploaded data
-                        training_df = st.session_state['scraped_df']
+                        # Use original/filtered data
+                        training_data = training_df.copy()
                     
                     df_results, trained_models, trained_vectorizer = evaluate_models(
-                        training_df, 
+                        training_data, 
                         selected_phase, 
                         text_column='statement',
                         label_column='label',
@@ -2118,12 +2517,16 @@ def app():
                     # Column info if available
                     if st.session_state.get('csv_columns_selected', False):
                         st.info(f"**Data Columns:** Text from '{st.session_state['selected_text_column']}', Labels from '{st.session_state['selected_label_column']}'")
+                        if st.session_state.get('selected_date_column'):
+                            st.info(f"**Date Column:** '{st.session_state['selected_date_column']}'")
                     
                     # Verification info if used
                     if 'verification_df' in st.session_state and not st.session_state['verification_df'].empty:
-                        verified_count = len(st.session_state['verification_df'][st.session_state['verification_df']['google_verification'] == 'Found'])
+                        found_verified = st.session_state['verification_df'][st.session_state['verification_df']['google_verification'] == 'Found']
+                        verified_count = len(found_verified)
                         if verified_count > 0:
-                            st.info(f"**Training Data:** {verified_count} Google-verified claims")
+                            high_conf = len(found_verified[found_verified['verification_confidence'] == 'High'])
+                            st.info(f"**Training Data:** {verified_count} Google-verified claims ({high_conf} high confidence)")
 
 if __name__ == '__main__':
     app()
