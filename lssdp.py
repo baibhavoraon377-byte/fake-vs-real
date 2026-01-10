@@ -2511,138 +2511,138 @@ def app():
                         st.error("Model training failed. Please check your data and try again.")
 
     # --- RESULTS & ANALYSIS ---
-elif page == "Results & Analysis":
-    st.markdown("<h1 class='main-header'>Results & Analysis</h1>", unsafe_allow_html=True)
-    
-    # Check if we have results
-    if st.session_state['df_results'].empty:
-        st.warning("No model results available. Please train models first.")
-        if st.button("Go to Model Training", use_container_width=True):
-            st.switch_page("Model Training")
-    else:
-        st.write("Analyze model performance and make predictions on new claims.")
+    elif page == "Results & Analysis":
+        st.markdown("<h1 class='main-header'>Results & Analysis</h1>", unsafe_allow_html=True)
         
-        # Display results in tabs
-        tab1, tab2 = st.tabs(["Performance Results", "Make Predictions"])
-        
-        with tab1:
-            st.subheader("Model Performance")
-            df_results = st.session_state['df_results']
-            selected_phase = st.session_state['selected_phase_run']
+        # Check if we have results
+        if st.session_state['df_results'].empty:
+            st.warning("No model results available. Please train models first.")
+            if st.button("Go to Model Training", use_container_width=True):
+                st.switch_page("Model Training")
+        else:
+            st.write("Analyze model performance and make predictions on new claims.")
             
-            # Display results table
-            st.dataframe(df_results, use_container_width=True)
+            # Display results in tabs
+            tab1, tab2 = st.tabs(["Performance Results", "Make Predictions"])
             
-            # Visualization - MOVED UP
-            st.subheader("Performance Visualization")
-            fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-            
-            # Accuracy comparison
-            axes[0, 0].bar(df_results['Model'], df_results['Accuracy'], color='#2196F3')
-            axes[0, 0].set_title('Model Accuracy (%)')
-            axes[0, 0].set_ylabel('Accuracy %')
-            axes[0, 0].tick_params(axis='x', rotation=45)
-            axes[0, 0].grid(True, alpha=0.3)
-            
-            # F1-Score comparison
-            axes[0, 1].bar(df_results['Model'], df_results['F1-Score'], color='#4CAF50')
-            axes[0, 1].set_title('F1-Score Comparison')
-            axes[0, 1].set_ylabel('F1-Score')
-            axes[0, 1].tick_params(axis='x', rotation=45)
-            axes[0, 1].grid(True, alpha=0.3)
-            
-            # Precision-Recall comparison
-            x = range(len(df_results))
-            width = 0.35
-            axes[1, 0].bar([i - width/2 for i in x], df_results['Precision'], width, label='Precision', color='#FF9800')
-            axes[1, 0].bar([i + width/2 for i in x], df_results['Recall'], width, label='Recall', color='#9C27B0')
-            axes[1, 0].set_title('Precision vs Recall')
-            axes[1, 0].set_ylabel('Score')
-            axes[1, 0].set_xticks(x)
-            axes[1, 0].set_xticklabels(df_results['Model'], rotation=45)
-            axes[1, 0].legend()
-            axes[1, 0].grid(True, alpha=0.3)
-            
-            # Inference latency
-            axes[1, 1].bar(df_results['Model'], df_results['Inference Latency (ms)'], color='#F44336')
-            axes[1, 1].set_title('Inference Latency (ms)')
-            axes[1, 1].set_ylabel('Milliseconds')
-            axes[1, 1].tick_params(axis='x', rotation=45)
-            axes[1, 1].grid(True, alpha=0.3)
-            
-            plt.tight_layout()
-            st.pyplot(fig)
-            
-            # Generate humorous critique - MOVED DOWN
-            st.subheader("AI Performance Analysis")
-            critique = generate_humorous_critique(df_results, selected_phase)
-            st.markdown(critique)
-            
-        with tab2:
-            st.subheader("Make Predictions")
-            
-            # Input for single text prediction
-            input_text = st.text_area(
-                "Enter a claim to analyze:",
-                placeholder="e.g., The moon landing was faked by NASA",
-                height=100
-            )
-            
-            if input_text and st.button("Analyze Claim", key="predict_btn", use_container_width=True, type="primary"):
-                if not st.session_state['trained_models']:
-                    st.error("No trained models available. Please train models first.")
-                else:
-                    results = predict_single_text(
-                        input_text,
-                        st.session_state['trained_models'],
-                        st.session_state['trained_vectorizer'],
-                        st.session_state['selected_phase_run']
-                    )
-                    
-                    # Display results
-                    st.subheader("Prediction Results")
-                    
-                    # Create a nice display
-                    cols = st.columns(4)
-                    model_names = list(results.keys())
-                    
-                    for idx, col in enumerate(cols):
-                        if idx < len(model_names):
-                            model_name = model_names[idx]
-                            result = results[model_name]
-                            
-                            with col:
-                                if 'error' in result:
-                                    st.error(f"{model_name}")
-                                    st.write(result['error'])
-                                else:
-                                    prediction = result['prediction']
-                                    label_text = "True" if prediction == 1 else "False" if prediction == 0 else "Unknown"
-                                    color = "green" if prediction == 1 else "red" if prediction == 0 else "gray"
-                                    
-                                    st.markdown(f"""
-                                    <div style="text-align: center; padding: 15px; border-radius: 8px; background-color: #f8f9fa; border: 2px solid {color};">
-                                        <h4>{model_name}</h4>
-                                        <h2 style="color: {color};">{label_text}</h2>
-                                        <p>Prediction: {prediction}</p>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-                    
-                    # Show consensus
-                    st.subheader("Model Consensus")
-                    predictions = [r.get('prediction', -1) for r in results.values() if 'error' not in r]
-                    if predictions:
-                        valid_predictions = [p for p in predictions if p in [0, 1]]
-                        if valid_predictions:
-                            avg_prediction = sum(valid_predictions) / len(valid_predictions)
-                            consensus = "True" if avg_prediction > 0.5 else "False" if avg_prediction < 0.5 else "Tie"
-                            confidence = abs(avg_prediction - 0.5) * 2 * 100  # Convert to percentage
-                            
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.metric("Consensus", consensus)
-                            with col2:
-                                st.metric("Confidence", f"{confidence:.1f}%")
+            with tab1:
+                st.subheader("Model Performance")
+                df_results = st.session_state['df_results']
+                selected_phase = st.session_state['selected_phase_run']
+                
+                # Display results table
+                st.dataframe(df_results, use_container_width=True)
+                
+                # Visualization - MOVED UP
+                st.subheader("Performance Visualization")
+                fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+                
+                # Accuracy comparison
+                axes[0, 0].bar(df_results['Model'], df_results['Accuracy'], color='#2196F3')
+                axes[0, 0].set_title('Model Accuracy (%)')
+                axes[0, 0].set_ylabel('Accuracy %')
+                axes[0, 0].tick_params(axis='x', rotation=45)
+                axes[0, 0].grid(True, alpha=0.3)
+                
+                # F1-Score comparison
+                axes[0, 1].bar(df_results['Model'], df_results['F1-Score'], color='#4CAF50')
+                axes[0, 1].set_title('F1-Score Comparison')
+                axes[0, 1].set_ylabel('F1-Score')
+                axes[0, 1].tick_params(axis='x', rotation=45)
+                axes[0, 1].grid(True, alpha=0.3)
+                
+                # Precision-Recall comparison
+                x = range(len(df_results))
+                width = 0.35
+                axes[1, 0].bar([i - width/2 for i in x], df_results['Precision'], width, label='Precision', color='#FF9800')
+                axes[1, 0].bar([i + width/2 for i in x], df_results['Recall'], width, label='Recall', color='#9C27B0')
+                axes[1, 0].set_title('Precision vs Recall')
+                axes[1, 0].set_ylabel('Score')
+                axes[1, 0].set_xticks(x)
+                axes[1, 0].set_xticklabels(df_results['Model'], rotation=45)
+                axes[1, 0].legend()
+                axes[1, 0].grid(True, alpha=0.3)
+                
+                # Inference latency
+                axes[1, 1].bar(df_results['Model'], df_results['Inference Latency (ms)'], color='#F44336')
+                axes[1, 1].set_title('Inference Latency (ms)')
+                axes[1, 1].set_ylabel('Milliseconds')
+                axes[1, 1].tick_params(axis='x', rotation=45)
+                axes[1, 1].grid(True, alpha=0.3)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                
+                # Generate humorous critique - MOVED DOWN
+                st.subheader("AI Performance Analysis")
+                critique = generate_humorous_critique(df_results, selected_phase)
+                st.markdown(critique)
+                
+            with tab2:
+                st.subheader("Make Predictions")
+                
+                # Input for single text prediction
+                input_text = st.text_area(
+                    "Enter a claim to analyze:",
+                    placeholder="e.g., The moon landing was faked by NASA",
+                    height=100
+                )
+                
+                if input_text and st.button("Analyze Claim", key="predict_btn", use_container_width=True, type="primary"):
+                    if not st.session_state['trained_models']:
+                        st.error("No trained models available. Please train models first.")
+                    else:
+                        results = predict_single_text(
+                            input_text,
+                            st.session_state['trained_models'],
+                            st.session_state['trained_vectorizer'],
+                            st.session_state['selected_phase_run']
+                        )
+                        
+                        # Display results
+                        st.subheader("Prediction Results")
+                        
+                        # Create a nice display
+                        cols = st.columns(4)
+                        model_names = list(results.keys())
+                        
+                        for idx, col in enumerate(cols):
+                            if idx < len(model_names):
+                                model_name = model_names[idx]
+                                result = results[model_name]
+                                
+                                with col:
+                                    if 'error' in result:
+                                        st.error(f"{model_name}")
+                                        st.write(result['error'])
+                                    else:
+                                        prediction = result['prediction']
+                                        label_text = "True" if prediction == 1 else "False" if prediction == 0 else "Unknown"
+                                        color = "green" if prediction == 1 else "red" if prediction == 0 else "gray"
+                                        
+                                        st.markdown(f"""
+                                        <div style="text-align: center; padding: 15px; border-radius: 8px; background-color: #f8f9fa; border: 2px solid {color};">
+                                            <h4>{model_name}</h4>
+                                            <h2 style="color: {color};">{label_text}</h2>
+                                            <p>Prediction: {prediction}</p>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                        
+                        # Show consensus
+                        st.subheader("Model Consensus")
+                        predictions = [r.get('prediction', -1) for r in results.values() if 'error' not in r]
+                        if predictions:
+                            valid_predictions = [p for p in predictions if p in [0, 1]]
+                            if valid_predictions:
+                                avg_prediction = sum(valid_predictions) / len(valid_predictions)
+                                consensus = "True" if avg_prediction > 0.5 else "False" if avg_prediction < 0.5 else "Tie"
+                                confidence = abs(avg_prediction - 0.5) * 2 * 100  # Convert to percentage
+                                
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.metric("Consensus", consensus)
+                                with col2:
+                                    st.metric("Confidence", f"{confidence:.1f}%")
 
 if __name__ == '__main__':
     app()
