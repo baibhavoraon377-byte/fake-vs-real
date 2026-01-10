@@ -681,7 +681,7 @@ def get_classifier(name):
 def apply_feature_extraction(X, phase, vectorizer=None):
     if phase == "Lexical & Morphological":
         X_processed = X.apply(lexical_features)
-        vectorizer = vectorizer if vectorizer else CountVectorizer(binary=True, ngram_range=(1,2))
+        vectorizer = vectorizer if vectorizer else CountVectorizer(binary=True, ngram_range=(1,2), max_features=5000)
         X_features = vectorizer.fit_transform(X_processed)
         return X_features, vectorizer
     elif phase == "Syntactic":
@@ -690,16 +690,28 @@ def apply_feature_extraction(X, phase, vectorizer=None):
         X_features = vectorizer.fit_transform(X_processed)
         return X_features, vectorizer
     elif phase == "Semantic":
-        X_features = pd.DataFrame(X.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"])
-        return X_features, None
+        try:
+            X_features = pd.DataFrame(X.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"])
+            # Handle NaN values
+            X_features = X_features.fillna(0)
+            return X_features, None
+        except Exception as e:
+            st.error(f"Semantic feature extraction failed: {e}")
+            return None, None
     elif phase == "Discourse":
         X_processed = X.apply(discourse_features)
         vectorizer = vectorizer if vectorizer else CountVectorizer(ngram_range=(1,2), max_features=5000)
         X_features = vectorizer.fit_transform(X_processed)
         return X_features, vectorizer
     elif phase == "Pragmatic":
-        X_features = pd.DataFrame(X.apply(pragmatic_features).tolist(), columns=pragmatic_words)
-        return X_features, None
+        try:
+            X_features = pd.DataFrame(X.apply(pragmatic_features).tolist(), columns=pragmatic_words)
+            # Handle NaN values
+            X_features = X_features.fillna(0)
+            return X_features, None
+        except Exception as e:
+            st.error(f"Pragmatic feature extraction failed: {e}")
+            return None, None
     return None, None
 
 # --------------------------
@@ -792,6 +804,7 @@ def predict_single_text(text, trained_models, vectorizer, selected_phase):
     
     try:
         X_raw_series = pd.Series([str(text)])
+        
         if selected_phase == "Lexical & Morphological":
             X_proc = X_raw_series.apply(lexical_features)
             if vectorizer is None:
@@ -808,9 +821,11 @@ def predict_single_text(text, trained_models, vectorizer, selected_phase):
                 raise ValueError("Vectorizer required for Discourse phase is missing.")
             X_features = vectorizer.transform(X_proc)
         elif selected_phase == "Semantic":
-            X_features = pd.DataFrame(X_raw_series.apply(semantic_features).tolist(), columns=["polarity", "subjectivity"]).values
+            X_features = pd.DataFrame(X_raw_series.apply(semantic_features).tolist(), 
+                                     columns=["polarity", "subjectivity"]).fillna(0).values
         elif selected_phase == "Pragmatic":
-            X_features = pd.DataFrame(X_raw_series.apply(pragmatic_features).tolist(), columns=pragmatic_words).values
+            X_features = pd.DataFrame(X_raw_series.apply(pragmatic_features).tolist(), 
+                                     columns=pragmatic_words).fillna(0).values
         else:
             raise ValueError(f"Unknown selected_phase: {selected_phase}")
     except Exception as e:
@@ -828,21 +843,39 @@ def predict_single_text(text, trained_models, vectorizer, selected_phase):
                     X_for_model = np.abs(X_features.toarray()).astype(float)
                 else:
                     X_for_model = np.abs(X_features).astype(float)
+            elif model_name == "Decision Tree" and hasattr(X_features, "toarray"):
+                # Convert sparse to dense for Decision Tree
+                X_for_model = X_features.toarray()
             else:
                 X_for_model = X_features
+            
+            # Ensure X_for_model has correct shape
+            if X_for_model.ndim == 1:
+                X_for_model = X_for_model.reshape(1, -1)
+            elif X_for_model.ndim > 2:
+                X_for_model = X_for_model.reshape(1, -1)
             
             pred = model.predict(X_for_model)
             label = int(pred[0]) if hasattr(pred, "__len__") else int(pred)
             results[model_name] = {"prediction": label}
         except Exception as e:
-            # Try conversion to dense for all models
+            # Try alternative approach
             try:
-                X_alt = X_for_model.toarray() if hasattr(X_for_model, "toarray") else X_for_model
+                if hasattr(X_features, "toarray"):
+                    X_alt = X_features.toarray()
+                else:
+                    X_alt = X_features
+                
+                if X_alt.ndim == 1:
+                    X_alt = X_alt.reshape(1, -1)
+                elif X_alt.ndim > 2:
+                    X_alt = X_alt.reshape(1, -1)
+                
                 pred = model.predict(X_alt)
                 label = int(pred[0]) if hasattr(pred, "__len__") else int(pred)
                 results[model_name] = {"prediction": label}
             except Exception as e2:
-                results[model_name] = {"error": f"Prediction failed: {e2}"}
+                results[model_name] = {"error": f"Prediction failed: {str(e2)[:100]}"}
     return results
 
 # --------------------------
@@ -882,24 +915,20 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
     else:
         df['target_label'] = df[label_col_to_use]
     
+    # Drop NaN values
     df = df.dropna(subset=['target_label'])
     df = df[df[text_column].astype(str).str.len() > 10]
+    
+    if df.empty:
+        st.error("No valid data after processing. Check your labels and data.")
+        return pd.DataFrame(), {}, None
+    
     X_raw = df[text_column].astype(str)
     y_raw = df['target_label'].astype(int)
     
     if len(np.unique(y_raw)) < 2:
-        st.error("After binary mapping, only one class remains (all Real or all Fake). Cannot train classifier.")
+        st.error(f"After binary mapping, only one class remains (class {y_raw.iloc[0]}). Cannot train classifier.")
         return pd.DataFrame(), {}, None
-
-    # Check class distribution for SMOTE decision
-    class_counts = y_raw.value_counts()
-    imbalance_ratio = min(class_counts) / max(class_counts)
-    
-    # Auto-adjust SMOTE usage based on imbalance
-    if imbalance_ratio < 0.3 and use_smote:
-        st.info(f"Class imbalance detected (ratio: {imbalance_ratio:.2f}). Using SMOTE for better accuracy.")
-    elif imbalance_ratio >= 0.3 and use_smote:
-        st.info(f"Classes are relatively balanced (ratio: {imbalance_ratio:.2f}). Proceeding with SMOTE as requested.")
 
     # Extract features ONCE for the entire dataset
     X_features_full, vectorizer = apply_feature_extraction(X_raw, selected_phase)
@@ -910,6 +939,9 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
     # Convert to appropriate format
     if isinstance(X_features_full, pd.DataFrame):
         X_features_full = X_features_full.values
+    elif sparse.issparse(X_features_full):
+        # Keep sparse for efficiency
+        pass
     elif hasattr(X_features_full, "toarray"):
         X_features_full = X_features_full.toarray()
     
@@ -925,53 +957,44 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
             "max_depth": 20 if selected_phase in ["Semantic", "Pragmatic"] else 15,
             "min_samples_split": 5,
             "min_samples_leaf": 2,
-            "max_features": 'sqrt' if selected_phase in ["Lexical & Morphological", "Discourse"] else None
+            "max_features": 'sqrt' if selected_phase in ["Lexical & Morphological", "Discourse"] else None,
+            "random_state": 42
         },
         "Logistic Regression": {
             "C": 1.0 if selected_phase in ["Semantic", "Pragmatic"] else 0.5,
             "penalty": 'l2',
             "solver": 'liblinear',
-            "max_iter": 2000
+            "max_iter": 2000,
+            "random_state": 42
         },
         "SVM": {
             "C": 0.5 if selected_phase in ["Lexical & Morphological", "Syntactic"] else 1.0,
             "kernel": 'linear',
-            "gamma": 'scale'
+            "gamma": 'scale',
+            "random_state": 42
         }
     }
     
     models_to_run = {
         "Naive Bayes": MultinomialNB(**model_params["Naive Bayes"]),
         "Decision Tree": DecisionTreeClassifier(
-            random_state=42, 
-            class_weight='balanced',
-            **{k: v for k, v in model_params["Decision Tree"].items() if k != 'max_features'}
+            **model_params["Decision Tree"]
         ),
         "Logistic Regression": LogisticRegression(
-            max_iter=model_params["Logistic Regression"]["max_iter"],
-            solver=model_params["Logistic Regression"]["solver"],
-            random_state=42, 
-            class_weight='balanced',
-            C=model_params["Logistic Regression"]["C"],
-            penalty=model_params["Logistic Regression"]["penalty"]
+            **model_params["Logistic Regression"],
+            class_weight='balanced'
         ),
         "SVM": SVC(
-            kernel=model_params["SVM"]["kernel"],
-            C=model_params["SVM"]["C"],
-            random_state=42, 
-            class_weight='balanced',
-            gamma=model_params["SVM"]["gamma"]
+            **model_params["SVM"],
+            class_weight='balanced'
         )
     }
     
     skf = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=42)
     model_metrics = {name: [] for name in models_to_run.keys()}
     
-    # Prepare raw text for each sample (for fold processing if needed)
-    X_raw_list = X_raw.tolist()
-    
     for name, model in models_to_run.items():
-        st.caption(f"Training {name} with {N_SPLITS}-Fold CV and optimized parameters...")
+        st.caption(f"Training {name} with {N_SPLITS}-Fold CV...")
         fold_metrics = {'accuracy': [], 'f1': [], 'precision': [], 'recall': [], 'train_time': [], 'inference_time': []}
         
         for fold, (train_index, test_index) in enumerate(skf.split(X_features_full, y)):
@@ -982,24 +1005,21 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
                 y_train = y[train_index]
                 y_test = y[test_index]
                 
-                # Convert to dense if needed for specific models
-                if name in ["Naive Bayes", "Decision Tree"]:
-                    if hasattr(X_train, "toarray"):
-                        X_train = X_train.toarray()
-                        X_test = X_test.toarray()
-                    X_train = np.abs(X_train).astype(float) if name == "Naive Bayes" else X_train
-                    X_test = np.abs(X_test).astype(float) if name == "Naive Bayes" else X_test
-                
-                start_time = time.time()
-                
+                # Prepare data for specific models
                 if name == "Naive Bayes":
                     # Naive Bayes needs non-negative values
-                    X_train_final = np.abs(X_train).astype(float)
-                    clf = model
-                    clf.fit(X_train_final, y_train)
-                else:
+                    if sparse.issparse(X_train):
+                        X_train_nb = X_train.toarray()
+                        X_test_nb = X_test.toarray()
+                    else:
+                        X_train_nb = X_train
+                        X_test_nb = X_test
+                    X_train_nb = np.abs(X_train_nb).astype(float)
+                    X_test_nb = np.abs(X_test_nb).astype(float)
+                    
+                    start_time = time.time()
+                    
                     if use_smote and len(np.unique(y_train)) > 1:
-                        # Ensure we have enough samples for SMOTE
                         min_class_count = np.min(np.bincount(y_train))
                         k_neighbors = min(3, min_class_count - 1) if min_class_count > 1 else 1
                         
@@ -1007,16 +1027,46 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
                             ('sampler', SMOTE(random_state=42, k_neighbors=k_neighbors)), 
                             ('classifier', model)
                         ])
-                        smote_pipeline.fit(X_train, y_train)
+                        smote_pipeline.fit(X_train_nb, y_train)
                         clf = smote_pipeline
                     else:
                         clf = model
-                        clf.fit(X_train, y_train)
-                
-                train_time = time.time() - start_time
-                start_inference = time.time()
-                y_pred = clf.predict(X_test)
-                inference_time = (time.time() - start_inference) * 1000
+                        clf.fit(X_train_nb, y_train)
+                    
+                    train_time = time.time() - start_time
+                    start_inference = time.time()
+                    y_pred = clf.predict(X_test_nb)
+                    inference_time = (time.time() - start_inference) * 1000
+                    
+                else:
+                    # For other models, convert sparse to dense if needed
+                    if name == "Decision Tree" and sparse.issparse(X_train):
+                        X_train_dt = X_train.toarray()
+                        X_test_dt = X_test.toarray()
+                    else:
+                        X_train_dt = X_train
+                        X_test_dt = X_test
+                    
+                    start_time = time.time()
+                    
+                    if use_smote and len(np.unique(y_train)) > 1:
+                        min_class_count = np.min(np.bincount(y_train))
+                        k_neighbors = min(3, min_class_count - 1) if min_class_count > 1 else 1
+                        
+                        smote_pipeline = ImbPipeline([
+                            ('sampler', SMOTE(random_state=42, k_neighbors=k_neighbors)), 
+                            ('classifier', model)
+                        ])
+                        smote_pipeline.fit(X_train_dt, y_train)
+                        clf = smote_pipeline
+                    else:
+                        clf = model
+                        clf.fit(X_train_dt, y_train)
+                    
+                    train_time = time.time() - start_time
+                    start_inference = time.time()
+                    y_pred = clf.predict(X_test_dt)
+                    inference_time = (time.time() - start_inference) * 1000
                 
                 # Calculate metrics
                 fold_metrics['accuracy'].append(accuracy_score(y_test, y_pred))
@@ -1028,22 +1078,11 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
                 
             except Exception as e:
                 st.warning(f"Fold {fold+1} failed for {name}: {str(e)[:100]}")
-                # Fallback: use simple logistic regression
-                try:
-                    fallback_model = LogisticRegression(max_iter=1000, random_state=42)
-                    fallback_model.fit(X_train, y_train)
-                    y_pred = fallback_model.predict(X_test)
-                    
-                    fold_metrics['accuracy'].append(accuracy_score(y_test, y_pred))
-                    fold_metrics['f1'].append(f1_score(y_test, y_pred, average='weighted', zero_division=0))
-                    fold_metrics['precision'].append(precision_score(y_test, y_pred, average='weighted', zero_division=0))
-                    fold_metrics['recall'].append(recall_score(y_test, y_pred, average='weighted', zero_division=0))
-                    fold_metrics['train_time'].append(time.time() - start_time)
-                    fold_metrics['inference_time'].append(inference_time)
-                except:
-                    # If even fallback fails, append zeros
-                    for key in fold_metrics:
-                        fold_metrics[key].append(0)
+                # Append zeros for this fold
+                for key in ['accuracy', 'f1', 'precision', 'recall']:
+                    fold_metrics[key].append(0)
+                fold_metrics['train_time'].append(0)
+                fold_metrics['inference_time'].append(0)
         
         # Calculate final metrics for this model
         if fold_metrics['accuracy'] and any(acc > 0 for acc in fold_metrics['accuracy']):
@@ -1071,42 +1110,61 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
             # Get fresh model with optimized parameters
             if name == "Naive Bayes":
                 final_model = MultinomialNB(**model_params["Naive Bayes"])
+                # Prepare final training data for Naive Bayes
+                if sparse.issparse(X_features_full):
+                    X_final_nb = X_features_full.toarray()
+                else:
+                    X_final_nb = X_features_full
+                X_final_nb = np.abs(X_final_nb).astype(float)
+                
+                if use_smote and len(np.unique(y)) > 1:
+                    min_class_count = np.min(np.bincount(y))
+                    k_neighbors = min(3, min_class_count - 1) if min_class_count > 1 else 1
+                    
+                    smote_pipeline_final = ImbPipeline([
+                        ('sampler', SMOTE(random_state=42, k_neighbors=k_neighbors)), 
+                        ('classifier', final_model)
+                    ])
+                    smote_pipeline_final.fit(X_final_nb, y)
+                    trained_models_final[name] = smote_pipeline_final
+                else:
+                    final_model.fit(X_final_nb, y)
+                    trained_models_final[name] = final_model
+                    
             elif name == "Decision Tree":
-                final_model = DecisionTreeClassifier(
-                    random_state=42, 
-                    class_weight='balanced',
-                    **{k: v for k, v in model_params["Decision Tree"].items() if k != 'max_features'}
-                )
-            elif name == "Logistic Regression":
-                final_model = LogisticRegression(
-                    max_iter=model_params["Logistic Regression"]["max_iter"],
-                    solver=model_params["Logistic Regression"]["solver"],
-                    random_state=42, 
-                    class_weight='balanced',
-                    C=model_params["Logistic Regression"]["C"],
-                    penalty=model_params["Logistic Regression"]["penalty"]
-                )
-            elif name == "SVM":
-                final_model = SVC(
-                    kernel=model_params["SVM"]["kernel"],
-                    C=model_params["SVM"]["C"],
-                    random_state=42, 
-                    class_weight='balanced',
-                    gamma=model_params["SVM"]["gamma"]
-                )
-            
-            # Prepare final training data
-            X_final = X_features_full.copy()
-            
-            # Convert to dense if needed
-            if name in ["Naive Bayes", "Decision Tree"]:
-                if hasattr(X_final, "toarray"):
-                    X_final = X_final.toarray()
-                X_final = np.abs(X_final).astype(float) if name == "Naive Bayes" else X_final
-            
-            if name == "Naive Bayes":
-                final_model.fit(np.abs(X_final).astype(float), y)
-            else:
+                final_model = DecisionTreeClassifier(**model_params["Decision Tree"])
+                # Prepare final training data for Decision Tree
+                if sparse.issparse(X_features_full):
+                    X_final_dt = X_features_full.toarray()
+                else:
+                    X_final_dt = X_features_full
+                
+                if use_smote and len(np.unique(y)) > 1:
+                    min_class_count = np.min(np.bincount(y))
+                    k_neighbors = min(3, min_class_count - 1) if min_class_count > 1 else 1
+                    
+                    smote_pipeline_final = ImbPipeline([
+                        ('sampler', SMOTE(random_state=42, k_neighbors=k_neighbors)), 
+                        ('classifier', final_model)
+                    ])
+                    smote_pipeline_final.fit(X_final_dt, y)
+                    trained_models_final[name] = smote_pipeline_final
+                else:
+                    final_model.fit(X_final_dt, y)
+                    trained_models_final[name] = final_model
+                    
+            else:  # Logistic Regression and SVM
+                if name == "Logistic Regression":
+                    final_model = LogisticRegression(**model_params["Logistic Regression"], class_weight='balanced')
+                else:  # SVM
+                    final_model = SVC(**model_params["SVM"], class_weight='balanced')
+                
+                # Prepare final training data
+                if sparse.issparse(X_features_full):
+                    X_final = X_features_full
+                else:
+                    X_final = X_features_full
+                
                 if use_smote and len(np.unique(y)) > 1:
                     min_class_count = np.min(np.bincount(y))
                     k_neighbors = min(3, min_class_count - 1) if min_class_count > 1 else 1
@@ -1122,7 +1180,7 @@ def evaluate_models(df: pd.DataFrame, selected_phase: str, text_column: str = 's
                     trained_models_final[name] = final_model
             
         except Exception as e:
-            st.error(f"Failed to train final {name} model: {str(e)[:100]}")
+            st.error(f"Failed to train final {name} model: {str(e)[:200]}")
             trained_models_final[name] = None
     
     # Save models
